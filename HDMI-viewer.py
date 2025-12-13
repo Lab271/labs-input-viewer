@@ -36,6 +36,7 @@ import argparse
 from enum import Enum, auto
 import cv2
 import numpy as np
+from PIL import Image, ImageDraw, ImageFont
 from PyQt6.QtWidgets import (
     QApplication,
     QWidget,
@@ -286,73 +287,113 @@ class DualVideoViewer(QWidget):
         return label
     
     def _create_no_signal_frame(self, width: int, height: int) -> np.ndarray:
-        """Generate an elegant no-signal frame with smooth animation."""
-        # Black background
-        frame = np.zeros((height, width, 3), dtype=np.uint8)
+        """Generate no-signal frame using the custom image with animated HDMI cable."""
+        # Pre-render all animation frames for smooth playback
+        cache_key = (width, height)
+        if not hasattr(self, '_no_signal_cache') or self._no_signal_cache.get('size') != cache_key:
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            icon_path = os.path.join(script_dir, "no_signal_icon.png")
+            if os.path.exists(icon_path):
+                icon = Image.open(icon_path).convert('RGBA')
+                cable_split_x = 980
+                
+                # Calculate scale to fit the image in the frame
+                icon_w, icon_h = icon.width, icon.height
+                scale = min(width / icon_w, height / icon_h) * 0.6
+                
+                new_w = int(icon_w * scale)
+                new_h = int(icon_h * scale)
+                cable_w = int(cable_split_x * scale)
+                
+                # Pre-scale the parts once
+                cable_part = icon.crop((0, 0, cable_split_x, icon.height))
+                rest_part = icon.crop((cable_split_x, 0, icon.width, icon.height))
+                
+                cable_scaled = cable_part.resize((cable_w, new_h), Image.Resampling.LANCZOS)
+                rest_scaled = rest_part.resize((new_w - cable_w, new_h), Image.Resampling.LANCZOS)
+                
+                base_x = (width - new_w) // 2
+                base_y = (height - new_h) // 2
+                
+                # Pre-render ALL animation frames (120 frames for smooth loop)
+                num_frames = 120
+                max_offset = int(50 * scale)
+                frames = []
+                
+                # Text settings - try TT Interphases, fallback to system fonts
+                text = "No signal detected"
+                text_font = None
+                font_size = 32
+                font_paths = [
+                    "/Library/Fonts/TT Interphases Pro Trial Medium.ttf",
+                    "/Library/Fonts/TT Interphases Pro Medium.ttf",
+                    "/Library/Fonts/TTInterphasesPro-Medium.ttf",
+                    "C:/Windows/Fonts/TT Interphases Pro Trial Medium.ttf",
+                    "C:/Windows/Fonts/TTInterphasesPro-Medium.ttf",
+                    "/System/Library/Fonts/Helvetica.ttc",
+                    "C:/Windows/Fonts/segoeui.ttf",
+                ]
+                for path in font_paths:
+                    try:
+                        text_font = ImageFont.truetype(path, font_size)
+                        break
+                    except (OSError, IOError):
+                        continue
+                if text_font is None:
+                    text_font = ImageFont.load_default()
+                
+                # Calculate text position
+                temp_img = Image.new('RGB', (width, height))
+                temp_draw = ImageDraw.Draw(temp_img)
+                text_bbox = temp_draw.textbbox((0, 0), text, font=text_font)
+                text_width = text_bbox[2] - text_bbox[0]
+                text_x = (width - text_width) // 2
+                text_y = base_y + new_h + 30  # Below the image
+                
+                for i in range(num_frames):
+                    # Sine wave animation
+                    t = i / num_frames * 2 * np.pi
+                    ease = (np.sin(t) + 1) / 2
+                    cable_offset = int(-max_offset * (1 - ease))
+                    
+                    # Create frame
+                    img = Image.new('RGB', (width, height), (0, 0, 0))
+                    draw = ImageDraw.Draw(img)
+                    rest_x = base_x + cable_w
+                    img.paste(rest_scaled.convert('RGB'), (rest_x, base_y))
+                    cable_x = base_x + cable_offset
+                    img.paste(cable_scaled.convert('RGB'), (cable_x, base_y))
+                    
+                    # Add text using PIL
+                    draw.text((text_x, text_y), text, font=text_font, fill=(150, 150, 150))
+                    
+                    # Convert to BGR numpy array
+                    frame = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+                    frames.append(frame)
+                
+                self._no_signal_cache = {
+                    'size': cache_key,
+                    'frames': frames,
+                    'num_frames': num_frames,
+                }
+                self._no_signal_frame_idx = 0
+                print(f"Pre-rendered {num_frames} animation frames for no-signal icon")
+            else:
+                self._no_signal_cache = {'size': cache_key, 'frames': None}
+                print(f"No signal icon not found: {icon_path}")
         
-        # Center coordinates
-        cx, cy = width // 2, height // 2
+        cache = self._no_signal_cache
         
-        # Smooth pulsing animation
-        self.pulse_phase = (self.pulse_phase + 0.03) % (2 * np.pi)
-        pulse = (np.sin(self.pulse_phase) + 1) / 2  # 0 to 1
+        if cache.get('frames') is None:
+            # Fallback: simple text
+            frame = np.zeros((height, width, 3), dtype=np.uint8)
+            cv2.putText(frame, "No Signal", (width//2 - 100, height//2), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 1.5, (128, 128, 128), 2)
+            return frame
         
-        # Animated ring around the icon area
-        ring_alpha = int(30 + 25 * pulse)
-        ring_radius = 80
-        cv2.circle(frame, (cx, cy - 40), ring_radius, (ring_alpha, ring_alpha, ring_alpha), 2, cv2.LINE_AA)
-        
-        # Inner pulsing circle
-        inner_radius = int(8 + 4 * pulse)
-        inner_color = int(60 + 40 * pulse)
-        cv2.circle(frame, (cx, cy - 40), inner_radius, (inner_color, inner_color, inner_color), -1, cv2.LINE_AA)
-        
-        # HDMI cable icon (simple representation)
-        icon_y = cy - 40
-        # Connector shape
-        cv2.rectangle(frame, (cx - 25, icon_y - 15), (cx + 25, icon_y + 15), (70, 70, 70), -1, cv2.LINE_AA)
-        cv2.rectangle(frame, (cx - 25, icon_y - 15), (cx + 25, icon_y + 15), (100, 100, 100), 2, cv2.LINE_AA)
-        # Pins
-        for i in range(-2, 3):
-            pin_x = cx + i * 8
-            cv2.line(frame, (pin_x, icon_y - 8), (pin_x, icon_y + 8), (50, 50, 50), 2, cv2.LINE_AA)
-        
-        # "No Signal" text with subtle glow effect
-        text = "No Signal"
-        font = cv2.FONT_HERSHEY_SIMPLEX
-        font_scale = 1.8
-        thickness = 2
-        text_size = cv2.getTextSize(text, font, font_scale, thickness)[0]
-        text_x = cx - text_size[0] // 2
-        text_y = cy + 80
-        
-        # Glow layer (slightly larger, dimmer)
-        glow_intensity = int(40 + 20 * pulse)
-        cv2.putText(frame, text, (text_x, text_y), font, font_scale, (glow_intensity, glow_intensity, glow_intensity), thickness + 2, cv2.LINE_AA)
-        # Main text
-        text_intensity = int(120 + 40 * pulse)
-        cv2.putText(frame, text, (text_x, text_y), font, font_scale, (text_intensity, text_intensity, text_intensity), thickness, cv2.LINE_AA)
-        
-        # Subtitle
-        subtitle = "Connect HDMI cable"
-        sub_scale = 0.7
-        sub_size = cv2.getTextSize(subtitle, font, sub_scale, 1)[0]
-        sub_x = cx - sub_size[0] // 2
-        sub_y = cy + 130
-        sub_intensity = int(50 + 20 * pulse)
-        cv2.putText(frame, subtitle, (sub_x, sub_y), font, sub_scale, (sub_intensity, sub_intensity, sub_intensity), 1, cv2.LINE_AA)
-        
-        # Animated dots at the bottom (loading-style indicator)
-        dots_y = cy + 180
-        dot_spacing = 20
-        for i in range(3):
-            # Each dot pulses with a phase offset
-            dot_phase = (self.pulse_phase + i * 0.8) % (2 * np.pi)
-            dot_pulse = (np.sin(dot_phase) + 1) / 2
-            dot_size = int(4 + 3 * dot_pulse)
-            dot_brightness = int(40 + 50 * dot_pulse)
-            dot_x = cx + (i - 1) * dot_spacing
-            cv2.circle(frame, (dot_x, dots_y), dot_size, (dot_brightness, dot_brightness, dot_brightness), -1, cv2.LINE_AA)
+        # Simply return the next pre-rendered frame
+        frame = cache['frames'][self._no_signal_frame_idx]
+        self._no_signal_frame_idx = (self._no_signal_frame_idx + 1) % cache['num_frames']
         
         return frame
     
