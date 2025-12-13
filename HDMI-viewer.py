@@ -776,11 +776,9 @@ class DualVideoViewer(QWidget):
         # Shortcuts
         shortcuts = [
             ("D", "Dual view"),
-            ("1", "Single left"),
-            ("2", "Single right"),
-            ("←/→", "Switch input"),
-            ("⇧←/→", "Left input (dual)"),
-            ("⌃←/→", "Right input (dual)"),
+            ("L", "Single left"),
+            ("R", "Single right"),
+            ("1-4", "Select input"),
             ("F11", "Fullscreen"),
             ("Q", "Quit"),
         ]
@@ -1151,7 +1149,7 @@ class DualVideoViewer(QWidget):
                     break
 
     def _reload_input_configs(self):
-        """Reload input configurations from settings."""
+        """Reload input configurations from settings and apply changes live."""
         global _input_configs, _enabled_inputs, _default_input
         global AVAILABLE_INPUT_INDICES
 
@@ -1163,6 +1161,42 @@ class DualVideoViewer(QWidget):
         _enabled_inputs = self.enabled_inputs
         _default_input = get_default_input(self.input_configs)
         AVAILABLE_INPUT_INDICES = [inp.index for inp in _enabled_inputs]
+
+        # Check if current inputs are still valid, switch if not
+        left_valid = self.left_input_index in AVAILABLE_INPUT_INDICES
+        right_valid = self.right_input_index in AVAILABLE_INPUT_INDICES
+
+        if not left_valid and len(AVAILABLE_INPUT_INDICES) > 0:
+            # Switch to first available input
+            new_index = AVAILABLE_INPUT_INDICES[0]
+            self.left_input_index = new_index
+            self.left_feed.release()
+            self.left_feed = CameraFeed(
+                self.left_input_index,
+                self.test_mode,
+                "LEFT",
+                self.switch_signals,
+                self.always_no_signal,
+            )
+            Log.info(f"Left input switched to {self._get_input_name(new_index)}")
+
+        if not right_valid and len(AVAILABLE_INPUT_INDICES) > 0:
+            # Switch to first available input
+            new_index = AVAILABLE_INPUT_INDICES[0]
+            self.right_input_index = new_index
+            self.right_feed.release()
+            self.right_feed = CameraFeed(
+                self.right_input_index,
+                self.test_mode,
+                "RIGHT",
+                self.switch_signals,
+                self.always_no_signal,
+            )
+            Log.info(f"Right input switched to {self._get_input_name(new_index)}")
+
+        # Reset dual camera index if needed
+        if self.dual_input_idx >= len(self.enabled_inputs):
+            self.dual_input_idx = 0
 
         Log.debug(f"Reloaded {len(self.enabled_inputs)} enabled inputs")
 
@@ -1276,8 +1310,14 @@ class DualVideoViewer(QWidget):
 
     def switch_input(self, feed: str, direction: int):
         """Switch input index for a feed. direction: 1=next, -1=previous"""
+        if len(AVAILABLE_INPUT_INDICES) == 0:
+            return
+
         if feed == "left":
-            current_idx = AVAILABLE_INPUT_INDICES.index(self.left_input_index)
+            try:
+                current_idx = AVAILABLE_INPUT_INDICES.index(self.left_input_index)
+            except ValueError:
+                current_idx = 0
             new_idx = (current_idx + direction) % len(AVAILABLE_INPUT_INDICES)
             self.left_input_index = AVAILABLE_INPUT_INDICES[new_idx]
             self.left_feed.release()
@@ -1292,7 +1332,10 @@ class DualVideoViewer(QWidget):
             Log.info(f"Left input: {input_name} (index {self.left_input_index})")
             self._show_input_name(input_name)
         else:
-            current_idx = AVAILABLE_INPUT_INDICES.index(self.right_input_index)
+            try:
+                current_idx = AVAILABLE_INPUT_INDICES.index(self.right_input_index)
+            except ValueError:
+                current_idx = 0
             new_idx = (current_idx + direction) % len(AVAILABLE_INPUT_INDICES)
             self.right_input_index = AVAILABLE_INPUT_INDICES[new_idx]
             self.right_feed.release()
@@ -1342,9 +1385,80 @@ class DualVideoViewer(QWidget):
         Log.info(f"Dual inputs: {new_input.name} (index {new_input.index})")
         self._show_input_name(new_input.name)
 
+    def select_input_by_index(self, index: int):
+        """Select an input directly by its index (0-3)."""
+        # Find the input config with this index
+        target_input = None
+        for inp in self.enabled_inputs:
+            if inp.index == index:
+                target_input = inp
+                break
+
+        if target_input is None:
+            # Input not enabled or doesn't exist
+            Log.warning(f"Input {index + 1} is not available")
+            return
+
+        if self.layout_mode == LayoutMode.DUAL:
+            # In dual mode, switch both feeds to the selected input
+            self.left_input_index = target_input.index
+            self.right_input_index = target_input.index
+            self.dual_input_idx = self.enabled_inputs.index(target_input)
+
+            self.left_feed.release()
+            self.right_feed.release()
+
+            self.left_feed = CameraFeed(
+                self.left_input_index,
+                self.test_mode,
+                "LEFT",
+                self.switch_signals,
+                self.always_no_signal,
+            )
+            self.right_feed = CameraFeed(
+                self.right_input_index,
+                self.test_mode,
+                "RIGHT",
+                self.switch_signals,
+                self.always_no_signal,
+            )
+
+            Log.info(f"Dual inputs: {target_input.name} (index {target_input.index})")
+
+        elif self.layout_mode == LayoutMode.SINGLE_LEFT:
+            self.left_input_index = target_input.index
+            self.left_input_idx = self.enabled_inputs.index(target_input)
+
+            self.left_feed.release()
+            self.left_feed = CameraFeed(
+                self.left_input_index,
+                self.test_mode,
+                "LEFT",
+                self.switch_signals,
+                self.always_no_signal,
+            )
+
+            Log.info(f"Left input: {target_input.name} (index {target_input.index})")
+
+        elif self.layout_mode == LayoutMode.SINGLE_RIGHT:
+            self.right_input_index = target_input.index
+            self.right_input_idx = self.enabled_inputs.index(target_input)
+
+            self.right_feed.release()
+            self.right_feed = CameraFeed(
+                self.right_input_index,
+                self.test_mode,
+                "RIGHT",
+                self.switch_signals,
+                self.always_no_signal,
+            )
+
+            Log.info(f"Right input: {target_input.name} (index {target_input.index})")
+
+        self._show_input_name(target_input.name)
+
     def keyPressEvent(self, event):
         key = event.key()
-        modifiers = event.modifiers()
 
         # Fullscreen toggle
         if key in (Qt.Key.Key_F11, Qt.Key.Key_F):
@@ -1367,36 +1481,16 @@ class DualVideoViewer(QWidget):
         elif key == Qt.Key.Key_D:
             self.set_layout_mode(LayoutMode.DUAL)
 
-        elif key == Qt.Key.Key_1:
+        elif key == Qt.Key.Key_L:
             self.set_layout_mode(LayoutMode.SINGLE_LEFT)
 
-        elif key == Qt.Key.Key_2:
+        elif key == Qt.Key.Key_R:
             self.set_layout_mode(LayoutMode.SINGLE_RIGHT)
 
-        # Input switching with arrow keys
-        elif key == Qt.Key.Key_Right:
-            if modifiers & Qt.KeyboardModifier.ShiftModifier:
-                self.switch_input("left", 1)
-            elif modifiers & Qt.KeyboardModifier.ControlModifier:
-                self.switch_input("right", 1)
-            elif self.layout_mode == LayoutMode.DUAL:
-                self.switch_dual_inputs(1)
-            elif self.layout_mode == LayoutMode.SINGLE_LEFT:
-                self.switch_input("left", 1)
-            elif self.layout_mode == LayoutMode.SINGLE_RIGHT:
-                self.switch_input("right", 1)
-
-        elif key == Qt.Key.Key_Left:
-            if modifiers & Qt.KeyboardModifier.ShiftModifier:
-                self.switch_input("left", -1)
-            elif modifiers & Qt.KeyboardModifier.ControlModifier:
-                self.switch_input("right", -1)
-            elif self.layout_mode == LayoutMode.DUAL:
-                self.switch_dual_inputs(-1)
-            elif self.layout_mode == LayoutMode.SINGLE_LEFT:
-                self.switch_input("left", -1)
-            elif self.layout_mode == LayoutMode.SINGLE_RIGHT:
-                self.switch_input("right", -1)
+        # Direct input selection with 1-4
+        elif key in (Qt.Key.Key_1, Qt.Key.Key_2, Qt.Key.Key_3, Qt.Key.Key_4):
+            input_index = key - Qt.Key.Key_1  # 0-3
+            self.select_input_by_index(input_index)
 
         # Test mode: toggle no-signal simulation
         elif key == Qt.Key.Key_N and self.test_mode:
