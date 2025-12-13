@@ -31,9 +31,12 @@ Requirements:
 """
 
 import argparse
+import json
 import os
 import sys
+from dataclasses import dataclass
 from enum import Enum, auto
+from typing import Optional
 
 import cv2
 import numpy as np
@@ -130,15 +133,85 @@ class LayoutMode(Enum):
     SINGLE_RIGHT = auto()  # Only right feed, centered
 
 
+@dataclass
+class InputConfig:
+    """Configuration for a single input."""
+
+    index: int
+    name: str
+    enabled: bool = True
+    default: bool = False
+
+
+def load_settings() -> dict:
+    """Load settings from settings.json file."""
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    settings_path = os.path.join(script_dir, "settings.json")
+
+    if os.path.exists(settings_path):
+        try:
+            with open(settings_path, "r") as f:
+                settings = json.load(f)
+            Log.debug(f"Settings loaded from {settings_path}")
+            return settings
+        except (json.JSONDecodeError, IOError) as e:
+            Log.warning(f"Failed to load settings.json: {e}")
+
+    # Return default settings if file doesn't exist or fails to load
+    return {
+        "inputs": [
+            {"index": 0, "name": "Input 1", "enabled": True, "default": True},
+            {"index": 1, "name": "Input 2", "enabled": True, "default": False},
+            {"index": 2, "name": "Input 3", "enabled": True, "default": False},
+            {"index": 3, "name": "Input 4", "enabled": False, "default": False},
+        ]
+    }
+
+
+def get_input_configs(settings: dict) -> list[InputConfig]:
+    """Parse input configurations from settings."""
+    inputs = []
+    for input_data in settings.get("inputs", []):
+        inputs.append(
+            InputConfig(
+                index=input_data.get("index", 0),
+                name=input_data.get("name", f"Input {input_data.get('index', 0)}"),
+                enabled=input_data.get("enabled", True),
+                default=input_data.get("default", False),
+            )
+        )
+    return inputs
+
+
+def get_enabled_inputs(inputs: list[InputConfig]) -> list[InputConfig]:
+    """Get list of enabled inputs."""
+    return [inp for inp in inputs if inp.enabled]
+
+
+def get_default_input(inputs: list[InputConfig]) -> Optional[InputConfig]:
+    """Get the default input, or first enabled input if no default."""
+    for inp in inputs:
+        if inp.default and inp.enabled:
+            return inp
+    # Fallback to first enabled input
+    enabled = get_enabled_inputs(inputs)
+    return enabled[0] if enabled else None
+
+
 # =============================================================================
-# CONFIGURATION - Adjust these to your setup
+# CONFIGURATION - Loaded from settings.json
 # =============================================================================
 
-# Camera indices (from your Cam Link Pro)
-# Cam Link Pro typically exposes 4 inputs as indices 0-3
-LEFT_CAMERA_INDEX = 0  # Left display (default)
-RIGHT_CAMERA_INDEX = 0  # Right display (default)
-AVAILABLE_CAMERA_INDICES = [0, 1, 2, 3]  # All available camera inputs
+# Load settings
+_settings = load_settings()
+_input_configs = get_input_configs(_settings)
+_enabled_inputs = get_enabled_inputs(_input_configs)
+_default_input = get_default_input(_input_configs)
+
+# Input indices (from your Cam Link Pro)
+LEFT_INPUT_INDEX = _default_input.index if _default_input else 0
+RIGHT_INPUT_INDEX = _default_input.index if _default_input else 0
+AVAILABLE_INPUT_INDICES = [inp.index for inp in _enabled_inputs]
 
 # Capture settings
 TARGET_WIDTH = 1920
@@ -315,16 +388,23 @@ class DualVideoViewer(QWidget):
         self.always_no_signal = always_no_signal
         self.layout_mode = LayoutMode.DUAL
 
-        # Camera indices (can be changed at runtime)
-        self.left_camera_index = LEFT_CAMERA_INDEX
-        self.right_camera_index = RIGHT_CAMERA_INDEX
+        # Input configurations
+        self.input_configs = _input_configs
+        self.enabled_inputs = _enabled_inputs
 
-        # Open both cameras
+        # Current input selection index (for dual mode cycling)
+        self.dual_input_idx = 0  # Index into enabled_inputs list
+
+        # Input indices (can be changed at runtime)
+        self.left_input_index = LEFT_INPUT_INDEX
+        self.right_input_index = RIGHT_INPUT_INDEX
+
+        # Open both inputs
         self.left_feed = CameraFeed(
-            self.left_camera_index, test_mode, "LEFT", switch_signals, always_no_signal
+            self.left_input_index, test_mode, "LEFT", switch_signals, always_no_signal
         )
         self.right_feed = CameraFeed(
-            self.right_camera_index,
+            self.right_input_index,
             test_mode,
             "RIGHT",
             switch_signals,
@@ -360,6 +440,12 @@ class DualVideoViewer(QWidget):
         # Info overlay in bottom-left corner
         self.info_overlay = self._create_info_overlay()
 
+        # Input name overlay (shown briefly when switching inputs)
+        self.input_name_label = self._create_input_name_overlay()
+        self.input_name_timer = QTimer(self)
+        self.input_name_timer.timeout.connect(self._hide_input_name)
+        self.input_name_timer.setSingleShot(True)
+
         # Start fullscreen if configured
         if FULLSCREEN:
             self.showFullScreen()
@@ -373,6 +459,43 @@ class DualVideoViewer(QWidget):
 
         # Animation state for no-signal pulse
         self.pulse_phase = 0
+
+    def _create_input_name_overlay(self) -> QLabel:
+        """Create an overlay label to show the input name when switching."""
+        label = QLabel(self)
+        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        label.setStyleSheet(
+            """
+            QLabel {
+                color: white;
+                font-size: 48px;
+                font-weight: bold;
+                font-family: 'TT Interphases Pro', 'Helvetica Neue', Arial, sans-serif;
+                background-color: rgba(0, 0, 0, 180);
+                border-radius: 16px;
+                padding: 20px 40px;
+            }
+            """
+        )
+        label.hide()
+        return label
+
+    def _show_input_name(self, name: str):
+        """Show the input name overlay briefly."""
+        self.input_name_label.setText(name)
+        self.input_name_label.adjustSize()
+        # Center the label
+        x = (self.width() - self.input_name_label.width()) // 2
+        y = (self.height() - self.input_name_label.height()) // 2
+        self.input_name_label.move(x, y)
+        self.input_name_label.show()
+        self.input_name_label.raise_()
+        # Hide after 1.5 seconds
+        self.input_name_timer.start(1500)
+
+    def _hide_input_name(self):
+        """Hide the input name overlay."""
+        self.input_name_label.hide()
 
     def _create_video_label(self) -> QLabel:
         """Create a video display label."""
@@ -696,7 +819,7 @@ class DualVideoViewer(QWidget):
             self.left_spacer.setFixedWidth(SIDE_MARGIN)
             self.right_spacer.setFixedWidth(SIDE_MARGIN)
             Log.info(
-                f"Layout: DUAL (Left: cam {self.left_camera_index}, Right: cam {self.right_camera_index})"
+                f"Layout: DUAL (Left: {self.left_input_index}, Right: {self.right_input_index})"
             )
 
         elif mode == LayoutMode.SINGLE_LEFT:
@@ -708,7 +831,7 @@ class DualVideoViewer(QWidget):
             total_margin = SIDE_MARGIN * 2 + CENTER_GAP
             self.left_spacer.setFixedWidth(total_margin)
             self.right_spacer.setFixedWidth(total_margin)
-            Log.info(f"Layout: SINGLE LEFT (cam {self.left_camera_index})")
+            Log.info(f"Layout: SINGLE LEFT (input {self.left_input_index})")
 
         elif mode == LayoutMode.SINGLE_RIGHT:
             # Show only right feed, centered
@@ -719,36 +842,82 @@ class DualVideoViewer(QWidget):
             total_margin = SIDE_MARGIN * 2 + CENTER_GAP
             self.left_spacer.setFixedWidth(total_margin)
             self.right_spacer.setFixedWidth(total_margin)
-            Log.info(f"Layout: SINGLE RIGHT (cam {self.right_camera_index})")
+            Log.info(f"Layout: SINGLE RIGHT (input {self.right_input_index})")
 
-    def switch_camera(self, feed: str, direction: int):
-        """Switch camera index for a feed. direction: 1=next, -1=previous"""
+    def _get_input_name(self, index: int) -> str:
+        """Get friendly name for an input index."""
+        for inp in self.input_configs:
+            if inp.index == index:
+                return inp.name
+        return f"Input {index}"
+
+    def switch_input(self, feed: str, direction: int):
+        """Switch input index for a feed. direction: 1=next, -1=previous"""
         if feed == "left":
-            current_idx = AVAILABLE_CAMERA_INDICES.index(self.left_camera_index)
-            new_idx = (current_idx + direction) % len(AVAILABLE_CAMERA_INDICES)
-            self.left_camera_index = AVAILABLE_CAMERA_INDICES[new_idx]
+            current_idx = AVAILABLE_INPUT_INDICES.index(self.left_input_index)
+            new_idx = (current_idx + direction) % len(AVAILABLE_INPUT_INDICES)
+            self.left_input_index = AVAILABLE_INPUT_INDICES[new_idx]
             self.left_feed.release()
             self.left_feed = CameraFeed(
-                self.left_camera_index,
+                self.left_input_index,
                 self.test_mode,
                 "LEFT",
                 self.switch_signals,
                 self.always_no_signal,
             )
-            Log.info(f"Left camera switched to index {self.left_camera_index}")
+            input_name = self._get_input_name(self.left_input_index)
+            Log.info(f"Left input: {input_name} (index {self.left_input_index})")
+            self._show_input_name(input_name)
         else:
-            current_idx = AVAILABLE_CAMERA_INDICES.index(self.right_camera_index)
-            new_idx = (current_idx + direction) % len(AVAILABLE_CAMERA_INDICES)
-            self.right_camera_index = AVAILABLE_CAMERA_INDICES[new_idx]
+            current_idx = AVAILABLE_INPUT_INDICES.index(self.right_input_index)
+            new_idx = (current_idx + direction) % len(AVAILABLE_INPUT_INDICES)
+            self.right_input_index = AVAILABLE_INPUT_INDICES[new_idx]
             self.right_feed.release()
             self.right_feed = CameraFeed(
-                self.right_camera_index,
+                self.right_input_index,
                 self.test_mode,
                 "RIGHT",
                 self.switch_signals,
                 self.always_no_signal,
             )
-            Log.info(f"Right camera switched to index {self.right_camera_index}")
+            input_name = self._get_input_name(self.right_input_index)
+            Log.info(f"Right input: {input_name} (index {self.right_input_index})")
+            self._show_input_name(input_name)
+
+    def switch_dual_inputs(self, direction: int):
+        """Switch both inputs together in dual mode. direction: 1=next, -1=previous"""
+        if len(self.enabled_inputs) == 0:
+            return
+
+        self.dual_input_idx = (self.dual_input_idx + direction) % len(
+            self.enabled_inputs
+        )
+        new_input = self.enabled_inputs[self.dual_input_idx]
+
+        # Update both feeds to the same input
+        self.left_input_index = new_input.index
+        self.right_input_index = new_input.index
+
+        self.left_feed.release()
+        self.right_feed.release()
+
+        self.left_feed = CameraFeed(
+            self.left_input_index,
+            self.test_mode,
+            "LEFT",
+            self.switch_signals,
+            self.always_no_signal,
+        )
+        self.right_feed = CameraFeed(
+            self.right_input_index,
+            self.test_mode,
+            "RIGHT",
+            self.switch_signals,
+            self.always_no_signal,
+        )
+
+        Log.info(f"Dual inputs: {new_input.name} (index {new_input.index})")
+        self._show_input_name(new_input.name)
 
     def keyPressEvent(self, event):
         key = event.key()
@@ -781,26 +950,30 @@ class DualVideoViewer(QWidget):
         elif key == Qt.Key.Key_2:
             self.set_layout_mode(LayoutMode.SINGLE_RIGHT)
 
-        # Camera switching with arrow keys
+        # Input switching with arrow keys
         elif key == Qt.Key.Key_Right:
             if modifiers & Qt.KeyboardModifier.ShiftModifier:
-                self.switch_camera("left", 1)
+                self.switch_input("left", 1)
             elif modifiers & Qt.KeyboardModifier.ControlModifier:
-                self.switch_camera("right", 1)
+                self.switch_input("right", 1)
+            elif self.layout_mode == LayoutMode.DUAL:
+                self.switch_dual_inputs(1)
             elif self.layout_mode == LayoutMode.SINGLE_LEFT:
-                self.switch_camera("left", 1)
+                self.switch_input("left", 1)
             elif self.layout_mode == LayoutMode.SINGLE_RIGHT:
-                self.switch_camera("right", 1)
+                self.switch_input("right", 1)
 
         elif key == Qt.Key.Key_Left:
             if modifiers & Qt.KeyboardModifier.ShiftModifier:
-                self.switch_camera("left", -1)
+                self.switch_input("left", -1)
             elif modifiers & Qt.KeyboardModifier.ControlModifier:
-                self.switch_camera("right", -1)
+                self.switch_input("right", -1)
+            elif self.layout_mode == LayoutMode.DUAL:
+                self.switch_dual_inputs(-1)
             elif self.layout_mode == LayoutMode.SINGLE_LEFT:
-                self.switch_camera("left", -1)
+                self.switch_input("left", -1)
             elif self.layout_mode == LayoutMode.SINGLE_RIGHT:
-                self.switch_camera("right", -1)
+                self.switch_input("right", -1)
 
         # Test mode: toggle no-signal simulation
         elif key == Qt.Key.Key_N and self.test_mode:
