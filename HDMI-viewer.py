@@ -41,13 +41,16 @@ from typing import Optional
 import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
-from PyQt6.QtCore import QTimer, Qt
-from PyQt6.QtGui import QEnterEvent, QImage, QPixmap
+from PyQt6.QtCore import QTimer, Qt, QPropertyAnimation, QEasingCurve, pyqtProperty
+from PyQt6.QtGui import QEnterEvent, QImage, QPixmap, QColor, QPainter, QBrush
 from PyQt6.QtWidgets import (
     QApplication,
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
+    QPushButton,
+    QScrollArea,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
@@ -168,6 +171,19 @@ def load_settings() -> dict:
     }
 
 
+def save_settings(settings: dict):
+    """Save settings to settings.json file."""
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    settings_path = os.path.join(script_dir, "settings.json")
+
+    try:
+        with open(settings_path, "w") as f:
+            json.dump(settings, f, indent=4)
+        Log.debug(f"Settings saved to {settings_path}")
+    except IOError as e:
+        Log.error(f"Failed to save settings.json: {e}")
+
+
 def get_input_configs(settings: dict) -> list[InputConfig]:
     """Parse input configurations from settings."""
     inputs = []
@@ -236,6 +252,73 @@ TIMER_INTERVAL_MS = 30
 # =============================================================================
 # APPLICATION
 # =============================================================================
+
+
+class ToggleSwitch(QWidget):
+    """A custom iOS-style toggle switch widget."""
+
+    def __init__(self, checked: bool = False, parent=None):
+        super().__init__(parent)
+        self._checked = checked
+        self._circle_position = 22 if checked else 2
+        self.setFixedSize(44, 24)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+        # Animation for smooth toggle
+        self._animation = QPropertyAnimation(self, b"circle_position", self)
+        self._animation.setEasingCurve(QEasingCurve.Type.InOutCubic)
+        self._animation.setDuration(150)
+
+        self._on_change_callback = None
+
+    def get_circle_position(self):
+        return self._circle_position
+
+    def set_circle_position(self, pos):
+        self._circle_position = pos
+        self.update()
+
+    circle_position = pyqtProperty(int, get_circle_position, set_circle_position)
+
+    def isChecked(self) -> bool:
+        return self._checked
+
+    def setChecked(self, checked: bool):
+        if self._checked != checked:
+            self._checked = checked
+            self._animation.setStartValue(self._circle_position)
+            self._animation.setEndValue(22 if checked else 2)
+            self._animation.start()
+
+    def setOnChange(self, callback):
+        """Set callback for when toggle state changes."""
+        self._on_change_callback = callback
+
+    def mousePressEvent(self, event):
+        self._checked = not self._checked
+        self._animation.setStartValue(self._circle_position)
+        self._animation.setEndValue(22 if self._checked else 2)
+        self._animation.start()
+        if self._on_change_callback:
+            self._on_change_callback(self._checked)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Background
+        if self._checked:
+            bg_color = QColor(52, 199, 89)  # Green
+        else:
+            bg_color = QColor(120, 120, 128)  # Gray
+
+        painter.setBrush(QBrush(bg_color))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawRoundedRect(0, 0, 44, 24, 12, 12)
+
+        # Circle
+        painter.setBrush(QBrush(QColor(255, 255, 255)))
+        painter.drawEllipse(self._circle_position, 2, 20, 20)
 
 
 class CameraFeed:
@@ -439,6 +522,12 @@ class DualVideoViewer(QWidget):
 
         # Info overlay in bottom-left corner
         self.info_overlay = self._create_info_overlay()
+
+        # Settings gear icon (separate from info overlay for independent clicking)
+        self.settings_icon = self._create_settings_icon()
+
+        # Settings panel (hidden by default)
+        self.settings_panel = self._create_settings_panel()
 
         # Input name overlay (shown briefly when switching inputs)
         self.input_name_label = self._create_input_name_overlay()
@@ -644,9 +733,9 @@ class DualVideoViewer(QWidget):
 
     def _create_info_overlay(self) -> QFrame:
         """Create an info overlay with keyboard shortcuts that shows on hover."""
-        # Container that handles hover events
+        # Container that handles hover events for info only
         container = QFrame(self)
-        container.setFixedSize(200, 200)  # Hover detection area
+        container.setFixedSize(35, 40)  # Small hover area just for info icon
         container.setStyleSheet("background: transparent;")
 
         # Small info icon (always visible)
@@ -659,10 +748,10 @@ class DualVideoViewer(QWidget):
             }
         """)
         self.info_icon.adjustSize()
-        self.info_icon.move(10, 160)
+        self.info_icon.move(5, 5)
 
-        # The actual info panel (hidden by default)
-        self.info_panel = QFrame(container)
+        # The actual info panel (hidden by default) - attached to main widget, not container
+        self.info_panel = QFrame(self)
         self.info_panel.setStyleSheet("""
             QFrame {
                 background-color: rgba(0, 0, 0, 200);
@@ -689,9 +778,9 @@ class DualVideoViewer(QWidget):
             ("D", "Dual view"),
             ("1", "Single left"),
             ("2", "Single right"),
-            ("←/→", "Switch camera"),
-            ("⇧←/→", "Left cam (dual)"),
-            ("⌃←/→", "Right cam (dual)"),
+            ("←/→", "Switch input"),
+            ("⇧←/→", "Left input (dual)"),
+            ("⌃←/→", "Right input (dual)"),
             ("F11", "Fullscreen"),
             ("Q", "Quit"),
         ]
@@ -702,7 +791,6 @@ class DualVideoViewer(QWidget):
             layout.addWidget(line)
 
         self.info_panel.adjustSize()
-        self.info_panel.move(5, 200 - self.info_panel.height() - 5)
         self.info_panel.hide()  # Hidden by default
 
         # Store original enter/leave events and override them
@@ -710,6 +798,43 @@ class DualVideoViewer(QWidget):
         container.leaveEvent = self._on_info_hover_leave
 
         return container
+
+    def _create_settings_icon(self) -> QLabel:
+        """Create the settings gear icon."""
+        icon = QLabel("⚙", self)
+        icon.setStyleSheet("""
+            QLabel {
+                color: rgba(255, 255, 255, 100);
+                font-size: 24px;
+                background: transparent;
+            }
+        """)
+        icon.adjustSize()
+        icon.setCursor(Qt.CursorShape.PointingHandCursor)
+        icon.mousePressEvent = self._on_settings_click
+        icon.enterEvent = self._on_settings_hover_enter
+        icon.leaveEvent = self._on_settings_hover_leave
+        return icon
+
+    def _on_settings_hover_enter(self, event):
+        """Highlight gear icon on hover."""
+        self.settings_icon.setStyleSheet("""
+            QLabel {
+                color: rgba(255, 255, 255, 255);
+                font-size: 24px;
+                background: transparent;
+            }
+        """)
+
+    def _on_settings_hover_leave(self, event):
+        """Dim gear icon when not hovering."""
+        self.settings_icon.setStyleSheet("""
+            QLabel {
+                color: rgba(255, 255, 255, 100);
+                font-size: 24px;
+                background: transparent;
+            }
+        """)
 
     def _on_info_hover_enter(self, event: QEnterEvent):
         """Show the info panel when mouse enters the hover zone."""
@@ -734,14 +859,312 @@ class DualVideoViewer(QWidget):
         self.info_panel.hide()
 
     def resizeEvent(self, event):
-        """Reposition info overlay when window is resized."""
+        """Reposition overlays when window is resized."""
         super().resizeEvent(event)
-        # Position in bottom-left corner with some padding
+        margin = 20
+        bottom_y = self.height() - 40 - margin
+
+        # Position info overlay in bottom-left corner
         if hasattr(self, "info_overlay"):
-            margin = 20
-            self.info_overlay.move(
-                margin, self.height() - self.info_overlay.height() - margin
+            self.info_overlay.move(margin, bottom_y)
+
+        # Position settings icon next to info overlay
+        if hasattr(self, "settings_icon"):
+            self.settings_icon.move(margin + 40, bottom_y + 5)
+
+        # Position info panel above the icons
+        if hasattr(self, "info_panel"):
+            self.info_panel.move(margin, bottom_y - self.info_panel.height() - 5)
+
+        # Center settings panel
+        if hasattr(self, "settings_panel") and self.settings_panel.isVisible():
+            x = (self.width() - self.settings_panel.width()) // 2
+            y = (self.height() - self.settings_panel.height()) // 2
+            self.settings_panel.move(x, y)
+
+    def _on_settings_click(self, event):
+        """Handle click on settings gear icon."""
+        if self.settings_panel.isVisible():
+            self.settings_panel.hide()
+        else:
+            self._refresh_settings_panel()
+            # Center the panel
+            x = (self.width() - self.settings_panel.width()) // 2
+            y = (self.height() - self.settings_panel.height()) // 2
+            self.settings_panel.move(x, y)
+            self.settings_panel.show()
+            self.settings_panel.raise_()
+
+    def _create_settings_panel(self) -> QFrame:
+        """Create the settings panel with input configuration."""
+        panel = QFrame(self)
+        panel.setFixedSize(400, 450)
+        panel.setStyleSheet("""
+            QFrame#settingsPanel {
+                background-color: rgba(30, 30, 30, 240);
+                border-radius: 12px;
+                border: 1px solid rgba(255, 255, 255, 30);
+            }
+            QLabel {
+                color: white;
+                font-family: 'TT Interphases Pro', Arial, sans-serif;
+                background: transparent;
+            }
+            QLineEdit {
+                background-color: rgba(60, 60, 60, 200);
+                border: 1px solid rgba(255, 255, 255, 30);
+                border-radius: 6px;
+                color: white;
+                padding: 6px 10px;
+                font-size: 14px;
+            }
+            QLineEdit:focus {
+                border: 1px solid rgba(88, 166, 255, 200);
+            }
+        """)
+        panel.setObjectName("settingsPanel")
+
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(16)
+
+        # Header with title and close button
+        header = QHBoxLayout()
+        title = QLabel("⚙ Input Settings")
+        title.setStyleSheet("font-size: 18px; font-weight: bold; color: #88ccff;")
+        header.addWidget(title)
+        header.addStretch()
+
+        close_btn = QPushButton("✕")
+        close_btn.setFixedSize(30, 30)
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                color: rgba(255, 255, 255, 150);
+                font-size: 18px;
+                border: none;
+                border-radius: 15px;
+            }
+            QPushButton:hover {
+                background-color: rgba(255, 255, 255, 30);
+                color: white;
+            }
+        """)
+        close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        close_btn.clicked.connect(lambda: panel.hide())
+        header.addWidget(close_btn)
+        layout.addLayout(header)
+
+        # Scroll area for inputs
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("""
+            QScrollArea {
+                background: transparent;
+                border: none;
+            }
+            QWidget#scrollContent {
+                background: transparent;
+            }
+        """)
+
+        scroll_content = QWidget()
+        scroll_content.setObjectName("scrollContent")
+        self.inputs_layout = QVBoxLayout(scroll_content)
+        self.inputs_layout.setSpacing(12)
+        self.inputs_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Store references to input widgets
+        self.input_widgets = []
+
+        scroll.setWidget(scroll_content)
+        layout.addWidget(scroll)
+
+        panel.hide()
+        return panel
+
+    def _refresh_settings_panel(self):
+        """Refresh the settings panel with current input configurations."""
+        # Clear existing widgets
+        while self.inputs_layout.count():
+            child = self.inputs_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+
+        self.input_widgets = []
+
+        # Load current settings
+        settings = load_settings()
+        inputs = settings.get("inputs", [])
+
+        for i, input_data in enumerate(inputs):
+            input_frame = QFrame()
+            input_frame.setStyleSheet("""
+                QFrame {
+                    background-color: rgba(50, 50, 50, 150);
+                    border-radius: 8px;
+                    padding: 8px;
+                }
+            """)
+
+            input_layout = QVBoxLayout(input_frame)
+            input_layout.setContentsMargins(12, 10, 12, 10)
+            input_layout.setSpacing(8)
+
+            # Input header with index
+            header_label = QLabel(f"Input {input_data.get('index', i)}")
+            header_label.setStyleSheet(
+                "font-size: 12px; color: rgba(255, 255, 255, 100);"
             )
+            input_layout.addWidget(header_label)
+
+            # Name field
+            name_row = QHBoxLayout()
+            name_label = QLabel("Name:")
+            name_label.setFixedWidth(60)
+            name_label.setStyleSheet("font-size: 14px;")
+            name_edit = QLineEdit(input_data.get("name", f"Input {i}"))
+            name_edit.setProperty("input_index", i)
+            name_edit.textChanged.connect(
+                lambda text, idx=i: self._on_input_name_changed(idx, text)
+            )
+            name_row.addWidget(name_label)
+            name_row.addWidget(name_edit)
+            input_layout.addLayout(name_row)
+
+            # Toggle row
+            toggle_row = QHBoxLayout()
+
+            # Enabled toggle
+            enabled_label = QLabel("Enabled:")
+            enabled_label.setStyleSheet("font-size: 14px;")
+            enabled_toggle = ToggleSwitch(input_data.get("enabled", True))
+            enabled_toggle.setOnChange(
+                lambda checked, idx=i: self._on_input_enabled_changed(idx, checked)
+            )
+
+            # Default toggle
+            default_label = QLabel("Default:")
+            default_label.setStyleSheet("font-size: 14px;")
+            default_toggle = ToggleSwitch(input_data.get("default", False))
+            default_toggle.setOnChange(
+                lambda checked, idx=i: self._on_input_default_changed(idx, checked)
+            )
+
+            toggle_row.addWidget(enabled_label)
+            toggle_row.addWidget(enabled_toggle)
+            toggle_row.addSpacing(20)
+            toggle_row.addWidget(default_label)
+            toggle_row.addWidget(default_toggle)
+            toggle_row.addStretch()
+            input_layout.addLayout(toggle_row)
+
+            self.inputs_layout.addWidget(input_frame)
+            self.input_widgets.append(
+                {
+                    "name_edit": name_edit,
+                    "enabled_toggle": enabled_toggle,
+                    "default_toggle": default_toggle,
+                }
+            )
+
+        self.inputs_layout.addStretch()
+
+    def _on_input_name_changed(self, index: int, name: str):
+        """Handle input name change."""
+        settings = load_settings()
+        if index < len(settings.get("inputs", [])):
+            settings["inputs"][index]["name"] = name
+            save_settings(settings)
+            # Update local config
+            if index < len(self.input_configs):
+                self.input_configs[index] = InputConfig(
+                    index=self.input_configs[index].index,
+                    name=name,
+                    enabled=self.input_configs[index].enabled,
+                    default=self.input_configs[index].default,
+                )
+
+    def _on_input_enabled_changed(self, index: int, enabled: bool):
+        """Handle input enabled toggle change."""
+        settings = load_settings()
+        if index < len(settings.get("inputs", [])):
+            settings["inputs"][index]["enabled"] = enabled
+            # If disabling and this was default, clear default
+            if not enabled and settings["inputs"][index].get("default", False):
+                settings["inputs"][index]["default"] = False
+                # Update toggle UI
+                if index < len(self.input_widgets):
+                    self.input_widgets[index]["default_toggle"].setChecked(False)
+
+            # Ensure at least one enabled input is default
+            self._ensure_default_exists(settings["inputs"])
+
+            save_settings(settings)
+            self._reload_input_configs()
+
+    def _on_input_default_changed(self, index: int, is_default: bool):
+        """Handle input default toggle change - ensure only one is default."""
+        settings = load_settings()
+        inputs = settings.get("inputs", [])
+
+        if is_default:
+            # Clear default from all other inputs
+            for i, inp in enumerate(inputs):
+                if i != index:
+                    inp["default"] = False
+                    # Update toggle UI
+                    if i < len(self.input_widgets):
+                        self.input_widgets[i]["default_toggle"].setChecked(False)
+            # Set this one as default (only if enabled)
+            if inputs[index].get("enabled", True):
+                inputs[index]["default"] = True
+            else:
+                # Can't set disabled input as default
+                inputs[index]["default"] = False
+                if index < len(self.input_widgets):
+                    self.input_widgets[index]["default_toggle"].setChecked(False)
+        else:
+            inputs[index]["default"] = False
+
+        # Ensure at least one enabled input is default
+        self._ensure_default_exists(inputs)
+
+        save_settings(settings)
+        self._reload_input_configs()
+
+    def _ensure_default_exists(self, inputs: list[dict]):
+        """Ensure at least one enabled input is set as default."""
+        # Check if any enabled input is default
+        has_default = any(
+            inp.get("default", False) and inp.get("enabled", True) for inp in inputs
+        )
+
+        if not has_default:
+            # Set first enabled input as default
+            for i, inp in enumerate(inputs):
+                if inp.get("enabled", True):
+                    inp["default"] = True
+                    # Update toggle UI if widgets exist
+                    if hasattr(self, "input_widgets") and i < len(self.input_widgets):
+                        self.input_widgets[i]["default_toggle"].setChecked(True)
+                    break
+
+    def _reload_input_configs(self):
+        """Reload input configurations from settings."""
+        global _input_configs, _enabled_inputs, _default_input
+        global AVAILABLE_INPUT_INDICES
+
+        settings = load_settings()
+        self.input_configs = get_input_configs(settings)
+        self.enabled_inputs = get_enabled_inputs(self.input_configs)
+
+        _input_configs = self.input_configs
+        _enabled_inputs = self.enabled_inputs
+        _default_input = get_default_input(self.input_configs)
+        AVAILABLE_INPUT_INDICES = [inp.index for inp in _enabled_inputs]
+
+        Log.debug(f"Reloaded {len(self.enabled_inputs)} enabled inputs")
 
     def _create_logo_label(self, width: int) -> QLabel:
         label = QLabel()

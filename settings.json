@@ -3,25 +3,25 @@
         {
             "index": 0,
             "name": "HDMI-Cable",
-            "enabled": true,
-            "default": true
+            "enabled": false,
+            "default": false
         },
         {
             "index": 1,
             "name": "Apple TV",
             "enabled": true,
-            "default": false
+            "default": true
         },
         {
             "index": 2,
             "name": "Input 3",
-            "enabled": false,
+            "enabled": true,
             "default": false
         },
         {
             "index": 3,
             "name": "Input 4",
-            "enabled": false,
+            "enabled": true,
             "default": false
         }
     ]
