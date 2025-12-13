@@ -42,8 +42,15 @@ jobs:
           pip install PyQt6 opencv-python numpy Pillow pyinstaller
 
       - name: Build executable
+        shell: bash
         run: |
-          pyinstaller --onefile --name ${{ matrix.asset_name }} HDMI-viewer.py
+          if [ "$RUNNER_OS" == "macOS" ]; then
+            pyinstaller --onefile --windowed --name ${{ matrix.asset_name }} --icon=assets/icon.icns HDMI-viewer.py
+          elif [ "$RUNNER_OS" == "Windows" ]; then
+            pyinstaller --onefile --windowed --name ${{ matrix.asset_name }} --icon=assets/icon.ico HDMI-viewer.py
+          else
+            pyinstaller --onefile --name ${{ matrix.asset_name }} HDMI-viewer.py
+          fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
