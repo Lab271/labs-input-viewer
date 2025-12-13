@@ -6,8 +6,10 @@ Displays two camera feeds side by side with configurable spacing.
 Designed for 6000x1200 resolution displays.
 
 Usage:
-    python HDMI-viewer.py           # Production mode (real cameras)
-    python HDMI-viewer.py --test    # Test mode (mock video sources)
+    python HDMI-viewer.py                  # Production mode (real cameras)
+    python HDMI-viewer.py --mock           # Test mode (animated mock sources)
+    python HDMI-viewer.py --switch-signals # Cycle signal/no-signal every 10s
+    python HDMI-viewer.py --no-signal      # Always show no-signal overlay
 
 Keyboard shortcuts:
     F11 / F  - Toggle fullscreen
@@ -43,7 +45,7 @@ from PyQt6.QtWidgets import (
     QSizePolicy,
     QFrame,
 )
-from PyQt6.QtCore import QTimer, Qt, QPropertyAnimation, QEasingCurve
+from PyQt6.QtCore import QTimer, Qt
 from PyQt6.QtGui import QImage, QPixmap, QEnterEvent
 
 
@@ -91,18 +93,29 @@ TIMER_INTERVAL_MS = 30
 class CameraFeed:
     """Handles a single camera capture (real or mock)."""
     
-    def __init__(self, camera_index: int, test_mode: bool = False, label: str = "FEED"):
+    def __init__(self, camera_index: int, test_mode: bool = False, label: str = "FEED", 
+                 switch_signals: bool = False, always_no_signal: bool = False):
         self.index = camera_index
         self.test_mode = test_mode
+        self.switch_signals = switch_signals
+        self.always_no_signal = always_no_signal
         self.last_frame = None
         self.static_frame_count = 0
         
         if test_mode:
             from mock_sources import create_mock_feed
             self.cap = create_mock_feed(
-                camera_index, TARGET_WIDTH, TARGET_HEIGHT, TARGET_FPS, label
+                camera_index, TARGET_WIDTH, TARGET_HEIGHT, TARGET_FPS, label,
+                switch_signals=switch_signals,
+                always_no_signal=always_no_signal
             )
-            print(f"Mock camera {camera_index} ({label}): {TARGET_WIDTH}x{TARGET_HEIGHT} @ {TARGET_FPS} FPS")
+            if always_no_signal:
+                mode_str = "NO-SIGNAL"
+            elif switch_signals:
+                mode_str = "SWITCH-SIGNALS"
+            else:
+                mode_str = "TEST"
+            print(f"Mock camera {camera_index} ({label}) [{mode_str}]: {TARGET_WIDTH}x{TARGET_HEIGHT} @ {TARGET_FPS} FPS")
         else:
             self.cap = self._open_camera(camera_index)
             if self.cap and self.cap.isOpened():
@@ -203,9 +216,11 @@ class CameraFeed:
 
 
 class DualVideoViewer(QWidget):
-    def __init__(self, test_mode: bool = False):
+    def __init__(self, test_mode: bool = False, switch_signals: bool = False, always_no_signal: bool = False):
         super().__init__()
         self.test_mode = test_mode
+        self.switch_signals = switch_signals
+        self.always_no_signal = always_no_signal
         self.layout_mode = LayoutMode.DUAL
         
         # Camera indices (can be changed at runtime)
@@ -213,14 +228,14 @@ class DualVideoViewer(QWidget):
         self.right_camera_index = RIGHT_CAMERA_INDEX
         
         # Open both cameras
-        self.left_feed = CameraFeed(self.left_camera_index, test_mode, "LEFT")
-        self.right_feed = CameraFeed(self.right_camera_index, test_mode, "RIGHT")
+        self.left_feed = CameraFeed(self.left_camera_index, test_mode, "LEFT", switch_signals, always_no_signal)
+        self.right_feed = CameraFeed(self.right_camera_index, test_mode, "RIGHT", switch_signals, always_no_signal)
         
         # Window setup
         self.setWindowTitle("Dual Elgato Viewer")
         self.setStyleSheet("background-color: black;")
         
-        # Create labels for each video feed
+        # Create video labels
         self.left_label = self._create_video_label()
         self.right_label = self._create_video_label()
         
@@ -255,22 +270,91 @@ class DualVideoViewer(QWidget):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_frames)
         self.timer.start(TIMER_INTERVAL_MS)
+        
+        # Animation state for no-signal pulse
+        self.pulse_phase = 0
     
     def _create_video_label(self) -> QLabel:
+        """Create a video display label."""
         label = QLabel()
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         label.setSizePolicy(
             QSizePolicy.Policy.Expanding,
             QSizePolicy.Policy.Expanding
         )
-        label.setStyleSheet("""
-            background-color: black;
-            color: white;
-            font-size: 24px;
-            font-family: Arial, Helvetica;
-        """)
-        label.setWordWrap(True)
+        label.setStyleSheet("background-color: black;")
         return label
+    
+    def _create_no_signal_frame(self, width: int, height: int) -> np.ndarray:
+        """Generate an elegant no-signal frame with smooth animation."""
+        # Black background
+        frame = np.zeros((height, width, 3), dtype=np.uint8)
+        
+        # Center coordinates
+        cx, cy = width // 2, height // 2
+        
+        # Smooth pulsing animation
+        self.pulse_phase = (self.pulse_phase + 0.03) % (2 * np.pi)
+        pulse = (np.sin(self.pulse_phase) + 1) / 2  # 0 to 1
+        
+        # Animated ring around the icon area
+        ring_alpha = int(30 + 25 * pulse)
+        ring_radius = 80
+        cv2.circle(frame, (cx, cy - 40), ring_radius, (ring_alpha, ring_alpha, ring_alpha), 2, cv2.LINE_AA)
+        
+        # Inner pulsing circle
+        inner_radius = int(8 + 4 * pulse)
+        inner_color = int(60 + 40 * pulse)
+        cv2.circle(frame, (cx, cy - 40), inner_radius, (inner_color, inner_color, inner_color), -1, cv2.LINE_AA)
+        
+        # HDMI cable icon (simple representation)
+        icon_y = cy - 40
+        # Connector shape
+        cv2.rectangle(frame, (cx - 25, icon_y - 15), (cx + 25, icon_y + 15), (70, 70, 70), -1, cv2.LINE_AA)
+        cv2.rectangle(frame, (cx - 25, icon_y - 15), (cx + 25, icon_y + 15), (100, 100, 100), 2, cv2.LINE_AA)
+        # Pins
+        for i in range(-2, 3):
+            pin_x = cx + i * 8
+            cv2.line(frame, (pin_x, icon_y - 8), (pin_x, icon_y + 8), (50, 50, 50), 2, cv2.LINE_AA)
+        
+        # "No Signal" text with subtle glow effect
+        text = "No Signal"
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 1.8
+        thickness = 2
+        text_size = cv2.getTextSize(text, font, font_scale, thickness)[0]
+        text_x = cx - text_size[0] // 2
+        text_y = cy + 80
+        
+        # Glow layer (slightly larger, dimmer)
+        glow_intensity = int(40 + 20 * pulse)
+        cv2.putText(frame, text, (text_x, text_y), font, font_scale, (glow_intensity, glow_intensity, glow_intensity), thickness + 2, cv2.LINE_AA)
+        # Main text
+        text_intensity = int(120 + 40 * pulse)
+        cv2.putText(frame, text, (text_x, text_y), font, font_scale, (text_intensity, text_intensity, text_intensity), thickness, cv2.LINE_AA)
+        
+        # Subtitle
+        subtitle = "Connect HDMI cable"
+        sub_scale = 0.7
+        sub_size = cv2.getTextSize(subtitle, font, sub_scale, 1)[0]
+        sub_x = cx - sub_size[0] // 2
+        sub_y = cy + 130
+        sub_intensity = int(50 + 20 * pulse)
+        cv2.putText(frame, subtitle, (sub_x, sub_y), font, sub_scale, (sub_intensity, sub_intensity, sub_intensity), 1, cv2.LINE_AA)
+        
+        # Animated dots at the bottom (loading-style indicator)
+        dots_y = cy + 180
+        dot_spacing = 20
+        for i in range(3):
+            # Each dot pulses with a phase offset
+            dot_phase = (self.pulse_phase + i * 0.8) % (2 * np.pi)
+            dot_pulse = (np.sin(dot_phase) + 1) / 2
+            dot_size = int(4 + 3 * dot_pulse)
+            dot_brightness = int(40 + 50 * dot_pulse)
+            dot_x = cx + (i - 1) * dot_spacing
+            cv2.circle(frame, (dot_x, dots_y), dot_size, (dot_brightness, dot_brightness, dot_brightness), -1, cv2.LINE_AA)
+        
+        return frame
     
     def _create_spacer(self, width: int) -> QLabel:
         spacer = QLabel()
@@ -413,9 +497,9 @@ class DualVideoViewer(QWidget):
                     Qt.TransformationMode.SmoothTransformation
                 )
                 self.left_label.setPixmap(scaled)
-            elif not left_has_signal:
-                self.left_label.clear()
-                self.left_label.setText(NO_SIGNAL_MESSAGE)
+            else:
+                # Show animated no-signal frame
+                self._show_no_signal(self.left_label)
         
         # Right feed (shown in DUAL and SINGLE_RIGHT modes)
         if self.layout_mode in (LayoutMode.DUAL, LayoutMode.SINGLE_RIGHT):
@@ -427,9 +511,19 @@ class DualVideoViewer(QWidget):
                     Qt.TransformationMode.SmoothTransformation
                 )
                 self.right_label.setPixmap(scaled)
-            elif not right_has_signal:
-                self.right_label.clear()
-                self.right_label.setText(NO_SIGNAL_MESSAGE)
+            else:
+                # Show animated no-signal frame
+                self._show_no_signal(self.right_label)
+    
+    def _show_no_signal(self, label: QLabel):
+        """Display animated no-signal frame on a label."""
+        size = label.size()
+        if size.width() > 0 and size.height() > 0:
+            frame = self._create_no_signal_frame(size.width(), size.height())
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            h, w, ch = frame_rgb.shape
+            qimg = QImage(frame_rgb.data, w, h, ch * w, QImage.Format.Format_RGB888)
+            label.setPixmap(QPixmap.fromImage(qimg))
     
     def set_layout_mode(self, mode: LayoutMode):
         """Switch to a different layout mode."""
@@ -453,7 +547,6 @@ class DualVideoViewer(QWidget):
             total_margin = SIDE_MARGIN * 2 + CENTER_GAP
             self.left_spacer.setFixedWidth(total_margin)
             self.right_spacer.setFixedWidth(total_margin)
-            self.left_label.clear()
             print(f"Layout: SINGLE LEFT (cam {self.left_camera_index})")
             
         elif mode == LayoutMode.SINGLE_RIGHT:
@@ -465,7 +558,6 @@ class DualVideoViewer(QWidget):
             total_margin = SIDE_MARGIN * 2 + CENTER_GAP
             self.left_spacer.setFixedWidth(total_margin)
             self.right_spacer.setFixedWidth(total_margin)
-            self.right_label.clear()
             print(f"Layout: SINGLE RIGHT (cam {self.right_camera_index})")
     
     def switch_camera(self, feed: str, direction: int):
@@ -475,14 +567,14 @@ class DualVideoViewer(QWidget):
             new_idx = (current_idx + direction) % len(AVAILABLE_CAMERA_INDICES)
             self.left_camera_index = AVAILABLE_CAMERA_INDICES[new_idx]
             self.left_feed.release()
-            self.left_feed = CameraFeed(self.left_camera_index, self.test_mode, "LEFT")
+            self.left_feed = CameraFeed(self.left_camera_index, self.test_mode, "LEFT", self.switch_signals, self.always_no_signal)
             print(f"Left camera switched to index {self.left_camera_index}")
         else:
             current_idx = AVAILABLE_CAMERA_INDICES.index(self.right_camera_index)
             new_idx = (current_idx + direction) % len(AVAILABLE_CAMERA_INDICES)
             self.right_camera_index = AVAILABLE_CAMERA_INDICES[new_idx]
             self.right_feed.release()
-            self.right_feed = CameraFeed(self.right_camera_index, self.test_mode, "RIGHT")
+            self.right_feed = CameraFeed(self.right_camera_index, self.test_mode, "RIGHT", self.switch_signals, self.always_no_signal)
             print(f"Right camera switched to index {self.right_camera_index}")
     
     def keyPressEvent(self, event):
@@ -537,6 +629,20 @@ class DualVideoViewer(QWidget):
             elif self.layout_mode == LayoutMode.SINGLE_RIGHT:
                 self.switch_camera("right", -1)
         
+        # Test mode: toggle no-signal simulation
+        elif key == Qt.Key.Key_N and self.test_mode:
+            # Toggle signal for the active feed(s)
+            if self.layout_mode == LayoutMode.SINGLE_LEFT:
+                has_signal = self.left_feed.toggle_signal()
+                print(f"Left feed signal: {'ON' if has_signal else 'OFF'}\"")
+            elif self.layout_mode == LayoutMode.SINGLE_RIGHT:
+                has_signal = self.right_feed.toggle_signal()
+                print(f"Right feed signal: {'ON' if has_signal else 'OFF'}\"")
+            else:  # DUAL mode - toggle both
+                self.left_feed.toggle_signal()
+                has_signal = self.right_feed.toggle_signal()
+                print(f"Both feeds signal: {'ON' if has_signal else 'OFF'}\"")
+        
         else:
             super().keyPressEvent(event)
     
@@ -554,20 +660,44 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description="Dual Elgato Capture Card Viewer for Ultrawide Displays"
     )
-    parser.add_argument(
-        "--test", "-t",
+    
+    # Test mode group
+    test_group = parser.add_mutually_exclusive_group()
+    test_group.add_argument(
+        "--mock", "-m",
         action="store_true",
-        help="Run in test mode with mock video sources"
+        help="Run in test mode with mock video sources (animated pattern)"
     )
+    test_group.add_argument(
+        "--switch-signals", "-s",
+        action="store_true",
+        help="Test mode with signal cycling (10s signal, 10s no-signal)"
+    )
+    test_group.add_argument(
+        "--no-signal", "-n",
+        action="store_true",
+        help="Test mode with always no-signal state"
+    )
+    
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
     
-    if args.test:
+    # Determine test mode
+    test_mode = args.mock or args.switch_signals or args.no_signal
+    switch_signals = args.switch_signals
+    always_no_signal = args.no_signal
+    
+    if test_mode:
         print("=" * 60)
-        print("TEST MODE - Using mock video sources")
+        if always_no_signal:
+            print("NO-SIGNAL MODE - Always showing no-signal overlay")
+        elif switch_signals:
+            print("SWITCH-SIGNALS MODE - Cycling signal/no-signal every 10s")
+        else:
+            print("TEST MODE - Using mock video sources (animated pattern)")
         print("=" * 60)
         print("Layout: D=dual, 1=single left, 2=single right")
         print("Camera: Arrow keys to switch camera index")
@@ -576,7 +706,11 @@ def main():
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
     
-    viewer = DualVideoViewer(test_mode=args.test)
+    viewer = DualVideoViewer(
+        test_mode=test_mode, 
+        switch_signals=switch_signals,
+        always_no_signal=always_no_signal
+    )
     viewer.show()
     
     sys.exit(app.exec())

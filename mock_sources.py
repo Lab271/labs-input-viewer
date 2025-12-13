@@ -7,6 +7,7 @@ Provides animated test patterns and simulated no-signal states.
 import cv2
 import numpy as np
 import time
+import os
 from dataclasses import dataclass
 
 
@@ -17,14 +18,19 @@ class MockConfig:
     height: int = 1080
     fps: int = 30
     label: str = "FEED"
+    switch_signals: bool = False    # Cycle between signal and no-signal
+    always_no_signal: bool = False  # Always show no-signal
+    signal_duration: float = 10.0   # Seconds of signal before switching
 
 
 class MockVideoSource:
     """
     Generates animated test patterns for testing without capture hardware.
     
-    Keyboard controls (handled by main app):
-        1/2 - Toggle no-signal for left/right feed
+    Modes:
+        - Normal: Always shows animated test pattern
+        - switch_signals: Cycles between signal (10s) and no-signal (10s)
+        - always_no_signal: Always shows no-signal (Elgato screenshot)
     """
     
     def __init__(self, config: MockConfig, source_id: int = 0):
@@ -33,6 +39,14 @@ class MockVideoSource:
         self.start_time = time.time()
         self.frame_count = 0
         self.no_signal = False
+        
+        # Load the Elgato no-signal screenshot if available
+        self.elgato_no_signal_img = None
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        no_signal_path = os.path.join(script_dir, "elgato_no_source.png")
+        if os.path.exists(no_signal_path):
+            self.elgato_no_signal_img = cv2.imread(no_signal_path)
+            print(f"Loaded Elgato no-signal image: {no_signal_path}")
         
         # Colors for the animated pattern
         self.colors = [
@@ -67,7 +81,19 @@ class MockVideoSource:
         Generate and return an animated test frame.
         Returns (success, frame) like cv2.VideoCapture.read()
         """
-        if self.no_signal:
+        # In always_no_signal mode, always show no-signal
+        if self.config.always_no_signal:
+            return True, self._generate_no_signal_frame()
+        
+        # In switch_signals mode, cycle between signal and no-signal
+        if self.config.switch_signals:
+            elapsed = time.time() - self.start_time
+            cycle_time = self.config.signal_duration * 2  # Full cycle
+            in_signal_phase = (elapsed % cycle_time) < self.config.signal_duration
+            
+            if not in_signal_phase:
+                return True, self._generate_no_signal_frame()
+        elif self.no_signal:
             return True, self._generate_no_signal_frame()
         
         frame = self._generate_animated_frame()
@@ -147,26 +173,39 @@ class MockVideoSource:
         """Generate a frame that mimics Elgato's no-signal screen."""
         w, h = self.config.width, self.config.height
         
-        # Dark gray background (matches Elgato no-signal)
+        # Use actual Elgato screenshot if available
+        if self.elgato_no_signal_img is not None:
+            # Resize to match expected dimensions
+            return cv2.resize(self.elgato_no_signal_img, (w, h))
+        
+        # Fallback: Dark gray background (matches Elgato no-signal)
         frame = np.full((h, w, 3), 45, dtype=np.uint8)
         
         # Add slight noise to make it more realistic
-        noise = np.random.randint(-5, 5, (h, w, 3), dtype=np.int16)
+        noise = np.random.randint(-3, 3, (h, w, 3), dtype=np.int16)
         frame = np.clip(frame.astype(np.int16) + noise, 0, 255).astype(np.uint8)
         
         return frame
 
 
 def create_mock_feed(camera_index: int, target_width: int, target_height: int, 
-                     target_fps: int, label: str = "FEED") -> MockVideoSource:
+                     target_fps: int, label: str = "FEED", 
+                     switch_signals: bool = False,
+                     always_no_signal: bool = False) -> MockVideoSource:
     """
     Factory function to create a mock video source.
     Matches the signature expected by the main application.
+    
+    Args:
+        switch_signals: If True, cycles between signal (10s) and no-signal (10s)
+        always_no_signal: If True, always shows no-signal state
     """
     config = MockConfig(
         width=target_width,
         height=target_height,
         fps=target_fps,
-        label=f"{label} (CAM {camera_index})"
+        label=f"{label} (CAM {camera_index})",
+        switch_signals=switch_signals,
+        always_no_signal=always_no_signal
     )
     return MockVideoSource(config, source_id=camera_index)
