@@ -60,7 +60,7 @@ from PyQt6.QtWidgets import (
 
 def get_resource_path(relative_path: str) -> str:
     """Get absolute path to resource, works for dev and for PyInstaller bundle."""
-    if hasattr(sys, '_MEIPASS'):
+    if hasattr(sys, "_MEIPASS"):
         # PyInstaller creates a temp folder and stores path in _MEIPASS
         base_path = sys._MEIPASS
     else:
@@ -70,20 +70,19 @@ def get_resource_path(relative_path: str) -> str:
 
 def get_user_data_path(filename: str) -> str:
     """Get path for user data files (settings that need to persist)."""
-    if hasattr(sys, '_MEIPASS'):
+    if hasattr(sys, "_MEIPASS"):
         # When bundled, use user's home directory for writable files
-        if sys.platform == 'darwin':
-            data_dir = os.path.expanduser('~/Library/Application Support/HDMI Viewer')
-        elif sys.platform == 'win32':
-            data_dir = os.path.join(os.environ.get('APPDATA', ''), 'HDMI Viewer')
+        if sys.platform == "darwin":
+            data_dir = os.path.expanduser("~/Library/Application Support/HDMI Viewer")
+        elif sys.platform == "win32":
+            data_dir = os.path.join(os.environ.get("APPDATA", ""), "HDMI Viewer")
         else:
-            data_dir = os.path.expanduser('~/.config/hdmi-viewer')
+            data_dir = os.path.expanduser("~/.config/hdmi-viewer")
         os.makedirs(data_dir, exist_ok=True)
         return os.path.join(data_dir, filename)
     else:
         # Development mode - use script directory
         return os.path.join(os.path.dirname(os.path.abspath(__file__)), filename)
-
 
 
 # =============================================================================
