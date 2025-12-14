@@ -33,6 +33,7 @@ Requirements:
 import argparse
 import json
 import os
+import shutil
 import sys
 from dataclasses import dataclass
 from enum import Enum, auto
@@ -55,6 +56,34 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+
+def get_resource_path(relative_path: str) -> str:
+    """Get absolute path to resource, works for dev and for PyInstaller bundle."""
+    if hasattr(sys, '_MEIPASS'):
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    else:
+        base_path = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base_path, relative_path)
+
+
+def get_user_data_path(filename: str) -> str:
+    """Get path for user data files (settings that need to persist)."""
+    if hasattr(sys, '_MEIPASS'):
+        # When bundled, use user's home directory for writable files
+        if sys.platform == 'darwin':
+            data_dir = os.path.expanduser('~/Library/Application Support/HDMI Viewer')
+        elif sys.platform == 'win32':
+            data_dir = os.path.join(os.environ.get('APPDATA', ''), 'HDMI Viewer')
+        else:
+            data_dir = os.path.expanduser('~/.config/hdmi-viewer')
+        os.makedirs(data_dir, exist_ok=True)
+        return os.path.join(data_dir, filename)
+    else:
+        # Development mode - use script directory
+        return os.path.join(os.path.dirname(os.path.abspath(__file__)), filename)
+
 
 
 # =============================================================================
@@ -148,8 +177,17 @@ class InputConfig:
 
 def load_settings() -> dict:
     """Load settings from settings.json file."""
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    settings_path = os.path.join(script_dir, "settings.json")
+    settings_path = get_user_data_path("settings.json")
+
+    # If no user settings exist, copy default from bundle
+    if not os.path.exists(settings_path):
+        default_settings_path = get_resource_path("settings.json")
+        if os.path.exists(default_settings_path):
+            try:
+                shutil.copy(default_settings_path, settings_path)
+                Log.debug(f"Copied default settings to {settings_path}")
+            except IOError:
+                pass
 
     if os.path.exists(settings_path):
         try:
@@ -173,8 +211,7 @@ def load_settings() -> dict:
 
 def save_settings(settings: dict):
     """Save settings to settings.json file."""
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    settings_path = os.path.join(script_dir, "settings.json")
+    settings_path = get_user_data_path("settings.json")
 
     try:
         with open(settings_path, "w") as f:
@@ -602,8 +639,7 @@ class DualVideoViewer(QWidget):
             not hasattr(self, "_no_signal_cache")
             or self._no_signal_cache.get("size") != cache_key
         ):
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            icon_path = os.path.join(script_dir, "no_signal_icon.png")
+            icon_path = get_resource_path("no_signal_icon.png")
             if os.path.exists(icon_path):
                 icon = Image.open(icon_path).convert("RGBA")
                 cable_split_x = 980
@@ -1206,9 +1242,8 @@ class DualVideoViewer(QWidget):
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         label.setStyleSheet("background-color: black;")
 
-        # Load logo from same directory as script
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        logo_path = os.path.join(script_dir, LOGO_FILENAME)
+        # Load logo from resources
+        logo_path = get_resource_path(LOGO_FILENAME)
 
         if os.path.exists(logo_path):
             pixmap = QPixmap(logo_path)

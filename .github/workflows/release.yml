@@ -57,18 +57,24 @@ jobs:
         shell: bash
         run: |
           if [ "$RUNNER_OS" == "macOS" ]; then
-            pyinstaller --onefile --windowed --name ${{ matrix.asset_name }} --icon=assets/icon.icns HDMI-viewer.py
+            pyinstaller hdmi-viewer.spec
+            cd dist && zip -r ../hdmi-viewer-macos.zip "HDMI Viewer.app"
           elif [ "$RUNNER_OS" == "Windows" ]; then
-            pyinstaller --onefile --windowed --name ${{ matrix.asset_name }} --icon=assets/icon.ico HDMI-viewer.py
+            pyinstaller hdmi-viewer.spec
+            mv "dist/HDMI Viewer.exe" dist/hdmi-viewer-windows.exe
           else
-            pyinstaller --onefile --name ${{ matrix.asset_name }} HDMI-viewer.py
+            pyinstaller hdmi-viewer.spec
+            cd dist && tar -czvf ../hdmi-viewer-linux.tar.gz "HDMI Viewer"
           fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset_name }}
-          path: dist/
+          path: |
+            hdmi-viewer-*.zip
+            hdmi-viewer-*.tar.gz
+            dist/hdmi-viewer-*.exe
 
   release:
     name: Create Release
