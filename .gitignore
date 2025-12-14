@@ -7,7 +7,9 @@ __pycache__/
 *.egg-info/
 dist/
 build/
-*.spec
+# Keep hdmi-viewer.spec for PyInstaller builds
+!hdmi-viewer.spec
 .coverage
 htmlcov/
 .DS_Store
+continue.md
