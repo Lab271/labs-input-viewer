@@ -41,13 +41,21 @@ class MockVideoSource:
         self.frame_count = 0
         self.no_signal = False
 
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+
         # Load the Elgato no-signal screenshot if available
         self.elgato_no_signal_img = None
-        script_dir = os.path.dirname(os.path.abspath(__file__))
         no_signal_path = os.path.join(script_dir, "elgato_no_source.png")
         if os.path.exists(no_signal_path):
             self.elgato_no_signal_img = cv2.imread(no_signal_path)
             print(f"Loaded Elgato no-signal image: {no_signal_path}")
+
+        # Load zed.png for no-signal overlay
+        self.zed_img = None
+        zed_path = os.path.join(script_dir, "zed.png")
+        if os.path.exists(zed_path):
+            self.zed_img = cv2.imread(zed_path, cv2.IMREAD_UNCHANGED)
+            print(f"Loaded zed image: {zed_path}")
 
         # Colors for the animated pattern
         self.colors = [
@@ -193,22 +201,61 @@ class MockVideoSource:
         return frame
 
     def _generate_no_signal_frame(self) -> np.ndarray:
-        """Generate a frame that mimics Elgato's no-signal screen."""
+        """
+        Generate a frame that cycles through different no-signal screens:
+        - elgato_no_source.png (2 seconds)
+        - zed.png centered on grey (2 seconds)
+        - completely grey screen (2 seconds)
+        """
         w, h = self.config.width, self.config.height
-
-        # Use actual Elgato screenshot if available
-        if self.elgato_no_signal_img is not None:
-            # Resize to match expected dimensions
-            return cv2.resize(self.elgato_no_signal_img, (w, h))
-
-        # Fallback: Dark gray background (matches Elgato no-signal)
-        frame = np.full((h, w, 3), 45, dtype=np.uint8)
-
-        # Add slight noise to make it more realistic
-        noise = np.random.randint(-3, 3, (h, w, 3), dtype=np.int16)
-        frame = np.clip(frame.astype(np.int16) + noise, 0, 255).astype(np.uint8)
-
-        return frame
+        elapsed = time.time() - self.start_time
+        
+        # Cycle through 3 screens, 2 seconds each
+        cycle_phase = int(elapsed / 2) % 3
+        
+        if cycle_phase == 0:
+            # Phase 0: Elgato no-signal screenshot
+            if self.elgato_no_signal_img is not None:
+                return cv2.resize(self.elgato_no_signal_img, (w, h))
+            else:
+                return np.full((h, w, 3), 45, dtype=np.uint8)
+        
+        elif cycle_phase == 1:
+            # Phase 1: zed.png centered on grey background
+            frame = np.full((h, w, 3), 45, dtype=np.uint8)
+            
+            if self.zed_img is not None:
+                zed_h, zed_w = self.zed_img.shape[:2]
+                
+                # Calculate position to center the image
+                x_offset = max(0, (w - zed_w) // 2)
+                y_offset = max(0, (h - zed_h) // 2)
+                
+                # Calculate the region to overlay
+                x_end = min(x_offset + zed_w, w)
+                y_end = min(y_offset + zed_h, h)
+                zed_w_actual = x_end - x_offset
+                zed_h_actual = y_end - y_offset
+                
+                if self.zed_img.shape[2] == 4:
+                    # Image has alpha channel
+                    zed_rgb = self.zed_img[:zed_h_actual, :zed_w_actual, :3]
+                    alpha = self.zed_img[:zed_h_actual, :zed_w_actual, 3] / 255.0
+                    alpha = alpha[:, :, np.newaxis]
+                    
+                    roi = frame[y_offset:y_end, x_offset:x_end]
+                    frame[y_offset:y_end, x_offset:x_end] = (
+                        alpha * zed_rgb + (1 - alpha) * roi
+                    ).astype(np.uint8)
+                else:
+                    # No alpha channel, just overlay
+                    frame[y_offset:y_end, x_offset:x_end] = self.zed_img[:zed_h_actual, :zed_w_actual]
+            
+            return frame
+        
+        else:
+            # Phase 2: Completely grey screen (uniform)
+            return np.full((h, w, 3), 45, dtype=np.uint8)
 
 
 def create_mock_feed(
