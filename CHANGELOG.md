@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2025-12-16
+
+### Changed
+- Replaced no-signal detection with vision model using multi-vector feature extraction
+- No-signal detection now compares against reference image (elgato_no_source.png)
+- Uses cosine similarity on color histograms, spatial intensity, edge density, and statistical features
+- Only checks every 100 frames (~3.3s at 30Hz) for efficiency
+- Fixes false positives on dark/grey applications and presentations
+
+### Improved
+- Mock no-signal mode now cycles through 3 test screens: elgato_no_source.png, zed.png, and uniform grey
+
 ## [1.0.0] - 2025-12-13
 
 ### Added
