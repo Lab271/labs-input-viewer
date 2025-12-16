@@ -716,7 +716,7 @@ class DualVideoViewer(QWidget):
                 color: white;
                 font-size: 48px;
                 font-weight: bold;
-                font-family: 'TT Interphases Pro', 'Helvetica Neue', Arial, sans-serif;
+                font-family: 'TT Interphases', 'Helvetica Neue', Arial, sans-serif;
                 background-color: rgba(0, 0, 0, 180);
                 border-radius: 16px;
                 padding: 20px 40px;
@@ -757,7 +757,7 @@ class DualVideoViewer(QWidget):
         if self.cursor_hidden:
             self.setCursor(Qt.CursorShape.ArrowCursor)
             self.cursor_hidden = False
-        self.cursor_hide_timer.start(3000)  # Hide after 3 seconds
+        self.cursor_hide_timer.start(10000)  # Hide after 10 seconds
     
     def mouseMoveEvent(self, event):
         """Handle mouse movement - show cursor and restart timer."""
@@ -1035,7 +1035,7 @@ class DualVideoViewer(QWidget):
         icon.setStyleSheet("""
             QLabel {
                 color: rgba(255, 255, 255, 100);
-                font-size: 24px;
+                font-size: 28px;
                 background: transparent;
             }
         """)
@@ -1051,7 +1051,7 @@ class DualVideoViewer(QWidget):
         self.audio_icon.setStyleSheet("""
             QLabel {
                 color: rgba(255, 255, 255, 255);
-                font-size: 24px;
+                font-size: 28px;
                 background: transparent;
             }
         """)
@@ -1061,7 +1061,7 @@ class DualVideoViewer(QWidget):
         self.audio_icon.setStyleSheet("""
             QLabel {
                 color: rgba(255, 255, 255, 100);
-                font-size: 24px;
+                font-size: 28px;
                 background: transparent;
             }
         """)
@@ -1404,7 +1404,7 @@ class DualVideoViewer(QWidget):
         self.info_icon.setStyleSheet("""
             QLabel {
                 color: rgba(255, 255, 255, 100);
-                font-size: 24px;
+                font-size: 28px;
                 background: transparent;
             }
         """)
@@ -1473,7 +1473,7 @@ class DualVideoViewer(QWidget):
         icon.setStyleSheet("""
             QLabel {
                 color: rgba(255, 255, 255, 100);
-                font-size: 24px;
+                font-size: 28px;
                 background: transparent;
             }
         """)
@@ -1489,7 +1489,7 @@ class DualVideoViewer(QWidget):
         self.settings_icon.setStyleSheet("""
             QLabel {
                 color: rgba(255, 255, 255, 255);
-                font-size: 24px;
+                font-size: 28px;
                 background: transparent;
             }
         """)
@@ -1499,7 +1499,7 @@ class DualVideoViewer(QWidget):
         self.settings_icon.setStyleSheet("""
             QLabel {
                 color: rgba(255, 255, 255, 100);
-                font-size: 24px;
+                font-size: 28px;
                 background: transparent;
             }
         """)
@@ -1509,7 +1509,7 @@ class DualVideoViewer(QWidget):
         self.info_icon.setStyleSheet("""
             QLabel {
                 color: rgba(255, 255, 255, 255);
-                font-size: 24px;
+                font-size: 28px;
                 background: transparent;
             }
         """)
@@ -1520,7 +1520,7 @@ class DualVideoViewer(QWidget):
         self.info_icon.setStyleSheet("""
             QLabel {
                 color: rgba(255, 255, 255, 100);
-                font-size: 24px;
+                font-size: 28px;
                 background: transparent;
             }
         """)
