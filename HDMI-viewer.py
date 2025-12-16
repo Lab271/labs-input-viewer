@@ -35,6 +35,7 @@ import json
 import os
 import shutil
 import sys
+import time
 from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Optional
@@ -55,6 +56,8 @@ from PyQt6.QtWidgets import (
     QSizePolicy,
     QVBoxLayout,
     QWidget,
+    QSlider,
+    QGridLayout,
 )
 
 
@@ -654,6 +657,36 @@ class DualVideoViewer(QWidget):
         self.input_name_timer.timeout.connect(self._hide_input_name)
         self.input_name_timer.setSingleShot(True)
 
+        # Auto-hide cursor after inactivity
+        self.cursor_hide_timer = QTimer(self)
+        self.cursor_hide_timer.timeout.connect(self._hide_cursor)
+        self.cursor_hide_timer.setSingleShot(True)
+        self.cursor_hidden = False
+        self.setMouseTracking(True)
+        
+        # Screensaver mode (when all inputs have no signal)
+        self.screensaver_active = False
+        self.no_signal_start_time = None
+        self.screensaver_delay = 60  # Seconds before screensaver activates
+        
+        # Freeze frame feature
+        self.freeze_left = False
+        self.freeze_right = False
+        self.frozen_left_pixmap = None
+        self.frozen_right_pixmap = None
+        
+        # Auto-switch on signal
+        self.auto_switch_enabled = True
+        self.last_signal_state = {}  # Track signal state per input
+        
+        # Input thumbnails panel
+        self.thumbnails_panel = self._create_thumbnails_panel()
+        self.thumbnail_feeds = {}  # Will hold CameraFeed objects for thumbnails
+        
+        # Audio control panel
+        self.audio_panel = self._create_audio_panel()
+        self.audio_icon = self._create_audio_icon()
+
         # Start fullscreen if configured
         if FULLSCREEN:
             self.showFullScreen()
@@ -704,6 +737,450 @@ class DualVideoViewer(QWidget):
     def _hide_input_name(self):
         """Hide the input name overlay."""
         self.input_name_label.hide()
+
+    # =========================================================================
+    # AUTO-HIDE CURSOR
+    # =========================================================================
+    
+    def _hide_cursor(self):
+        """Hide the mouse cursor."""
+        self.setCursor(Qt.CursorShape.BlankCursor)
+        self.cursor_hidden = True
+    
+    def _show_cursor(self):
+        """Show the mouse cursor and restart hide timer."""
+        if self.cursor_hidden:
+            self.setCursor(Qt.CursorShape.ArrowCursor)
+            self.cursor_hidden = False
+        self.cursor_hide_timer.start(3000)  # Hide after 3 seconds
+    
+    def mouseMoveEvent(self, event):
+        """Handle mouse movement - show cursor and restart timer."""
+        self._show_cursor()
+        super().mouseMoveEvent(event)
+
+    # =========================================================================
+    # SCREENSAVER MODE
+    # =========================================================================
+    
+    def _create_screensaver_frame(self, width: int, height: int) -> np.ndarray:
+        """Generate a screensaver frame with animated logo."""
+        if not hasattr(self, '_screensaver_cache') or self._screensaver_cache.get('size') != (width, height):
+            # Load logo for screensaver
+            logo_path = get_resource_path(LOGO_FILENAME)
+            self._screensaver_logo = None
+            if os.path.exists(logo_path):
+                logo = Image.open(logo_path).convert("RGBA")
+                # Scale logo to reasonable size
+                scale = min(width / logo.width, height / logo.height) * 0.3
+                new_w = int(logo.width * scale)
+                new_h = int(logo.height * scale)
+                self._screensaver_logo = logo.resize((new_w, new_h), Image.Resampling.LANCZOS)
+            self._screensaver_cache = {'size': (width, height)}
+            self._screensaver_phase = 0
+        
+        # Create black frame
+        frame = np.zeros((height, width, 3), dtype=np.uint8)
+        
+        if self._screensaver_logo:
+            # Animate logo position (bouncing)
+            self._screensaver_phase += 0.02
+            logo_w, logo_h = self._screensaver_logo.size
+            
+            # Calculate bouncing position
+            t = self._screensaver_phase
+            x = int((width - logo_w) * (0.5 + 0.4 * np.sin(t * 0.7)))
+            y = int((height - logo_h) * (0.5 + 0.4 * np.sin(t * 0.5)))
+            
+            # Paste logo onto frame
+            logo_rgb = self._screensaver_logo.convert("RGB")
+            logo_arr = np.array(logo_rgb)
+            
+            # Handle alpha blending
+            if self._screensaver_logo.mode == "RGBA":
+                alpha = np.array(self._screensaver_logo.split()[3]) / 255.0
+                for c in range(3):
+                    frame[y:y+logo_h, x:x+logo_w, c] = (
+                        alpha * logo_arr[:, :, c] + (1 - alpha) * frame[y:y+logo_h, x:x+logo_w, c]
+                    ).astype(np.uint8)
+            else:
+                frame[y:y+logo_h, x:x+logo_w] = logo_arr
+        
+        return frame
+
+    # =========================================================================
+    # FREEZE FRAME
+    # =========================================================================
+    
+    def _toggle_freeze(self, feed: str = "both"):
+        """Toggle freeze frame for specified feed(s)."""
+        if feed in ("left", "both"):
+            self.freeze_left = not self.freeze_left
+            if self.freeze_left:
+                # Capture current frame
+                pixmap, has_signal = self.left_feed.read_frame()
+                if has_signal and pixmap:
+                    self.frozen_left_pixmap = pixmap
+                Log.info("Left feed FROZEN")
+            else:
+                self.frozen_left_pixmap = None
+                Log.info("Left feed UNFROZEN")
+        
+        if feed in ("right", "both"):
+            self.freeze_right = not self.freeze_right
+            if self.freeze_right:
+                pixmap, has_signal = self.right_feed.read_frame()
+                if has_signal and pixmap:
+                    self.frozen_right_pixmap = pixmap
+                Log.info("Right feed FROZEN")
+            else:
+                self.frozen_right_pixmap = None
+                Log.info("Right feed UNFROZEN")
+        
+        # Show freeze indicator
+        if self.freeze_left or self.freeze_right:
+            self._show_input_name("❙❙ FROZEN")
+        else:
+            self._show_input_name("▶ LIVE")
+
+    # =========================================================================
+    # INPUT THUMBNAILS PANEL
+    # =========================================================================
+    
+    def _create_thumbnails_panel(self) -> QFrame:
+        """Create a panel showing thumbnails of all inputs."""
+        panel = QFrame(self)
+        panel.setFixedSize(320, 200)
+        panel.setStyleSheet("""
+            QFrame {
+                background-color: rgba(30, 30, 30, 230);
+                border-radius: 12px;
+                border: 1px solid rgba(255, 255, 255, 30);
+            }
+        """)
+        
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(8)
+        
+        # Title
+        title = QLabel("⊞ Inputs")
+        title.setStyleSheet("color: rgba(255, 255, 255, 200); font-size: 14px; font-weight: bold; background: transparent;")
+        layout.addWidget(title)
+        
+        # Grid for thumbnails
+        grid = QGridLayout()
+        grid.setSpacing(6)
+        
+        self.thumbnail_labels = {}
+        for i in range(4):
+            thumb_frame = QFrame()
+            thumb_frame.setFixedSize(140, 80)
+            thumb_frame.setStyleSheet("""
+                QFrame {
+                    background-color: rgba(0, 0, 0, 200);
+                    border-radius: 6px;
+                    border: 2px solid rgba(255, 255, 255, 30);
+                }
+                QFrame:hover {
+                    border: 2px solid rgba(88, 166, 255, 200);
+                }
+            """)
+            thumb_frame.setCursor(Qt.CursorShape.PointingHandCursor)
+            thumb_frame.mousePressEvent = lambda e, idx=i: self._on_thumbnail_click(idx)
+            
+            thumb_layout = QVBoxLayout(thumb_frame)
+            thumb_layout.setContentsMargins(4, 4, 4, 4)
+            
+            # Thumbnail image
+            thumb_label = QLabel()
+            thumb_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            thumb_label.setStyleSheet("background: transparent;")
+            thumb_layout.addWidget(thumb_label)
+            
+            # Input name
+            name_label = QLabel(f"Input {i + 1}")
+            name_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            name_label.setStyleSheet("color: white; font-size: 10px; background: transparent;")
+            thumb_layout.addWidget(name_label)
+            
+            self.thumbnail_labels[i] = {'frame': thumb_frame, 'thumb': thumb_label, 'name': name_label}
+            grid.addWidget(thumb_frame, i // 2, i % 2)
+        
+        layout.addLayout(grid)
+        panel.hide()
+        return panel
+    
+    def _on_thumbnail_click(self, index: int):
+        """Handle click on a thumbnail to switch to that input."""
+        self.select_input_by_index(index)
+        self.thumbnails_panel.hide()
+    
+    def _toggle_thumbnails_panel(self):
+        """Toggle visibility of thumbnails panel."""
+        if self.thumbnails_panel.isVisible():
+            self.thumbnails_panel.hide()
+        else:
+            # Position in center
+            x = (self.width() - self.thumbnails_panel.width()) // 2
+            y = (self.height() - self.thumbnails_panel.height()) // 2
+            self.thumbnails_panel.move(x, y)
+            self.thumbnails_panel.show()
+            self.thumbnails_panel.raise_()
+    
+    def _update_thumbnails(self):
+        """Update thumbnail previews (called periodically)."""
+        if not self.thumbnails_panel.isVisible():
+            return
+        
+        for i, config in enumerate(self.input_configs):
+            if i in self.thumbnail_labels:
+                # Update name
+                self.thumbnail_labels[i]['name'].setText(config.name)
+                
+                # For now, show a placeholder or indicator
+                if config.enabled:
+                    self.thumbnail_labels[i]['frame'].setStyleSheet("""
+                        QFrame {
+                            background-color: rgba(0, 0, 0, 200);
+                            border-radius: 6px;
+                            border: 2px solid rgba(52, 199, 89, 150);
+                        }
+                        QFrame:hover {
+                            border: 2px solid rgba(88, 166, 255, 200);
+                        }
+                    """)
+                else:
+                    self.thumbnail_labels[i]['frame'].setStyleSheet("""
+                        QFrame {
+                            background-color: rgba(0, 0, 0, 200);
+                            border-radius: 6px;
+                            border: 2px solid rgba(255, 255, 255, 30);
+                        }
+                    """)
+
+    # =========================================================================
+    # AUDIO CONTROL PANEL
+    # =========================================================================
+    
+    def _create_audio_icon(self) -> QLabel:
+        """Create the audio icon button."""
+        icon = QLabel("♪", self)
+        icon.setStyleSheet("""
+            QLabel {
+                color: rgba(255, 255, 255, 100);
+                font-size: 24px;
+                background: transparent;
+            }
+        """)
+        icon.adjustSize()
+        icon.setCursor(Qt.CursorShape.PointingHandCursor)
+        icon.mousePressEvent = self._on_audio_click
+        icon.enterEvent = self._on_audio_hover_enter
+        icon.leaveEvent = self._on_audio_hover_leave
+        return icon
+    
+    def _on_audio_hover_enter(self, event):
+        """Highlight audio icon on hover."""
+        self.audio_icon.setStyleSheet("""
+            QLabel {
+                color: rgba(255, 255, 255, 255);
+                font-size: 24px;
+                background: transparent;
+            }
+        """)
+    
+    def _on_audio_hover_leave(self, event):
+        """Dim audio icon when not hovering."""
+        self.audio_icon.setStyleSheet("""
+            QLabel {
+                color: rgba(255, 255, 255, 100);
+                font-size: 24px;
+                background: transparent;
+            }
+        """)
+    
+    def _on_audio_click(self, event):
+        """Toggle audio panel visibility."""
+        if self.audio_panel.isVisible():
+            self.audio_panel.hide()
+        else:
+            # Position near the audio icon
+            x = self.audio_icon.x()
+            y = self.audio_icon.y() - self.audio_panel.height() - 10
+            self.audio_panel.move(x, y)
+            self.audio_panel.show()
+            self.audio_panel.raise_()
+    
+    def _create_audio_panel(self) -> QFrame:
+        """Create the audio control panel with sliders."""
+        panel = QFrame(self)
+        panel.setFixedSize(250, 180)
+        panel.setStyleSheet("""
+            QFrame#audioPanel {
+                background-color: rgba(30, 30, 30, 240);
+                border-radius: 12px;
+                border: 1px solid rgba(255, 255, 255, 30);
+            }
+            QLabel {
+                color: white;
+                font-family: Arial, sans-serif;
+                background: transparent;
+            }
+            QSlider::groove:horizontal {
+                height: 6px;
+                background: rgba(255, 255, 255, 30);
+                border-radius: 3px;
+            }
+            QSlider::handle:horizontal {
+                width: 16px;
+                height: 16px;
+                margin: -5px 0;
+                background: white;
+                border-radius: 8px;
+            }
+            QSlider::sub-page:horizontal {
+                background: #58a6ff;
+                border-radius: 3px;
+            }
+        """)
+        panel.setObjectName("audioPanel")
+        
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setSpacing(12)
+        
+        # Title
+        title = QLabel("♪ Audio Control")
+        title.setStyleSheet("font-size: 14px; font-weight: bold; color: rgba(255, 255, 255, 200);")
+        layout.addWidget(title)
+        
+        # Input audio (from capture card)
+        input_row = QHBoxLayout()
+        input_label = QLabel("← Input")
+        input_label.setFixedWidth(60)
+        self.input_volume_slider = QSlider(Qt.Orientation.Horizontal)
+        self.input_volume_slider.setRange(0, 100)
+        self.input_volume_slider.setValue(100)
+        self.input_volume_slider.valueChanged.connect(self._on_input_volume_changed)
+        self.input_volume_value = QLabel("100%")
+        self.input_volume_value.setFixedWidth(40)
+        input_row.addWidget(input_label)
+        input_row.addWidget(self.input_volume_slider)
+        input_row.addWidget(self.input_volume_value)
+        layout.addLayout(input_row)
+        
+        # System audio (PC output)
+        system_row = QHBoxLayout()
+        system_label = QLabel("→ System")
+        system_label.setFixedWidth(60)
+        self.system_volume_slider = QSlider(Qt.Orientation.Horizontal)
+        self.system_volume_slider.setRange(0, 100)
+        self.system_volume_slider.setValue(100)
+        self.system_volume_slider.valueChanged.connect(self._on_system_volume_changed)
+        self.system_volume_value = QLabel("100%")
+        self.system_volume_value.setFixedWidth(40)
+        system_row.addWidget(system_label)
+        system_row.addWidget(self.system_volume_slider)
+        system_row.addWidget(self.system_volume_value)
+        layout.addLayout(system_row)
+        
+        # Mute buttons
+        mute_row = QHBoxLayout()
+        self.input_mute_btn = QPushButton("⊘ Mute Input")
+        self.input_mute_btn.setCheckable(True)
+        self.input_mute_btn.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(60, 60, 60, 200);
+                color: white;
+                border: 1px solid rgba(255, 255, 255, 30);
+                border-radius: 6px;
+                padding: 6px 12px;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background-color: rgba(80, 80, 80, 200);
+            }
+            QPushButton:checked {
+                background-color: rgba(255, 59, 48, 200);
+            }
+        """)
+        self.input_mute_btn.clicked.connect(self._on_input_mute_toggle)
+        
+        self.system_mute_btn = QPushButton("⊘ Mute System")
+        self.system_mute_btn.setCheckable(True)
+        self.system_mute_btn.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(60, 60, 60, 200);
+                color: white;
+                border: 1px solid rgba(255, 255, 255, 30);
+                border-radius: 6px;
+                padding: 6px 12px;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background-color: rgba(80, 80, 80, 200);
+            }
+            QPushButton:checked {
+                background-color: rgba(255, 59, 48, 200);
+            }
+        """)
+        self.system_mute_btn.clicked.connect(self._on_system_mute_toggle)
+        
+        mute_row.addWidget(self.input_mute_btn)
+        mute_row.addWidget(self.system_mute_btn)
+        layout.addLayout(mute_row)
+        
+        layout.addStretch()
+        panel.hide()
+        return panel
+    
+    def _on_input_volume_changed(self, value: int):
+        """Handle input volume slider change."""
+        self.input_volume_value.setText(f"{value}%")
+        # Note: Actual audio control would require platform-specific implementation
+        Log.debug(f"Input volume: {value}%")
+    
+    def _on_system_volume_changed(self, value: int):
+        """Handle system volume slider change."""
+        self.system_volume_value.setText(f"{value}%")
+        # Note: Actual system volume control would require platform-specific implementation
+        Log.debug(f"System volume: {value}%")
+    
+    def _on_input_mute_toggle(self):
+        """Toggle input audio mute."""
+        muted = self.input_mute_btn.isChecked()
+        self.input_mute_btn.setText("♪ Unmute Input" if muted else "⊘ Mute Input")
+        Log.info(f"Input audio: {'MUTED' if muted else 'UNMUTED'}")
+    
+    def _on_system_mute_toggle(self):
+        """Toggle system audio mute."""
+        muted = self.system_mute_btn.isChecked()
+        self.system_mute_btn.setText("♪ Unmute System" if muted else "⊘ Mute System")
+        Log.info(f"System audio: {'MUTED' if muted else 'UNMUTED'}")
+
+    # =========================================================================
+    # AUTO-SWITCH ON SIGNAL
+    # =========================================================================
+    
+    def _check_auto_switch(self, input_index: int, has_signal: bool):
+        """Check if we should auto-switch to an input that just got signal."""
+        if not self.auto_switch_enabled:
+            return
+        
+        prev_state = self.last_signal_state.get(input_index, False)
+        self.last_signal_state[input_index] = has_signal
+        
+        # If signal just appeared (was False, now True)
+        if has_signal and not prev_state:
+            # Check if current inputs have no signal
+            current_left_signal = self.last_signal_state.get(self.left_input_index, True)
+            current_right_signal = self.last_signal_state.get(self.right_input_index, True)
+            
+            # Only auto-switch if current input has no signal
+            if not current_left_signal or not current_right_signal:
+                Log.info(f"Auto-switching to input {input_index} (signal detected)")
+                self.select_input_by_index(input_index)
 
     def _create_video_label(self) -> QLabel:
         """Create a video display label."""
@@ -897,6 +1374,9 @@ class DualVideoViewer(QWidget):
             ("L", "Single left"),
             ("R", "Single right"),
             ("1-4", "Select input"),
+            ("T", "Input thumbnails"),
+            ("Space", "Freeze frame"),
+            ("A", "Auto-switch"),
             ("F11", "Fullscreen"),
             ("Q", "Quit"),
         ]
@@ -994,15 +1474,29 @@ class DualVideoViewer(QWidget):
         if hasattr(self, "settings_icon"):
             self.settings_icon.move(margin + 40, bottom_y + 5)
 
+        # Position audio icon next to settings
+        if hasattr(self, "audio_icon"):
+            self.audio_icon.move(margin + 80, bottom_y + 5)
+
         # Position info panel above the icons
         if hasattr(self, "info_panel"):
             self.info_panel.move(margin, bottom_y - self.info_panel.height() - 5)
+        
+        # Position audio panel above audio icon
+        if hasattr(self, "audio_panel") and self.audio_panel.isVisible():
+            self.audio_panel.move(margin + 80, bottom_y - self.audio_panel.height() - 10)
 
         # Center settings panel
         if hasattr(self, "settings_panel") and self.settings_panel.isVisible():
             x = (self.width() - self.settings_panel.width()) // 2
             y = (self.height() - self.settings_panel.height()) // 2
             self.settings_panel.move(x, y)
+        
+        # Center thumbnails panel
+        if hasattr(self, "thumbnails_panel") and self.thumbnails_panel.isVisible():
+            x = (self.width() - self.thumbnails_panel.width()) // 2
+            y = (self.height() - self.thumbnails_panel.height()) // 2
+            self.thumbnails_panel.move(x, y)
 
     def _on_settings_click(self, event):
         """Handle click on settings gear icon."""
@@ -1349,33 +1843,91 @@ class DualVideoViewer(QWidget):
 
     def update_frames(self):
         """Update video feeds based on current layout mode."""
+        left_has_signal = False
+        right_has_signal = False
+        
         # Left feed (shown in DUAL and SINGLE_LEFT modes)
         if self.layout_mode in (LayoutMode.DUAL, LayoutMode.SINGLE_LEFT):
-            left_pixmap, left_has_signal = self.left_feed.read_frame()
-            if left_has_signal and left_pixmap:
-                scaled = left_pixmap.scaled(
+            if self.freeze_left and self.frozen_left_pixmap:
+                # Show frozen frame
+                scaled = self.frozen_left_pixmap.scaled(
                     self.left_label.size(),
                     Qt.AspectRatioMode.KeepAspectRatio,
                     Qt.TransformationMode.SmoothTransformation,
                 )
                 self.left_label.setPixmap(scaled)
+                left_has_signal = True
             else:
-                # Show animated no-signal frame
-                self._show_no_signal(self.left_label)
+                left_pixmap, left_has_signal = self.left_feed.read_frame()
+                self._check_auto_switch(self.left_input_index, left_has_signal)
+                if left_has_signal and left_pixmap:
+                    scaled = left_pixmap.scaled(
+                        self.left_label.size(),
+                        Qt.AspectRatioMode.KeepAspectRatio,
+                        Qt.TransformationMode.SmoothTransformation,
+                    )
+                    self.left_label.setPixmap(scaled)
+                else:
+                    # Show animated no-signal frame
+                    self._show_no_signal(self.left_label)
 
         # Right feed (shown in DUAL and SINGLE_RIGHT modes)
         if self.layout_mode in (LayoutMode.DUAL, LayoutMode.SINGLE_RIGHT):
-            right_pixmap, right_has_signal = self.right_feed.read_frame()
-            if right_has_signal and right_pixmap:
-                scaled = right_pixmap.scaled(
+            if self.freeze_right and self.frozen_right_pixmap:
+                # Show frozen frame
+                scaled = self.frozen_right_pixmap.scaled(
                     self.right_label.size(),
                     Qt.AspectRatioMode.KeepAspectRatio,
                     Qt.TransformationMode.SmoothTransformation,
                 )
                 self.right_label.setPixmap(scaled)
+                right_has_signal = True
             else:
-                # Show animated no-signal frame
-                self._show_no_signal(self.right_label)
+                right_pixmap, right_has_signal = self.right_feed.read_frame()
+                self._check_auto_switch(self.right_input_index, right_has_signal)
+                if right_has_signal and right_pixmap:
+                    scaled = right_pixmap.scaled(
+                        self.right_label.size(),
+                        Qt.AspectRatioMode.KeepAspectRatio,
+                        Qt.TransformationMode.SmoothTransformation,
+                    )
+                    self.right_label.setPixmap(scaled)
+                else:
+                    # Show animated no-signal frame
+                    self._show_no_signal(self.right_label)
+        
+        # Check for screensaver mode (all inputs have no signal)
+        if not left_has_signal and not right_has_signal:
+            if self.no_signal_start_time is None:
+                self.no_signal_start_time = time.time()
+            elif time.time() - self.no_signal_start_time > self.screensaver_delay:
+                if not self.screensaver_active:
+                    self.screensaver_active = True
+                    Log.info("Screensaver mode activated")
+        else:
+            self.no_signal_start_time = None
+            if self.screensaver_active:
+                self.screensaver_active = False
+                Log.info("Screensaver mode deactivated")
+        
+        # Show screensaver if active
+        if self.screensaver_active:
+            self._show_screensaver()
+        
+        # Update thumbnails if visible
+        self._update_thumbnails()
+
+    def _show_screensaver(self):
+        """Display screensaver animation on both feeds."""
+        for label in [self.left_label, self.right_label]:
+            if label.isVisible():
+                size = label.size()
+                if size.width() > 0 and size.height() > 0:
+                    frame = self._create_screensaver_frame(size.width(), size.height())
+                    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    h, w, ch = frame_rgb.shape
+                    qimg = QImage(frame_rgb.data, w, h, ch * w, QImage.Format.Format_RGB888)
+                    label.setPixmap(QPixmap.fromImage(qimg))
 
     def _show_no_signal(self, label: QLabel):
         """Display animated no-signal frame on a label."""
@@ -1614,6 +2166,21 @@ class DualVideoViewer(QWidget):
         elif key in (Qt.Key.Key_1, Qt.Key.Key_2, Qt.Key.Key_3, Qt.Key.Key_4):
             input_index = key - Qt.Key.Key_1  # 0-3
             self.select_input_by_index(input_index)
+
+        # Freeze frame toggle (Space key)
+        elif key == Qt.Key.Key_Space:
+            self._toggle_freeze("both")
+        
+        # Input thumbnails panel (T key)
+        elif key == Qt.Key.Key_T:
+            self._toggle_thumbnails_panel()
+        
+        # Toggle auto-switch (A key)
+        elif key == Qt.Key.Key_A:
+            self.auto_switch_enabled = not self.auto_switch_enabled
+            state = "ON" if self.auto_switch_enabled else "OFF"
+            Log.info(f"Auto-switch: {state}")
+            self._show_input_name(f"Auto-switch: {state}")
 
         # Test mode: toggle no-signal simulation
         elif key == Qt.Key.Key_N and self.test_mode:
