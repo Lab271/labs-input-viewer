@@ -669,6 +669,11 @@ class DualVideoViewer(QWidget):
         self.no_signal_start_time = None
         self.screensaver_delay = 60  # Seconds before screensaver activates
         
+        # Full-screen screensaver overlay
+        self.screensaver_label = QLabel(self)
+        self.screensaver_label.setStyleSheet("background-color: black;")
+        self.screensaver_label.hide()
+        
         # Freeze frame feature
         self.freeze_left = False
         self.freeze_right = False
@@ -760,51 +765,112 @@ class DualVideoViewer(QWidget):
         super().mouseMoveEvent(event)
 
     # =========================================================================
-    # SCREENSAVER MODE
+    # SCREENSAVER MODE (DVD-style bouncing logo)
     # =========================================================================
     
     def _create_screensaver_frame(self, width: int, height: int) -> np.ndarray:
-        """Generate a screensaver frame with animated logo."""
-        if not hasattr(self, '_screensaver_cache') or self._screensaver_cache.get('size') != (width, height):
-            # Load logo for screensaver
+        """Generate a DVD-style bouncing logo screensaver frame."""
+        # Initialize screensaver state on first call or resize
+        if not hasattr(self, '_ss') or self._ss.get('size') != (width, height):
             logo_path = get_resource_path(LOGO_FILENAME)
-            self._screensaver_logo = None
+            logo = None
             if os.path.exists(logo_path):
                 logo = Image.open(logo_path).convert("RGBA")
-                # Scale logo to reasonable size
-                scale = min(width / logo.width, height / logo.height) * 0.3
+                # Scale logo to ~15% of screen
+                scale = min(width / logo.width, height / logo.height) * 0.15
                 new_w = int(logo.width * scale)
                 new_h = int(logo.height * scale)
-                self._screensaver_logo = logo.resize((new_w, new_h), Image.Resampling.LANCZOS)
-            self._screensaver_cache = {'size': (width, height)}
-            self._screensaver_phase = 0
+                logo = logo.resize((new_w, new_h), Image.Resampling.LANCZOS)
+            
+            # DVD bounce colors for the backslash (vibrant colors)
+            colors = [
+                (0, 136, 255),    # Blue (original)
+                (255, 0, 128),    # Magenta
+                (0, 255, 128),    # Green
+                (255, 200, 0),    # Yellow
+                (255, 80, 0),     # Orange
+                (128, 0, 255),    # Purple
+                (0, 255, 255),    # Cyan
+            ]
+            
+            self._ss = {
+                'size': (width, height),
+                'logo': logo,
+                'x': width // 4,
+                'y': height // 4,
+                'vx': 3,  # Velocity X (pixels per frame)
+                'vy': 2,  # Velocity Y (pixels per frame)
+                'colors': colors,
+                'color_idx': 0,
+                'blue_mask': None,
+            }
+            
+            # Create mask for the blue backslash in the logo
+            if logo:
+                logo_arr = np.array(logo)
+                # Find blue-ish pixels (the backslash is blue ~#0088ff)
+                r, g, b = logo_arr[:,:,0], logo_arr[:,:,1], logo_arr[:,:,2]
+                alpha = logo_arr[:,:,3] if logo_arr.shape[2] == 4 else np.ones_like(r) * 255
+                # Blue backslash: low red, medium green, high blue
+                blue_mask = (b > 150) & (b > r + 50) & (alpha > 100)
+                self._ss['blue_mask'] = blue_mask
+        
+        ss = self._ss
         
         # Create black frame
         frame = np.zeros((height, width, 3), dtype=np.uint8)
         
-        if self._screensaver_logo:
-            # Animate logo position (bouncing)
-            self._screensaver_phase += 0.02
-            logo_w, logo_h = self._screensaver_logo.size
+        if ss['logo']:
+            logo_w, logo_h = ss['logo'].size
             
-            # Calculate bouncing position
-            t = self._screensaver_phase
-            x = int((width - logo_w) * (0.5 + 0.4 * np.sin(t * 0.7)))
-            y = int((height - logo_h) * (0.5 + 0.4 * np.sin(t * 0.5)))
+            # Update position
+            ss['x'] += ss['vx']
+            ss['y'] += ss['vy']
             
-            # Paste logo onto frame
-            logo_rgb = self._screensaver_logo.convert("RGB")
-            logo_arr = np.array(logo_rgb)
+            # Bounce off walls and change color
+            bounced = False
+            if ss['x'] <= 0:
+                ss['x'] = 0
+                ss['vx'] = abs(ss['vx'])
+                bounced = True
+            elif ss['x'] >= width - logo_w:
+                ss['x'] = width - logo_w
+                ss['vx'] = -abs(ss['vx'])
+                bounced = True
             
-            # Handle alpha blending
-            if self._screensaver_logo.mode == "RGBA":
-                alpha = np.array(self._screensaver_logo.split()[3]) / 255.0
-                for c in range(3):
-                    frame[y:y+logo_h, x:x+logo_w, c] = (
-                        alpha * logo_arr[:, :, c] + (1 - alpha) * frame[y:y+logo_h, x:x+logo_w, c]
-                    ).astype(np.uint8)
+            if ss['y'] <= 0:
+                ss['y'] = 0
+                ss['vy'] = abs(ss['vy'])
+                bounced = True
+            elif ss['y'] >= height - logo_h:
+                ss['y'] = height - logo_h
+                ss['vy'] = -abs(ss['vy'])
+                bounced = True
+            
+            # Change backslash color on bounce
+            if bounced:
+                ss['color_idx'] = (ss['color_idx'] + 1) % len(ss['colors'])
+            
+            # Create colored version of logo
+            logo_arr = np.array(ss['logo'].copy())
+            new_color = ss['colors'][ss['color_idx']]
+            
+            # Recolor the blue backslash
+            if ss['blue_mask'] is not None:
+                logo_arr[:,:,0][ss['blue_mask']] = new_color[0]  # R
+                logo_arr[:,:,1][ss['blue_mask']] = new_color[1]  # G
+                logo_arr[:,:,2][ss['blue_mask']] = new_color[2]  # B
+            
+            # Alpha blend logo onto frame
+            x, y = int(ss['x']), int(ss['y'])
+            if logo_arr.shape[2] == 4:
+                alpha = logo_arr[:,:,3:4] / 255.0
+                rgb = logo_arr[:,:,:3]
+                roi = frame[y:y+logo_h, x:x+logo_w]
+                blended = (alpha * rgb + (1 - alpha) * roi).astype(np.uint8)
+                frame[y:y+logo_h, x:x+logo_w] = blended
             else:
-                frame[y:y+logo_h, x:x+logo_w] = logo_arr
+                frame[y:y+logo_h, x:x+logo_w] = logo_arr[:,:,:3]
         
         return frame
 
@@ -1908,6 +1974,7 @@ class DualVideoViewer(QWidget):
             self.no_signal_start_time = None
             if self.screensaver_active:
                 self.screensaver_active = False
+                self.screensaver_label.hide()
                 Log.info("Screensaver mode deactivated")
         
         # Show screensaver if active
@@ -1918,16 +1985,20 @@ class DualVideoViewer(QWidget):
         self._update_thumbnails()
 
     def _show_screensaver(self):
-        """Display screensaver animation on both feeds."""
-        for label in [self.left_label, self.right_label]:
-            if label.isVisible():
-                size = label.size()
-                if size.width() > 0 and size.height() > 0:
-                    frame = self._create_screensaver_frame(size.width(), size.height())
-                    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    h, w, ch = frame_rgb.shape
-                    qimg = QImage(frame_rgb.data, w, h, ch * w, QImage.Format.Format_RGB888)
-                    label.setPixmap(QPixmap.fromImage(qimg))
+        """Display DVD-style screensaver animation on full screen."""
+        # Position screensaver label to cover entire window
+        self.screensaver_label.setGeometry(0, 0, self.width(), self.height())
+        self.screensaver_label.raise_()
+        self.screensaver_label.show()
+        
+        # Generate and display screensaver frame
+        width, height = self.width(), self.height()
+        if width > 0 and height > 0:
+            frame = self._create_screensaver_frame(width, height)
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            h, w, ch = frame_rgb.shape
+            qimg = QImage(frame_rgb.data, w, h, ch * w, QImage.Format.Format_RGB888)
+            self.screensaver_label.setPixmap(QPixmap.fromImage(qimg))
 
     def _show_no_signal(self, label: QLabel):
         """Display animated no-signal frame on a label."""
