@@ -1,6 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-PyInstaller spec file for HDMI Viewer
+PyInstaller spec file for Space Presenter
 
 This spec file creates a properly bundled application with all resources.
 """
@@ -60,7 +60,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='HDMI Viewer',
+    name='Space Presenter',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -80,15 +80,15 @@ exe = EXE(
 if sys.platform == 'darwin':
     app = BUNDLE(
         exe,
-        name='HDMI Viewer.app',
+        name='Space Presenter.app',
         icon='assets/icon.icns',
-        bundle_identifier='com.lab271.hdmi-viewer',
+        bundle_identifier='com.lab271.space-presenter',
         info_plist={
-            'CFBundleName': 'HDMI Viewer',
-            'CFBundleDisplayName': 'HDMI Viewer',
+            'CFBundleName': 'Space Presenter',
+            'CFBundleDisplayName': 'Space Presenter',
             'CFBundleVersion': open('VERSION').read().strip(),
             'CFBundleShortVersionString': open('VERSION').read().strip(),
             'NSHighResolutionCapable': True,
-            'NSCameraUsageDescription': 'HDMI Viewer needs camera access to display capture card feeds.',
+            'NSCameraUsageDescription': 'Space Presenter needs camera access to display capture card feeds.',
         },
     )

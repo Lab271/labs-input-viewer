@@ -58,13 +58,13 @@ jobs:
         run: |
           if [ "$RUNNER_OS" == "macOS" ]; then
             pyinstaller hdmi-viewer.spec
-            cd dist && zip -r ../hdmi-viewer-macos.zip "HDMI Viewer.app"
+            cd dist && zip -r ../space-presenter-macos.zip "Space Presenter.app"
           elif [ "$RUNNER_OS" == "Windows" ]; then
             pyinstaller hdmi-viewer.spec
-            mv "dist/HDMI Viewer.exe" dist/hdmi-viewer-windows.exe
+            mv "dist/Space Presenter.exe" dist/space-presenter-windows.exe
           else
             pyinstaller hdmi-viewer.spec
-            cd dist && tar -czvf ../hdmi-viewer-linux.tar.gz "HDMI Viewer"
+            cd dist && tar -czvf ../space-presenter-linux.tar.gz "Space Presenter"
           fi
 
       - name: Upload artifact
@@ -72,9 +72,9 @@ jobs:
         with:
           name: ${{ matrix.asset_name }}
           path: |
-            hdmi-viewer-*.zip
-            hdmi-viewer-*.tar.gz
-            dist/hdmi-viewer-*.exe
+            space-presenter-*.zip
+            space-presenter-*.tar.gz
+            dist/space-presenter-*.exe
 
   release:
     name: Create Release
@@ -95,7 +95,7 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          name: HDMI Viewer v${{ steps.version.outputs.version }}
+          name: Space Presenter v${{ steps.version.outputs.version }}
           draft: false
           prerelease: false
           generate_release_notes: true

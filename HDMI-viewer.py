@@ -73,9 +73,9 @@ def get_user_data_path(filename: str) -> str:
     if hasattr(sys, "_MEIPASS"):
         # When bundled, use user's home directory for writable files
         if sys.platform == "darwin":
-            data_dir = os.path.expanduser("~/Library/Application Support/HDMI Viewer")
+            data_dir = os.path.expanduser("~/Library/Application Support/Space Presenter")
         elif sys.platform == "win32":
-            data_dir = os.path.join(os.environ.get("APPDATA", ""), "HDMI Viewer")
+            data_dir = os.path.join(os.environ.get("APPDATA", ""), "Space Presenter")
         else:
             data_dir = os.path.expanduser("~/.config/hdmi-viewer")
         os.makedirs(data_dir, exist_ok=True)
@@ -266,8 +266,8 @@ RIGHT_INPUT_INDEX = _default_input.index if _default_input else 0
 AVAILABLE_INPUT_INDICES = [inp.index for inp in _enabled_inputs]
 
 # Capture settings
-TARGET_WIDTH = 1920
-TARGET_HEIGHT = 1080
+TARGET_WIDTH = 3840
+TARGET_HEIGHT = 2160
 TARGET_FPS = 30
 
 # Layout spacing (in pixels)
@@ -614,7 +614,7 @@ class DualVideoViewer(QWidget):
         )
 
         # Window setup
-        self.setWindowTitle("Dual Elgato Viewer")
+        self.setWindowTitle("Space Presenter")
         self.setStyleSheet("background-color: black;")
 
         # Create video labels
@@ -905,6 +905,12 @@ class DualVideoViewer(QWidget):
             line = QLabel(f"<b>{key}</b>  {desc}")
             line.setStyleSheet("font-size: 12px;")
             layout.addWidget(line)
+
+        # Attribution
+        layout.addSpacing(8)
+        attribution = QLabel("By Labs for _Space")
+        attribution.setStyleSheet("font-size: 10px; color: rgba(255, 255, 255, 60);")
+        layout.addWidget(attribution)
 
         self.info_panel.adjustSize()
         self.info_panel.hide()  # Hidden by default
