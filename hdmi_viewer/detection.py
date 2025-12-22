@@ -159,7 +159,7 @@ class NoSignalDetector:
 
         return ratio >= self.BACKGROUND_GREY_RATIO, ratio
 
-    def is_no_signal(self, frame) -> bool:
+    def is_no_signal(self, frame, debug: bool = False) -> bool:
         """
         Detect if frame is the Elgato no-signal screen.
 
@@ -177,12 +177,18 @@ class NoSignalDetector:
             frame_gray, self.logo_template_gray
         )
 
+        if debug:
+            Log.debug(f"NoSignal check: score={score:.3f} (thresh={self.MATCH_THRESHOLD})")
+
         if score < self.MATCH_THRESHOLD or loc is None:
             return False
 
         # Step 2: Validate background is dark grey
         logo_rect = (loc[0], loc[1], size[0], size[1]) if size else None
         is_grey, grey_ratio = self._is_background_grey(frame, logo_rect)
+
+        if debug:
+            Log.debug(f"NoSignal check: bg_grey={grey_ratio:.1%} (thresh={self.BACKGROUND_GREY_RATIO:.0%}), is_no_signal={is_grey}")
 
         return is_grey
 

@@ -30,7 +30,7 @@ class CameraFeed:
         self.switch_signals = switch_signals
         self.always_no_signal = always_no_signal
         self.frame_counter = 0
-        self.check_interval = 100  # Check every 100 frames (~3.3s at 30Hz)
+        self.check_interval = 30  # Check every 30 frames (~1s at 30Hz)
         self._last_no_signal_result = False
         self.detector = get_no_signal_detector()
 
@@ -98,7 +98,7 @@ class CameraFeed:
             return self._last_no_signal_result
 
         # Use the vision model detector
-        self._last_no_signal_result = self.detector.is_no_signal(frame)
+        self._last_no_signal_result = self.detector.is_no_signal(frame, debug=True)
 
         return self._last_no_signal_result
 
