@@ -170,9 +170,14 @@ class ScreenSaver(QLabel):
 
         # Animation state
         self._ss = None
+        self._last_time = None
 
     def create_frame(self, width: int, height: int) -> np.ndarray:
         """Generate a DVD-style bouncing logo screensaver frame."""
+        import time
+        
+        current_time = time.time()
+        
         # Initialize screensaver state on first call or resize
         if not self._ss or self._ss.get('size') != (width, height):
             logo_path = get_resource_path(LOGO_FILENAME)
@@ -199,14 +204,15 @@ class ScreenSaver(QLabel):
             self._ss = {
                 'size': (width, height),
                 'logo': logo,
-                'x': width // 4,
-                'y': height // 4,
-                'vx': 3,  # Velocity X (pixels per frame)
-                'vy': 2,  # Velocity Y (pixels per frame)
+                'x': float(width // 4),
+                'y': float(height // 4),
+                'vx': 60.0,  # Velocity X (pixels per second)
+                'vy': 40.0,   # Velocity Y (pixels per second)
                 'colors': colors,
                 'color_idx': 0,
                 'blue_mask': None,
             }
+            self._last_time = current_time
 
             # Create mask for the blue backslash in the logo
             if logo:
@@ -219,6 +225,15 @@ class ScreenSaver(QLabel):
                 self._ss['blue_mask'] = blue_mask
 
         ss = self._ss
+        
+        # Calculate delta time for smooth animation
+        if self._last_time is None:
+            self._last_time = current_time
+        dt = current_time - self._last_time
+        self._last_time = current_time
+        
+        # Clamp delta time to avoid jumps (e.g., after window was hidden)
+        dt = min(dt, 0.1)
 
         # Create black frame
         frame = np.zeros((height, width, 3), dtype=np.uint8)
@@ -226,9 +241,9 @@ class ScreenSaver(QLabel):
         if ss['logo']:
             logo_w, logo_h = ss['logo'].size
 
-            # Update position
-            ss['x'] += ss['vx']
-            ss['y'] += ss['vy']
+            # Update position based on time (not frames)
+            ss['x'] += ss['vx'] * dt
+            ss['y'] += ss['vy'] * dt
 
             # Bounce off walls and change color
             bounced = False

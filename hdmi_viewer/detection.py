@@ -159,6 +159,29 @@ class NoSignalDetector:
 
         return ratio >= self.BACKGROUND_GREY_RATIO, ratio
 
+    def quick_check_still_no_signal(self, frame) -> bool:
+        """
+        Quick check if frame is still a no-signal screen.
+        Only checks if the frame is predominantly dark grey - skips template matching.
+        Use this when we already detected no-signal and want to check if it changed.
+        """
+        is_grey, ratio = self._is_background_grey(frame, logo_rect=None)
+        # Be more aggressive about detecting signal return - if less than 80% grey, assume signal
+        if ratio < 0.80:
+            Log.debug(f"Quick check: signal may have returned (grey ratio: {ratio:.1%})")
+            return False
+        return is_grey
+
+    def quick_check_has_content(self, frame) -> bool:
+        """
+        Quick check if frame has actual content (not dark grey).
+        Use this when we have signal and want to quickly check if it went to no-signal.
+        Returns True if the frame has colorful/bright content.
+        """
+        is_grey, ratio = self._is_background_grey(frame, logo_rect=None)
+        # If less than 70% is dark grey, we definitely have content
+        return ratio < 0.70
+
     def is_no_signal(self, frame, debug: bool = False) -> bool:
         """
         Detect if frame is the Elgato no-signal screen.

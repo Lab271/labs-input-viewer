@@ -36,7 +36,7 @@ install-all:
 
 # Running the application
 run:
-	uv run python -m hdmi_viewer
+	uv run python hdmi_viewer
 
 run-verbose:
 	uv run python -m hdmi_viewer --verbose

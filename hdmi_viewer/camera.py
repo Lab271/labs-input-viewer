@@ -30,7 +30,7 @@ class CameraFeed:
         self.switch_signals = switch_signals
         self.always_no_signal = always_no_signal
         self.frame_counter = 0
-        self.check_interval = 30  # Check every 30 frames (~1s at 30Hz)
+        self.check_interval = 5  # Check every 5 frames for responsive detection
         self._last_no_signal_result = False
         self.detector = get_no_signal_detector()
 
@@ -88,17 +88,55 @@ class CameraFeed:
     def _is_no_signal(self, frame) -> bool:
         """
         Detect if the frame is the Elgato 'No Signal' screen.
-        Uses a vision model with multi-vector feature comparison against
-        a reference image. Only checks every 100 frames (~3.3s at 30Hz).
+        
+        Uses smart detection:
+        - If currently no-signal: quick check if still dark grey
+        - If currently has signal: quick check if became dark, then full check
+        - Full template matching only when state might have changed
+        - Periodic full check every 60 frames when in no-signal state
         """
         self.frame_counter += 1
 
-        # Only check every N frames for efficiency (4K 30Hz = check every ~3.3s)
+        # Only check every N frames for efficiency
         if self.frame_counter % self.check_interval != 0:
             return self._last_no_signal_result
 
-        # Use the vision model detector
-        self._last_no_signal_result = self.detector.is_no_signal(frame, debug=True)
+        if self._last_no_signal_result:
+            # Currently in no-signal state - quick check if still dark grey
+            still_no_signal = self.detector.quick_check_still_no_signal(frame)
+            
+            # Force full check every 60 frames (~2 seconds) even if quick check passes
+            force_full_check = (self.frame_counter % 60 == 0)
+            
+            if still_no_signal and not force_full_check:
+                # Still dark grey, no need for full check
+                return True
+            else:
+                # Frame changed or periodic full check - run full detection
+                if force_full_check:
+                    Log.debug("Periodic full detection check...")
+                else:
+                    Log.debug("Quick check indicates signal may have returned, running full detection...")
+                self._last_no_signal_result = self.detector.is_no_signal(
+                    frame, debug=True
+                )
+                if not self._last_no_signal_result:
+                    Log.info("Signal restored - content detected")
+                else:
+                    Log.debug("Full detection still shows no signal")
+        else:
+            # Currently has signal - quick check if frame became dark
+            has_content = self.detector.quick_check_has_content(frame)
+            if has_content:
+                # Still has colorful content, no need for full check
+                return False
+            else:
+                # Frame is mostly dark - run full detection to confirm no-signal
+                self._last_no_signal_result = self.detector.is_no_signal(
+                    frame, debug=True
+                )
+                if self._last_no_signal_result:
+                    Log.info("No signal detected - Elgato logo found")
 
         return self._last_no_signal_result
 

@@ -11,7 +11,6 @@ from collections import deque
 
 import cv2
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QImage, QPixmap
 from PyQt6.QtWidgets import (
@@ -230,9 +229,10 @@ class DualVideoViewer(QWidget):
         self.auto_switch_enabled = True
         self.last_signal_state = {}
 
-        # No-signal animation state
+        # No-signal video state
         self._no_signal_cache = None
         self._no_signal_frame_idx = 0
+        self._no_signal_video = None  # cv2.VideoCapture for MP4
 
     # =========================================================================
     # UI CREATION
@@ -519,89 +519,69 @@ class DualVideoViewer(QWidget):
             label.setPixmap(QPixmap.fromImage(qimg))
 
     def _create_no_signal_frame(self, width: int, height: int) -> np.ndarray:
-        """Generate no-signal frame with animated HDMI cable."""
+        """Generate no-signal frame from MP4 video loop."""
         cache_key = (width, height)
+        
+        # Check if we need to reload (size changed or not cached)
         if (
             not self._no_signal_cache
             or self._no_signal_cache.get("size") != cache_key
         ):
-            icon_path = get_resource_path("no_signal_icon.png")
-            if os.path.exists(icon_path):
-                icon = Image.open(icon_path).convert("RGBA")
-                cable_split_x = 980
-
-                icon_w, icon_h = icon.width, icon.height
-                scale = min(width / icon_w, height / icon_h) * 0.6
-
-                new_w = int(icon_w * scale)
-                new_h = int(icon_h * scale)
-                cable_w = int(cable_split_x * scale)
-
-                cable_part = icon.crop((0, 0, cable_split_x, icon.height))
-                rest_part = icon.crop((cable_split_x, 0, icon.width, icon.height))
-
-                cable_scaled = cable_part.resize(
-                    (cable_w, new_h), Image.Resampling.LANCZOS
-                )
-                rest_scaled = rest_part.resize(
-                    (new_w - cable_w, new_h), Image.Resampling.LANCZOS
-                )
-
-                base_x = (width - new_w) // 2
-                base_y = (height - new_h) // 2
-
-                num_frames = 120
-                max_offset = int(50 * scale)
+            video_path = get_resource_path("no_signal.mp4")
+            if os.path.exists(video_path):
+                # Load all frames from the video
+                cap = cv2.VideoCapture(video_path)
                 frames = []
-
-                # Font setup
-                text = "No signal detected"
-                text_font = None
-                font_size = 32
-                font_paths = [
-                    "/Library/Fonts/TT Interphases Pro Trial Medium.ttf",
-                    "/Library/Fonts/TT Interphases Pro Medium.ttf",
-                    "/System/Library/Fonts/Helvetica.ttc",
-                    "C:/Windows/Fonts/segoeui.ttf",
-                ]
-                for path in font_paths:
-                    try:
-                        text_font = ImageFont.truetype(path, font_size)
+                
+                # Text settings
+                text = "Please connect a source"
+                font = cv2.FONT_HERSHEY_SIMPLEX
+                font_scale = max(0.6, width / 1920)  # Scale font with resolution
+                font_thickness = max(1, int(width / 960))
+                text_color = (128, 128, 128)  # Grey
+                
+                # Calculate text size for positioning
+                (text_w, text_h), baseline = cv2.getTextSize(text, font, font_scale, font_thickness)
+                
+                while True:
+                    ret, frame = cap.read()
+                    if not ret:
                         break
-                    except OSError:
-                        continue
-                if text_font is None:
-                    text_font = ImageFont.load_default()
-
-                temp_img = Image.new("RGB", (width, height))
-                temp_draw = ImageDraw.Draw(temp_img)
-                text_bbox = temp_draw.textbbox((0, 0), text, font=text_font)
-                text_width = text_bbox[2] - text_bbox[0]
-                text_x = (width - text_width) // 2
-                text_y = base_y + new_h + 30
-
-                for i in range(num_frames):
-                    t = i / num_frames * 2 * np.pi
-                    ease = (np.sin(t) + 1) / 2
-                    cable_offset = int(-max_offset * (1 - ease))
-
-                    img = Image.new("RGB", (width, height), (0, 0, 0))
-                    draw = ImageDraw.Draw(img)
-                    rest_x = base_x + cable_w
-                    img.paste(rest_scaled.convert("RGB"), (rest_x, base_y))
-                    cable_x = base_x + cable_offset
-                    img.paste(cable_scaled.convert("RGB"), (cable_x, base_y))
-                    draw.text((text_x, text_y), text, font=text_font, fill=(150, 150, 150))
-
-                    frame = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
-                    frames.append(frame)
-
-                self._no_signal_cache = {
-                    "size": cache_key,
-                    "frames": frames,
-                    "num_frames": num_frames,
-                }
-                self._no_signal_frame_idx = 0
+                    
+                    # Resize frame to fit the target size while maintaining aspect ratio
+                    frame_h, frame_w = frame.shape[:2]
+                    scale = min(width / frame_w, height / frame_h)
+                    new_w = int(frame_w * scale)
+                    new_h = int(frame_h * scale)
+                    
+                    # Resize and center on black background
+                    resized = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+                    
+                    # Create black background and center the video
+                    output = np.zeros((height, width, 3), dtype=np.uint8)
+                    x_offset = (width - new_w) // 2
+                    y_offset = (height - new_h) // 2
+                    output[y_offset:y_offset + new_h, x_offset:x_offset + new_w] = resized
+                    
+                    # Add text below the animation
+                    text_x = (width - text_w) // 2
+                    text_y = y_offset + new_h + text_h + 30  # 30px below video
+                    if text_y < height - 10:  # Ensure text fits
+                        cv2.putText(output, text, (text_x, text_y), font, font_scale, text_color, font_thickness, cv2.LINE_AA)
+                    
+                    frames.append(output)
+                
+                cap.release()
+                
+                if frames:
+                    self._no_signal_cache = {
+                        "size": cache_key,
+                        "frames": frames,
+                        "num_frames": len(frames),
+                    }
+                    self._no_signal_frame_idx = 0
+                else:
+                    self._no_signal_cache = {"size": cache_key, "frames": None}
             else:
                 self._no_signal_cache = {"size": cache_key, "frames": None}
 
