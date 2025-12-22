@@ -1,6 +1,4 @@
-"""
-Audio control panel widget.
-"""
+"""Audio control panel widget."""
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
@@ -13,6 +11,7 @@ from PyQt6.QtWidgets import (
 )
 
 from hdmi_viewer.log import Log
+from hdmi_viewer.widgets.base import BUTTON_STYLE, HoverIcon, PANEL_STYLE, SLIDER_STYLE
 
 
 class AudioPanel(QFrame):
@@ -27,33 +26,16 @@ class AudioPanel(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setFixedSize(250, 180)
-        self.setStyleSheet("""
-            QFrame#audioPanel {
-                background-color: rgba(30, 30, 30, 240);
-                border-radius: 12px;
-                border: 1px solid rgba(255, 255, 255, 30);
-            }
-            QLabel {
+        self.setStyleSheet(f"""
+            QFrame#audioPanel {{
+                {PANEL_STYLE.replace('QFrame', '').replace('QLabel', '')}
+            }}
+            QLabel {{
                 color: white;
                 font-family: Arial, sans-serif;
                 background: transparent;
-            }
-            QSlider::groove:horizontal {
-                height: 6px;
-                background: rgba(255, 255, 255, 30);
-                border-radius: 3px;
-            }
-            QSlider::handle:horizontal {
-                width: 16px;
-                height: 16px;
-                margin: -5px 0;
-                background: white;
-                border-radius: 8px;
-            }
-            QSlider::sub-page:horizontal {
-                background: #58a6ff;
-                border-radius: 3px;
-            }
+            }}
+            {SLIDER_STYLE}
         """)
         self.setObjectName("audioPanel")
 
@@ -105,42 +87,12 @@ class AudioPanel(QFrame):
         mute_row = QHBoxLayout()
         self.input_mute_btn = QPushButton("⊘ Mute Input")
         self.input_mute_btn.setCheckable(True)
-        self.input_mute_btn.setStyleSheet("""
-            QPushButton {
-                background-color: rgba(60, 60, 60, 200);
-                color: white;
-                border: 1px solid rgba(255, 255, 255, 30);
-                border-radius: 6px;
-                padding: 6px 12px;
-                font-size: 11px;
-            }
-            QPushButton:hover {
-                background-color: rgba(80, 80, 80, 200);
-            }
-            QPushButton:checked {
-                background-color: rgba(255, 59, 48, 200);
-            }
-        """)
+        self.input_mute_btn.setStyleSheet(BUTTON_STYLE)
         self.input_mute_btn.clicked.connect(self._on_input_mute_toggle)
 
         self.system_mute_btn = QPushButton("⊘ Mute System")
         self.system_mute_btn.setCheckable(True)
-        self.system_mute_btn.setStyleSheet("""
-            QPushButton {
-                background-color: rgba(60, 60, 60, 200);
-                color: white;
-                border: 1px solid rgba(255, 255, 255, 30);
-                border-radius: 6px;
-                padding: 6px 12px;
-                font-size: 11px;
-            }
-            QPushButton:hover {
-                background-color: rgba(80, 80, 80, 200);
-            }
-            QPushButton:checked {
-                background-color: rgba(255, 59, 48, 200);
-            }
-        """)
+        self.system_mute_btn.setStyleSheet(BUTTON_STYLE)
         self.system_mute_btn.clicked.connect(self._on_system_mute_toggle)
 
         mute_row.addWidget(self.input_mute_btn)
@@ -176,44 +128,8 @@ class AudioPanel(QFrame):
         self.system_mute_toggled.emit(muted)
 
 
-class AudioIcon(QLabel):
+class AudioIcon(HoverIcon):
     """Audio icon button that toggles the AudioPanel."""
-
-    # Signal emitted when clicked
-    clicked = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__("♪", parent)
-        self.setStyleSheet("""
-            QLabel {
-                color: rgba(255, 255, 255, 100);
-                font-size: 28px;
-                background: transparent;
-            }
-        """)
-        self.adjustSize()
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-
-    def mousePressEvent(self, event):
-        """Handle click."""
-        self.clicked.emit()
-
-    def enterEvent(self, event):
-        """Highlight on hover."""
-        self.setStyleSheet("""
-            QLabel {
-                color: rgba(255, 255, 255, 255);
-                font-size: 28px;
-                background: transparent;
-            }
-        """)
-
-    def leaveEvent(self, event):
-        """Dim when not hovering."""
-        self.setStyleSheet("""
-            QLabel {
-                color: rgba(255, 255, 255, 100);
-                font-size: 28px;
-                background: transparent;
-            }
-        """)

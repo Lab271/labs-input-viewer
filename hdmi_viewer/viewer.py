@@ -39,6 +39,7 @@ from hdmi_viewer.config import (
 from hdmi_viewer.log import Log
 from hdmi_viewer.utils import get_resource_path
 from hdmi_viewer.widgets.audio_panel import AudioIcon, AudioPanel
+from hdmi_viewer.widgets.base import HoverIcon
 from hdmi_viewer.widgets.overlays import (
     InfoIcon,
     InfoPanel,
@@ -49,40 +50,11 @@ from hdmi_viewer.widgets.settings_panel import SettingsPanel
 from hdmi_viewer.widgets.thumbnails import ThumbnailsPanel
 
 
-class SettingsIcon(QLabel):
+class SettingsIcon(HoverIcon):
     """Settings gear icon widget."""
 
     def __init__(self, parent=None):
         super().__init__("⚙", parent)
-        self.setStyleSheet("""
-            QLabel {
-                color: rgba(255, 255, 255, 100);
-                font-size: 28px;
-                background: transparent;
-            }
-        """)
-        self.adjustSize()
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-
-    def enterEvent(self, event):
-        """Highlight on hover."""
-        self.setStyleSheet("""
-            QLabel {
-                color: rgba(255, 255, 255, 255);
-                font-size: 28px;
-                background: transparent;
-            }
-        """)
-
-    def leaveEvent(self, event):
-        """Dim when not hovering."""
-        self.setStyleSheet("""
-            QLabel {
-                color: rgba(255, 255, 255, 100);
-                font-size: 28px;
-                background: transparent;
-            }
-        """)
 
 
 class DualVideoViewer(QWidget):
@@ -643,115 +615,73 @@ class DualVideoViewer(QWidget):
                 return inp.name
         return f"Input {index}"
 
+    def _create_feed(self, input_index: int, label: str) -> CameraFeed:
+        """Create a new CameraFeed with current settings."""
+        return CameraFeed(
+            input_index, self.test_mode, label,
+            self.switch_signals, self.always_no_signal
+        )
+
+    def _switch_feed(self, feed: str, new_index: int):
+        """Switch a feed to a new input index."""
+        if feed in ("left", "both"):
+            self.left_input_index = new_index
+            self.left_feed.release()
+            self.left_feed = self._create_feed(new_index, "LEFT")
+        if feed in ("right", "both"):
+            self.right_input_index = new_index
+            self.right_feed.release()
+            self.right_feed = self._create_feed(new_index, "RIGHT")
+
     def switch_input(self, feed: str, direction: int):
         """Switch input index for a feed. direction: 1=next, -1=previous"""
         available = get_available_input_indices()
-        if len(available) == 0:
+        if not available:
             return
 
-        if feed == "left":
-            try:
-                current_idx = available.index(self.left_input_index)
-            except ValueError:
-                current_idx = 0
-            new_idx = (current_idx + direction) % len(available)
-            self.left_input_index = available[new_idx]
-            self.left_feed.release()
-            self.left_feed = CameraFeed(
-                self.left_input_index, self.test_mode, "LEFT",
-                self.switch_signals, self.always_no_signal
-            )
-            input_name = self._get_input_name(self.left_input_index)
-            Log.info(f"Left input: {input_name} (index {self.left_input_index})")
-            self.input_name_overlay.show_name(input_name)
-        else:
-            try:
-                current_idx = available.index(self.right_input_index)
-            except ValueError:
-                current_idx = 0
-            new_idx = (current_idx + direction) % len(available)
-            self.right_input_index = available[new_idx]
-            self.right_feed.release()
-            self.right_feed = CameraFeed(
-                self.right_input_index, self.test_mode, "RIGHT",
-                self.switch_signals, self.always_no_signal
-            )
-            input_name = self._get_input_name(self.right_input_index)
-            Log.info(f"Right input: {input_name} (index {self.right_input_index})")
-            self.input_name_overlay.show_name(input_name)
+        current_index = self.left_input_index if feed == "left" else self.right_input_index
+        try:
+            current_idx = available.index(current_index)
+        except ValueError:
+            current_idx = 0
+        new_index = available[(current_idx + direction) % len(available)]
+
+        self._switch_feed(feed, new_index)
+        input_name = self._get_input_name(new_index)
+        Log.info(f"{feed.title()} input: {input_name} (index {new_index})")
+        self.input_name_overlay.show_name(input_name)
 
     def switch_dual_inputs(self, direction: int):
         """Switch both inputs together in dual mode."""
-        if len(self.enabled_inputs) == 0:
+        if not self.enabled_inputs:
             return
 
         self.dual_input_idx = (self.dual_input_idx + direction) % len(self.enabled_inputs)
         new_input = self.enabled_inputs[self.dual_input_idx]
 
-        self.left_input_index = new_input.index
-        self.right_input_index = new_input.index
-
-        self.left_feed.release()
-        self.right_feed.release()
-
-        self.left_feed = CameraFeed(
-            self.left_input_index, self.test_mode, "LEFT",
-            self.switch_signals, self.always_no_signal
-        )
-        self.right_feed = CameraFeed(
-            self.right_input_index, self.test_mode, "RIGHT",
-            self.switch_signals, self.always_no_signal
-        )
-
+        self._switch_feed("both", new_input.index)
         Log.info(f"Dual inputs: {new_input.name} (index {new_input.index})")
         self.input_name_overlay.show_name(new_input.name)
 
     def select_input_by_index(self, index: int):
         """Select an input directly by its index (0-3)."""
-        target_input = None
-        for inp in self.enabled_inputs:
-            if inp.index == index:
-                target_input = inp
-                break
+        target_input = next((inp for inp in self.enabled_inputs if inp.index == index), None)
 
         if target_input is None:
             Log.warning(f"Input {index + 1} is not available")
             return
 
         if self.layout_mode == LayoutMode.DUAL:
-            self.left_input_index = target_input.index
-            self.right_input_index = target_input.index
             self.dual_input_idx = self.enabled_inputs.index(target_input)
-
-            self.left_feed.release()
-            self.right_feed.release()
-
-            self.left_feed = CameraFeed(
-                self.left_input_index, self.test_mode, "LEFT",
-                self.switch_signals, self.always_no_signal
-            )
-            self.right_feed = CameraFeed(
-                self.right_input_index, self.test_mode, "RIGHT",
-                self.switch_signals, self.always_no_signal
-            )
+            self._switch_feed("both", target_input.index)
             Log.info(f"Dual inputs: {target_input.name} (index {target_input.index})")
 
         elif self.layout_mode == LayoutMode.SINGLE_LEFT:
-            self.left_input_index = target_input.index
-            self.left_feed.release()
-            self.left_feed = CameraFeed(
-                self.left_input_index, self.test_mode, "LEFT",
-                self.switch_signals, self.always_no_signal
-            )
+            self._switch_feed("left", target_input.index)
             Log.info(f"Left input: {target_input.name} (index {target_input.index})")
 
         elif self.layout_mode == LayoutMode.SINGLE_RIGHT:
-            self.right_input_index = target_input.index
-            self.right_feed.release()
-            self.right_feed = CameraFeed(
-                self.right_input_index, self.test_mode, "RIGHT",
-                self.switch_signals, self.always_no_signal
-            )
+            self._switch_feed("right", target_input.index)
             Log.info(f"Right input: {target_input.name} (index {target_input.index})")
 
         self.input_name_overlay.show_name(target_input.name)
@@ -763,29 +693,14 @@ class DualVideoViewer(QWidget):
         self.enabled_inputs = get_all_enabled_inputs()
         available = get_available_input_indices()
 
-        # Check if current inputs are still valid
-        left_valid = self.left_input_index in available
-        right_valid = self.right_input_index in available
+        # Check if current inputs are still valid, switch to first available if not
+        if self.left_input_index not in available and available:
+            self._switch_feed("left", available[0])
+            Log.info(f"Left input switched to {self._get_input_name(available[0])}")
 
-        if not left_valid and len(available) > 0:
-            new_index = available[0]
-            self.left_input_index = new_index
-            self.left_feed.release()
-            self.left_feed = CameraFeed(
-                self.left_input_index, self.test_mode, "LEFT",
-                self.switch_signals, self.always_no_signal
-            )
-            Log.info(f"Left input switched to {self._get_input_name(new_index)}")
-
-        if not right_valid and len(available) > 0:
-            new_index = available[0]
-            self.right_input_index = new_index
-            self.right_feed.release()
-            self.right_feed = CameraFeed(
-                self.right_input_index, self.test_mode, "RIGHT",
-                self.switch_signals, self.always_no_signal
-            )
-            Log.info(f"Right input switched to {self._get_input_name(new_index)}")
+        if self.right_input_index not in available and available:
+            self._switch_feed("right", available[0])
+            Log.info(f"Right input switched to {self._get_input_name(available[0])}")
 
         if self.dual_input_idx >= len(self.enabled_inputs):
             self.dual_input_idx = 0

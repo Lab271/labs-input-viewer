@@ -10,11 +10,12 @@ import cv2
 import numpy as np
 from PIL import Image
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QEnterEvent, QImage, QPixmap
+from PyQt6.QtGui import QImage, QPixmap
 from PyQt6.QtWidgets import QFrame, QLabel, QVBoxLayout
 
 from hdmi_viewer.config import LOGO_FILENAME
 from hdmi_viewer.utils import get_resource_path
+from hdmi_viewer.widgets.base import HoverIcon
 
 
 class InputNameOverlay(QLabel):
@@ -114,50 +115,32 @@ class InfoPanel(QFrame):
         self.hide()
 
 
-class InfoIcon(QFrame):
-    """Small info icon that shows the InfoPanel on hover."""
+class InfoIcon(HoverIcon):
+    """Info icon that shows the InfoPanel on hover."""
 
-    # Signal emitted when hover starts/ends
     hover_changed = pyqtSignal(bool)
 
     def __init__(self, parent=None):
-        super().__init__(parent)
+        super().__init__("ⓘ", parent)
         self.setFixedSize(35, 40)
-        self.setStyleSheet("background: transparent;")
 
-        # Small info icon
-        self.icon_label = QLabel("ⓘ", self)
-        self.icon_label.setStyleSheet("""
-            QLabel {
-                color: rgba(255, 255, 255, 100);
-                font-size: 28px;
-                background: transparent;
-            }
-        """)
-        self.icon_label.adjustSize()
-        self.icon_label.move(5, 5)
-
-    def enterEvent(self, event: QEnterEvent):
-        """Show info panel when mouse enters."""
-        self.icon_label.setStyleSheet("""
-            QLabel {
-                color: rgba(255, 255, 255, 255);
-                font-size: 28px;
-                background: transparent;
-            }
-        """)
+    def enterEvent(self, event):
+        super().enterEvent(event)
         self.hover_changed.emit(True)
 
     def leaveEvent(self, event):
-        """Hide info panel when mouse leaves."""
-        self.icon_label.setStyleSheet("""
-            QLabel {
-                color: rgba(255, 255, 255, 100);
-                font-size: 28px;
-                background: transparent;
-            }
-        """)
+        super().leaveEvent(event)
         self.hover_changed.emit(False)
+
+    def mousePressEvent(self, event):
+        pass  # Override to prevent click behavior
+
+
+# DVD bounce colors (vibrant)
+_BOUNCE_COLORS = [
+    (0, 136, 255), (255, 0, 128), (0, 255, 128), (255, 200, 0),
+    (255, 80, 0), (128, 0, 255), (0, 255, 255),
+]
 
 
 class ScreenSaver(QLabel):
@@ -167,128 +150,99 @@ class ScreenSaver(QLabel):
         super().__init__(parent)
         self.setStyleSheet("background-color: black;")
         self.hide()
-
-        # Animation state
-        self._ss = None
+        self._state = None
         self._last_time = None
+
+    def _init_state(self, width: int, height: int):
+        """Initialize or reinitialize animation state for given dimensions."""
+        import time
+        logo = self._load_logo(width, height)
+        blue_mask = self._create_blue_mask(logo) if logo else None
+
+        self._state = {
+            'size': (width, height),
+            'logo': logo,
+            'x': float(width // 4),
+            'y': float(height // 4),
+            'vx': 60.0,
+            'vy': 40.0,
+            'color_idx': 0,
+            'blue_mask': blue_mask,
+        }
+        self._last_time = time.time()
+
+    def _load_logo(self, width: int, height: int):
+        """Load and scale logo for screensaver."""
+        logo_path = get_resource_path(LOGO_FILENAME)
+        if not os.path.exists(logo_path):
+            return None
+        logo = Image.open(logo_path).convert("RGBA")
+        scale = min(width / logo.width, height / logo.height) * 0.15
+        return logo.resize((int(logo.width * scale), int(logo.height * scale)), Image.Resampling.LANCZOS)
+
+    def _create_blue_mask(self, logo):
+        """Create mask for blue pixels in logo (for color cycling)."""
+        arr = np.array(logo)
+        r, b = arr[:, :, 0], arr[:, :, 2]
+        alpha = arr[:, :, 3] if arr.shape[2] == 4 else np.full_like(r, 255)
+        return (b > 150) & (b > r + 50) & (alpha > 100)
+
+    def _update_position(self, dt: float, width: int, height: int) -> bool:
+        """Update logo position and return True if bounced."""
+        s = self._state
+        logo_w, logo_h = s['logo'].size
+        s['x'] += s['vx'] * dt
+        s['y'] += s['vy'] * dt
+
+        bounced = False
+        if s['x'] <= 0 or s['x'] >= width - logo_w:
+            s['x'] = max(0, min(s['x'], width - logo_w))
+            s['vx'] = -s['vx']
+            bounced = True
+        if s['y'] <= 0 or s['y'] >= height - logo_h:
+            s['y'] = max(0, min(s['y'], height - logo_h))
+            s['vy'] = -s['vy']
+            bounced = True
+        return bounced
+
+    def _render_logo(self, frame: np.ndarray):
+        """Render colored logo onto frame."""
+        s = self._state
+        logo_arr = np.array(s['logo'])
+        color = _BOUNCE_COLORS[s['color_idx']]
+
+        if s['blue_mask'] is not None:
+            logo_arr[:, :, 0][s['blue_mask']] = color[0]
+            logo_arr[:, :, 1][s['blue_mask']] = color[1]
+            logo_arr[:, :, 2][s['blue_mask']] = color[2]
+
+        x, y = int(s['x']), int(s['y'])
+        logo_h, logo_w = logo_arr.shape[:2]
+
+        if logo_arr.shape[2] == 4:
+            alpha = logo_arr[:, :, 3:4] / 255.0
+            roi = frame[y:y + logo_h, x:x + logo_w]
+            frame[y:y + logo_h, x:x + logo_w] = (alpha * logo_arr[:, :, :3] + (1 - alpha) * roi).astype(np.uint8)
+        else:
+            frame[y:y + logo_h, x:x + logo_w] = logo_arr[:, :, :3]
 
     def create_frame(self, width: int, height: int) -> np.ndarray:
         """Generate a DVD-style bouncing logo screensaver frame."""
         import time
-        
         current_time = time.time()
-        
-        # Initialize screensaver state on first call or resize
-        if not self._ss or self._ss.get('size') != (width, height):
-            logo_path = get_resource_path(LOGO_FILENAME)
-            logo = None
-            if os.path.exists(logo_path):
-                logo = Image.open(logo_path).convert("RGBA")
-                # Scale logo to ~15% of screen
-                scale = min(width / logo.width, height / logo.height) * 0.15
-                new_w = int(logo.width * scale)
-                new_h = int(logo.height * scale)
-                logo = logo.resize((new_w, new_h), Image.Resampling.LANCZOS)
 
-            # DVD bounce colors for the backslash (vibrant colors)
-            colors = [
-                (0, 136, 255),    # Blue (original)
-                (255, 0, 128),    # Magenta
-                (0, 255, 128),    # Green
-                (255, 200, 0),    # Yellow
-                (255, 80, 0),     # Orange
-                (128, 0, 255),    # Purple
-                (0, 255, 255),    # Cyan
-            ]
+        if not self._state or self._state.get('size') != (width, height):
+            self._init_state(width, height)
 
-            self._ss = {
-                'size': (width, height),
-                'logo': logo,
-                'x': float(width // 4),
-                'y': float(height // 4),
-                'vx': 60.0,  # Velocity X (pixels per second)
-                'vy': 40.0,   # Velocity Y (pixels per second)
-                'colors': colors,
-                'color_idx': 0,
-                'blue_mask': None,
-            }
-            self._last_time = current_time
-
-            # Create mask for the blue backslash in the logo
-            if logo:
-                logo_arr = np.array(logo)
-                # Find blue-ish pixels (the backslash is blue ~#0088ff)
-                r, b = logo_arr[:, :, 0], logo_arr[:, :, 2]
-                alpha = logo_arr[:, :, 3] if logo_arr.shape[2] == 4 else np.ones_like(r) * 255
-                # Blue backslash: low red, medium green, high blue
-                blue_mask = (b > 150) & (b > r + 50) & (alpha > 100)
-                self._ss['blue_mask'] = blue_mask
-
-        ss = self._ss
-        
-        # Calculate delta time for smooth animation
-        if self._last_time is None:
-            self._last_time = current_time
-        dt = current_time - self._last_time
+        dt = min(current_time - (self._last_time or current_time), 0.1)
         self._last_time = current_time
-        
-        # Clamp delta time to avoid jumps (e.g., after window was hidden)
-        dt = min(dt, 0.1)
 
-        # Create black frame
         frame = np.zeros((height, width, 3), dtype=np.uint8)
 
-        if ss['logo']:
-            logo_w, logo_h = ss['logo'].size
-
-            # Update position based on time (not frames)
-            ss['x'] += ss['vx'] * dt
-            ss['y'] += ss['vy'] * dt
-
-            # Bounce off walls and change color
-            bounced = False
-            if ss['x'] <= 0:
-                ss['x'] = 0
-                ss['vx'] = abs(ss['vx'])
-                bounced = True
-            elif ss['x'] >= width - logo_w:
-                ss['x'] = width - logo_w
-                ss['vx'] = -abs(ss['vx'])
-                bounced = True
-
-            if ss['y'] <= 0:
-                ss['y'] = 0
-                ss['vy'] = abs(ss['vy'])
-                bounced = True
-            elif ss['y'] >= height - logo_h:
-                ss['y'] = height - logo_h
-                ss['vy'] = -abs(ss['vy'])
-                bounced = True
-
-            # Change backslash color on bounce
-            if bounced:
-                ss['color_idx'] = (ss['color_idx'] + 1) % len(ss['colors'])
-
-            # Create colored version of logo
-            logo_arr = np.array(ss['logo'].copy())
-            new_color = ss['colors'][ss['color_idx']]
-
-            # Recolor the blue backslash
-            if ss['blue_mask'] is not None:
-                logo_arr[:, :, 0][ss['blue_mask']] = new_color[0]  # R
-                logo_arr[:, :, 1][ss['blue_mask']] = new_color[1]  # G
-                logo_arr[:, :, 2][ss['blue_mask']] = new_color[2]  # B
-
-            # Alpha blend logo onto frame
-            x, y = int(ss['x']), int(ss['y'])
-            if logo_arr.shape[2] == 4:
-                alpha = logo_arr[:, :, 3:4] / 255.0
-                rgb = logo_arr[:, :, :3]
-                roi = frame[y:y + logo_h, x:x + logo_w]
-                blended = (alpha * rgb + (1 - alpha) * roi).astype(np.uint8)
-                frame[y:y + logo_h, x:x + logo_w] = blended
-            else:
-                frame[y:y + logo_h, x:x + logo_w] = logo_arr[:, :, :3]
+        if self._state['logo']:
+            if self._update_position(dt, width, height):
+                self._state['color_idx'] = (self._state['color_idx'] + 1) % len(_BOUNCE_COLORS)
+            self._render_logo(frame)
 
         return frame
 
