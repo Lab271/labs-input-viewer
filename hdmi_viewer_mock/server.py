@@ -16,7 +16,7 @@ from .patterns import PatternGenerator
 class VirtualCameraServer:
     """
     Streams test patterns to a virtual camera device.
-    
+
     Uses pyvirtualcam to create a virtual webcam that can be
     captured by the main HDMI Viewer application.
     """
@@ -138,7 +138,7 @@ def run_mock_server(
 ):
     """
     Main entry point for the mock server.
-    
+
     Args:
         headless: Run without GUI
         pattern: Initial pattern type

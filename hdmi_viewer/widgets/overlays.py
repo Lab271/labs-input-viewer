@@ -212,7 +212,7 @@ class ScreenSaver(QLabel):
             if logo:
                 logo_arr = np.array(logo)
                 # Find blue-ish pixels (the backslash is blue ~#0088ff)
-                r, g, b = logo_arr[:, :, 0], logo_arr[:, :, 1], logo_arr[:, :, 2]
+                r, b = logo_arr[:, :, 0], logo_arr[:, :, 2]
                 alpha = logo_arr[:, :, 3] if logo_arr.shape[2] == 4 else np.ones_like(r) * 255
                 # Blue backslash: low red, medium green, high blue
                 blue_mask = (b > 150) & (b > r + 50) & (alpha > 100)

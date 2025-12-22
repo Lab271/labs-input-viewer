@@ -63,7 +63,7 @@ class ServerThread(QObject):
 class ControlPanel(QMainWindow):
     """
     Control panel window for the mock server.
-    
+
     Allows changing patterns, toggling no-signal mode,
     and shows a preview of the output.
     """

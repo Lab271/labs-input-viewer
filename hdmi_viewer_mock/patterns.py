@@ -62,10 +62,10 @@ class PatternGenerator:
     def generate(self, pattern: PatternType) -> np.ndarray:
         """
         Generate a frame for the specified pattern.
-        
+
         Args:
             pattern: The pattern type to generate
-            
+
         Returns:
             BGR frame as numpy array
         """

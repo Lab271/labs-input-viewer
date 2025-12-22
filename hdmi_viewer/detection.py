@@ -17,7 +17,7 @@ from hdmi_viewer.utils import get_resource_path
 class NoSignalDetector:
     """
     Detect Elgato 'No Signal' screen using template matching.
-    
+
     Approach:
     1. Multi-scale template matching to find the logo at any size
     2. Validate that background pixels are grey/dark
@@ -111,11 +111,11 @@ class NoSignalDetector:
     def _is_background_grey(self, frame, logo_rect=None):
         """
         Check if the frame background (excluding logo area) is dark grey.
-        
+
         Args:
             frame: BGR image
             logo_rect: (x, y, w, h) of detected logo to exclude, or None
-        
+
         Returns:
             (is_grey, ratio) - whether background is grey and what percentage
         """
@@ -162,7 +162,7 @@ class NoSignalDetector:
     def is_no_signal(self, frame) -> bool:
         """
         Detect if frame is the Elgato no-signal screen.
-        
+
         Returns True if:
         1. The Elgato logo is found via template matching
         2. The background is predominantly dark grey

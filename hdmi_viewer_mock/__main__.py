@@ -76,9 +76,8 @@ def main():
     args = parse_args()
 
     # Check for pyvirtualcam
-    try:
-        import pyvirtualcam
-    except ImportError:
+    import importlib.util
+    if importlib.util.find_spec("pyvirtualcam") is None:
         print("Error: pyvirtualcam is required for the mock server.")
         print("Install it with: pip install pyvirtualcam")
         print("")
