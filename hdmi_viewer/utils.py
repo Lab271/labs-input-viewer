@@ -14,7 +14,7 @@ def get_resource_path(relative_path: str) -> str:
     else:
         # Development mode - use package directory
         base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    
+
     # Check assets folder first, then root
     assets_path = os.path.join(base_path, "assets", relative_path)
     if os.path.exists(assets_path):

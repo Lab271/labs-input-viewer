@@ -5,14 +5,13 @@ Includes InputNameOverlay, InfoPanel, and ScreenSaver components.
 """
 
 import os
-import time
 
 import cv2
 import numpy as np
 from PIL import Image
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QImage, QPixmap, QEnterEvent
-from PyQt6.QtWidgets import QWidget, QLabel, QFrame, QVBoxLayout
+from PyQt6.QtGui import QEnterEvent, QImage, QPixmap
+from PyQt6.QtWidgets import QFrame, QLabel, QVBoxLayout
 
 from hdmi_viewer.config import LOGO_FILENAME
 from hdmi_viewer.utils import get_resource_path
@@ -48,14 +47,14 @@ class InputNameOverlay(QLabel):
         """Show the input name overlay briefly."""
         self.setText(name)
         self.adjustSize()
-        
+
         # Center in parent
         if self.parent():
             parent = self.parent()
             x = (parent.width() - self.width()) // 2
             y = (parent.height() - self.height()) // 2
             self.move(x, y)
-        
+
         self.show()
         self.raise_()
         self._hide_timer.start(duration_ms)

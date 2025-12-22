@@ -5,11 +5,11 @@ Audio control panel widget.
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QFrame,
-    QVBoxLayout,
     QHBoxLayout,
     QLabel,
     QPushButton,
     QSlider,
+    QVBoxLayout,
 )
 
 from hdmi_viewer.log import Log

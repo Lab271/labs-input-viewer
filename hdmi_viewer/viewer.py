@@ -12,27 +12,26 @@ from collections import deque
 import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
-from PyQt6.QtCore import QTimer, Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QImage, QPixmap
 from PyQt6.QtWidgets import (
-    QWidget,
     QHBoxLayout,
     QLabel,
     QSizePolicy,
+    QWidget,
 )
 
 from hdmi_viewer.camera import CameraFeed
 from hdmi_viewer.config import (
-    LayoutMode,
-    InputConfig,
-    SIDE_MARGIN,
     CENTER_GAP,
-    LOGO_FILENAME,
-    FULLSCREEN,
-    TIMER_INTERVAL_MS,
     CURSOR_HIDE_DELAY_MS,
-    get_all_input_configs,
+    FULLSCREEN,
+    LOGO_FILENAME,
+    SIDE_MARGIN,
+    TIMER_INTERVAL_MS,
+    LayoutMode,
     get_all_enabled_inputs,
+    get_all_input_configs,
     get_available_input_indices,
     get_left_input_index,
     get_right_input_index,
@@ -40,14 +39,14 @@ from hdmi_viewer.config import (
 )
 from hdmi_viewer.log import Log
 from hdmi_viewer.utils import get_resource_path
+from hdmi_viewer.widgets.audio_panel import AudioIcon, AudioPanel
 from hdmi_viewer.widgets.overlays import (
-    InputNameOverlay,
-    InfoPanel,
     InfoIcon,
+    InfoPanel,
+    InputNameOverlay,
     ScreenSaver,
 )
 from hdmi_viewer.widgets.settings_panel import SettingsPanel
-from hdmi_viewer.widgets.audio_panel import AudioPanel, AudioIcon
 from hdmi_viewer.widgets.thumbnails import ThumbnailsPanel
 
 
@@ -209,7 +208,7 @@ class DualVideoViewer(QWidget):
         """Initialize state variables."""
         # Cursor state
         self.cursor_hidden = False
-        
+
         # Shake detection for cursor reveal
         self._mouse_history = deque(maxlen=10)  # (timestamp, x, y)
         self._shake_threshold = 3  # Number of direction reversals to detect shake
@@ -333,10 +332,10 @@ class DualVideoViewer(QWidget):
         """Handle mouse movement - show cursor on shake or restart timer."""
         pos = event.pos()
         current_time = time.time()
-        
+
         # Record mouse position
         self._mouse_history.append((current_time, pos.x(), pos.y()))
-        
+
         if self.cursor_hidden:
             # Only show cursor if we detect a shake
             if self._detect_shake():
@@ -344,28 +343,28 @@ class DualVideoViewer(QWidget):
         else:
             # Cursor visible - restart hide timer on any movement
             self._show_cursor()
-        
+
         super().mouseMoveEvent(event)
 
     def _detect_shake(self) -> bool:
         """Detect if user is shaking the mouse (rapid direction reversals)."""
         if len(self._mouse_history) < 3:
             return False
-        
+
         current_time = time.time()
-        
+
         # Filter to recent movements within time window
-        recent = [(t, x, y) for t, x, y in self._mouse_history 
+        recent = [(t, x, y) for t, x, y in self._mouse_history
                   if current_time - t < self._shake_time_window]
-        
+
         if len(recent) < 3:
             return False
-        
+
         # Count horizontal direction reversals
         reversals = 0
         last_direction = None
         last_x = recent[0][1]
-        
+
         for _, x, _ in recent[1:]:
             dx = x - last_x
             if abs(dx) >= self._min_shake_distance:
@@ -374,7 +373,7 @@ class DualVideoViewer(QWidget):
                     reversals += 1
                 last_direction = direction
                 last_x = x
-        
+
         return reversals >= self._shake_threshold
 
     # =========================================================================
@@ -569,7 +568,7 @@ class DualVideoViewer(QWidget):
                     try:
                         text_font = ImageFont.truetype(path, font_size)
                         break
-                    except (OSError, IOError):
+                    except OSError:
                         continue
                 if text_font is None:
                     text_font = ImageFont.load_default()

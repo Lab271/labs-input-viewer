@@ -5,9 +5,9 @@ Thumbnails panel for quick input selection.
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QFrame,
-    QVBoxLayout,
     QGridLayout,
     QLabel,
+    QVBoxLayout,
 )
 
 from hdmi_viewer.config import get_all_input_configs

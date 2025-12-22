@@ -9,7 +9,6 @@ import os
 import shutil
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Optional
 
 from hdmi_viewer.log import Log
 from hdmi_viewer.utils import get_resource_path, get_user_data_path
@@ -76,16 +75,16 @@ def load_settings() -> dict:
             try:
                 shutil.copy(default_settings_path, settings_path)
                 Log.debug(f"Copied default settings to {settings_path}")
-            except IOError:
+            except OSError:
                 pass
 
     if os.path.exists(settings_path):
         try:
-            with open(settings_path, "r") as f:
+            with open(settings_path) as f:
                 settings = json.load(f)
             Log.debug(f"Settings loaded from {settings_path}")
             return settings
-        except (json.JSONDecodeError, IOError) as e:
+        except (OSError, json.JSONDecodeError) as e:
             Log.warning(f"Failed to load settings.json: {e}")
 
     # Return default settings if file doesn't exist or fails to load
@@ -107,7 +106,7 @@ def save_settings(settings: dict):
         with open(settings_path, "w") as f:
             json.dump(settings, f, indent=4)
         Log.debug(f"Settings saved to {settings_path}")
-    except IOError as e:
+    except OSError as e:
         Log.error(f"Failed to save settings.json: {e}")
 
 
@@ -131,7 +130,7 @@ def get_enabled_inputs(inputs: list[InputConfig]) -> list[InputConfig]:
     return [inp for inp in inputs if inp.enabled]
 
 
-def get_default_input(inputs: list[InputConfig]) -> Optional[InputConfig]:
+def get_default_input(inputs: list[InputConfig]) -> InputConfig | None:
     """Get the default input, or first enabled input if no default."""
     for inp in inputs:
         if inp.default and inp.enabled:
@@ -149,14 +148,14 @@ def get_default_input(inputs: list[InputConfig]) -> Optional[InputConfig]:
 _settings: dict = {}
 _input_configs: list[InputConfig] = []
 _enabled_inputs: list[InputConfig] = []
-_default_input: Optional[InputConfig] = None
+_default_input: InputConfig | None = None
 _available_input_indices: list[int] = []
 
 
 def _init_config():
     """Initialize configuration from settings file."""
     global _settings, _input_configs, _enabled_inputs, _default_input, _available_input_indices
-    
+
     _settings = load_settings()
     _input_configs = get_input_configs(_settings)
     _enabled_inputs = get_enabled_inputs(_input_configs)
@@ -184,7 +183,7 @@ def get_all_enabled_inputs() -> list[InputConfig]:
     return _enabled_inputs
 
 
-def get_current_default_input() -> Optional[InputConfig]:
+def get_current_default_input() -> InputConfig | None:
     """Get the default input."""
     return _default_input
 

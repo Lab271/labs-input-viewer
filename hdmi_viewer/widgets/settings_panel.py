@@ -5,23 +5,19 @@ Settings panel widget for configuring inputs.
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QFrame,
-    QVBoxLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QPushButton,
     QScrollArea,
+    QVBoxLayout,
     QWidget,
 )
 
 from hdmi_viewer.config import (
-    InputConfig,
     load_settings,
-    save_settings,
-    get_input_configs,
-    get_enabled_inputs,
-    get_default_input,
     reload_config,
+    save_settings,
 )
 from hdmi_viewer.widgets.toggle_switch import ToggleSwitch
 
@@ -226,7 +222,7 @@ class SettingsPanel(QFrame):
         settings = load_settings()
         if index < len(settings.get("inputs", [])):
             settings["inputs"][index]["enabled"] = enabled
-            
+
             # If disabling and this was default, clear default
             if not enabled and settings["inputs"][index].get("default", False):
                 settings["inputs"][index]["default"] = False
@@ -255,7 +251,7 @@ class SettingsPanel(QFrame):
                     # Update toggle UI
                     if i < len(self.input_widgets):
                         self.input_widgets[i]["default_toggle"].setChecked(False)
-            
+
             # Set this one as default (only if enabled)
             if inputs[index].get("enabled", True):
                 inputs[index]["default"] = True

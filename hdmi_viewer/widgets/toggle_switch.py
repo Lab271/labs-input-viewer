@@ -2,8 +2,8 @@
 iOS-style toggle switch widget.
 """
 
-from PyQt6.QtCore import Qt, QPropertyAnimation, QEasingCurve, pyqtProperty, pyqtSignal
-from PyQt6.QtGui import QColor, QPainter, QBrush
+from PyQt6.QtCore import QEasingCurve, QPropertyAnimation, Qt, pyqtProperty, pyqtSignal
+from PyQt6.QtGui import QBrush, QColor, QPainter
 from PyQt6.QtWidgets import QWidget
 
 
@@ -56,10 +56,10 @@ class ToggleSwitch(QWidget):
         self._animation.setStartValue(self._circle_position)
         self._animation.setEndValue(22 if self._checked else 2)
         self._animation.start()
-        
+
         # Emit signal
         self.toggled.emit(self._checked)
-        
+
         # Legacy callback support
         if self._on_change_callback:
             self._on_change_callback(self._checked)

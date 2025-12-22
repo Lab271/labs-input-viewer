@@ -17,14 +17,14 @@ class PatternType(Enum):
 @dataclass
 class MockConfig:
     """Configuration for the mock video server."""
-    
+
     width: int = 1920
     height: int = 1080
     fps: int = 30
     pattern: PatternType = PatternType.BARS
     no_signal: bool = False
     label: str = "MOCK"
-    
+
     # Signal cycling
     switch_signals: bool = False
     signal_duration: float = 10.0  # Seconds before switching

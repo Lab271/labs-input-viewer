@@ -21,60 +21,60 @@ Examples:
   %(prog)s --no-signal      Start showing no-signal screen
         """,
     )
-    
+
     parser.add_argument(
         "--headless",
         action="store_true",
         help="Run without GUI control panel",
     )
-    
+
     parser.add_argument(
         "--pattern",
         choices=["bars", "gradient", "bouncing", "static"],
         default="bars",
         help="Initial test pattern (default: bars)",
     )
-    
+
     parser.add_argument(
         "--no-signal",
         action="store_true",
         help="Start in no-signal mode",
     )
-    
+
     parser.add_argument(
         "--width",
         type=int,
         default=1920,
         help="Output width in pixels (default: 1920)",
     )
-    
+
     parser.add_argument(
         "--height",
         type=int,
         default=1080,
         help="Output height in pixels (default: 1080)",
     )
-    
+
     parser.add_argument(
         "--fps",
         type=int,
         default=30,
         help="Output frame rate (default: 30)",
     )
-    
+
     parser.add_argument(
         "--verbose", "-v",
         action="store_true",
         help="Enable verbose output",
     )
-    
+
     return parser.parse_args()
 
 
 def main():
     """Main entry point."""
     args = parse_args()
-    
+
     # Check for pyvirtualcam
     try:
         import pyvirtualcam
@@ -87,9 +87,9 @@ def main():
         print("  Linux: sudo apt install v4l2loopback-dkms")
         print("  Windows: Install OBS Studio")
         sys.exit(1)
-    
+
     from .server import run_mock_server
-    
+
     run_mock_server(
         headless=args.headless,
         pattern=args.pattern,
