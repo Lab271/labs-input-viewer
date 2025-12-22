@@ -1,7 +1,7 @@
 # HDMI Viewer Makefile
 # ====================
 
-.PHONY: help install install-dev run run-mock run-no-signal test lint format clean
+.PHONY: help install install-dev run run-mock test lint format clean build
 
 # Default target
 help:
@@ -9,84 +9,82 @@ help:
 	@echo ""
 	@echo "  make install       Install production dependencies"
 	@echo "  make install-dev   Install development dependencies (includes test tools)"
+	@echo "  make install-mock  Install mock server dependencies (includes pyvirtualcam)"
 	@echo "  make run           Run the application (production mode)"
-	@echo "  make run-mock      Run with mock video sources"
-	@echo "  make run-no-signal Run with no-signal test mode"
+	@echo "  make run-mock      Run the mock video server"
 	@echo "  make run-verbose   Run with verbose logging"
 	@echo "  make test          Run the test suite"
 	@echo "  make test-verbose  Run tests with verbose output"
 	@echo "  make lint          Run ruff linter"
 	@echo "  make format        Format code with ruff"
 	@echo "  make clean         Remove cache and build artifacts"
+	@echo "  make build         Build the application with PyInstaller"
 	@echo ""
 
-# Python executable (use venv if available)
-PYTHON := $(shell if [ -f venv/bin/python ]; then echo venv/bin/python; else echo python3; fi)
-PIP := $(shell if [ -f venv/bin/pip ]; then echo venv/bin/pip; else echo pip3; fi)
-
-# Installation
+# Installation with uv
 install:
-	$(PIP) install PyQt6 opencv-python numpy Pillow
+	uv sync
 
-install-dev: install
-	$(PIP) install pytest ruff
+install-dev:
+	uv sync --extra dev
 
-# Create virtual environment
-venv:
-	python3 -m venv venv
-	@echo "Virtual environment created. Activate with: source venv/bin/activate"
+install-mock:
+	uv sync --extra mock
+
+install-all:
+	uv sync --all-extras
 
 # Running the application
 run:
-	$(PYTHON) HDMI-viewer.py
-
-run-mock:
-	$(PYTHON) HDMI-viewer.py --mock --verbose
-
-run-no-signal:
-	$(PYTHON) HDMI-viewer.py --no-signal --verbose
+	uv run python -m hdmi_viewer
 
 run-verbose:
-	$(PYTHON) HDMI-viewer.py --verbose
+	uv run python -m hdmi_viewer --verbose
 
-run-switch:
-	$(PYTHON) HDMI-viewer.py --switch-signals --verbose
+# Running the mock server (separate process)
+run-mock:
+	uv run python -m hdmi_viewer_mock
 
 # Testing
 test:
-	$(PYTHON) -m pytest tests/ -v
+	uv run pytest tests/ -v
 
 test-verbose:
-	$(PYTHON) -m pytest tests/ -v -s
+	uv run pytest tests/ -v -s
 
 test-coverage:
-	$(PYTHON) -m pytest tests/ -v --cov=. --cov-report=html
+	uv run pytest tests/ -v --cov=hdmi_viewer --cov-report=html
 
 # Linting and formatting
 lint:
-	$(PYTHON) -m ruff check HDMI-viewer.py
+	uv run ruff check hdmi_viewer hdmi_viewer_mock
 
 lint-fix:
-	$(PYTHON) -m ruff check HDMI-viewer.py --fix
+	uv run ruff check hdmi_viewer hdmi_viewer_mock --fix
 
 format:
-	$(PYTHON) -m ruff format HDMI-viewer.py
+	uv run ruff format hdmi_viewer hdmi_viewer_mock
 
 check: lint test
 	@echo "All checks passed!"
 
+# Building
+build:
+	uv run pyinstaller hdmi-viewer.spec
+
 # Cleaning
 clean:
 	rm -rf __pycache__
+	rm -rf hdmi_viewer/__pycache__
+	rm -rf hdmi_viewer/widgets/__pycache__
+	rm -rf hdmi_viewer_mock/__pycache__
 	rm -rf tests/__pycache__
 	rm -rf .pytest_cache
 	rm -rf .ruff_cache
 	rm -rf htmlcov
 	rm -rf .coverage
+	rm -rf build
+	rm -rf dist
 	find . -type f -name "*.pyc" -delete
 	find . -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
-
-# Generate no-signal frames (if needed)
-generate-frames:
-	@echo "Generating no-signal animation frames..."
-	$(PYTHON) -c "from HDMI-viewer import CameraFeed; CameraFeed._generate_no_signal_frames()"
+	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true

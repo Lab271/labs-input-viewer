@@ -7,17 +7,34 @@ This spec file creates a properly bundled application with all resources.
 
 import os
 import sys
+from PyInstaller.utils.hooks import collect_submodules
 
 block_cipher = None
 
 # Get the directory containing the spec file
 spec_dir = os.path.dirname(os.path.abspath(SPEC))
 
+# Collect all hdmi_viewer submodules
+hidden_imports = collect_submodules('hdmi_viewer')
+hidden_imports.extend([
+    'cv2',
+    'numpy',
+    'PIL',
+    'PIL.Image',
+    'PIL.ImageDraw',
+    'PIL.ImageFont',
+    'PyQt6',
+    'PyQt6.QtCore',
+    'PyQt6.QtGui',
+    'PyQt6.QtWidgets',
+])
+
 # Data files to include
 datas = [
     ('Logo-3-OnDark.png', '.'),
     ('no_signal_icon.png', '.'),
     ('settings.json', '.'),
+    ('elgato_no_source.png', '.'),
 ]
 
 # Add no_signal_frames if it exists
@@ -25,22 +42,11 @@ if os.path.exists(os.path.join(spec_dir, 'no_signal_frames')):
     datas.append(('no_signal_frames', 'no_signal_frames'))
 
 a = Analysis(
-    ['HDMI-viewer.py'],
-    pathex=[],
+    ['hdmi_viewer/__main__.py'],
+    pathex=[spec_dir],
     binaries=[],
     datas=datas,
-    hiddenimports=[
-        'cv2',
-        'numpy',
-        'PIL',
-        'PIL.Image',
-        'PIL.ImageDraw',
-        'PIL.ImageFont',
-        'PyQt6',
-        'PyQt6.QtCore',
-        'PyQt6.QtGui',
-        'PyQt6.QtWidgets',
-    ],
+    hiddenimports=hidden_imports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
