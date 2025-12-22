@@ -287,6 +287,9 @@ NO_SIGNAL_MESSAGE = "Please connect your computer to the HDMI"
 FULLSCREEN = True
 TIMER_INTERVAL_MS = 30
 
+# Cursor auto-hide delay
+CURSOR_HIDE_DELAY_MS = 3000
+
 
 # =============================================================================
 # APPLICATION
@@ -751,13 +754,14 @@ class DualVideoViewer(QWidget):
         """Hide the mouse cursor."""
         self.setCursor(Qt.CursorShape.BlankCursor)
         self.cursor_hidden = True
+        print("Cursor hidden")
     
     def _show_cursor(self):
         """Show the mouse cursor and restart hide timer."""
         if self.cursor_hidden:
             self.setCursor(Qt.CursorShape.ArrowCursor)
             self.cursor_hidden = False
-        self.cursor_hide_timer.start(10000)  # Hide after 10 seconds
+        self.cursor_hide_timer.start(CURSOR_HIDE_DELAY_MS)  # Hide after 10 seconds
     
     def mouseMoveEvent(self, event):
         """Handle mouse movement - show cursor and restart timer."""
