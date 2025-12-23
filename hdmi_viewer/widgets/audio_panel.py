@@ -28,7 +28,9 @@ class AudioPanel(QFrame):
         self.setFixedSize(250, 180)
         self.setStyleSheet(f"""
             QFrame#audioPanel {{
-                {PANEL_STYLE.replace('QFrame', '').replace('QLabel', '')}
+                background-color: rgba(30, 30, 30, 240);
+                border-radius: 12px;
+                border: 1px solid rgba(255, 255, 255, 30);
             }}
             QLabel {{
                 color: white;

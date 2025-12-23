@@ -1,12 +1,22 @@
-"""
-Base widget classes for reusable UI components.
-"""
+"""Base widget classes for reusable UI components."""
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import QLabel
 
 
-# Common stylesheet values
+# =============================================================================
+# Shared Color Constants
+# =============================================================================
+COLOR_BG_PANEL = "rgba(30, 30, 30, 240)"
+COLOR_BORDER = "rgba(255, 255, 255, 30)"
+COLOR_HOVER = "rgba(80, 80, 80, 200)"
+COLOR_ACCENT = "#58a6ff"
+COLOR_DANGER = "rgba(255, 59, 48, 200)"
+
+
+# =============================================================================
+# Common Stylesheet Snippets
+# =============================================================================
 ICON_STYLE_DIM = """
     QLabel {
         color: rgba(255, 255, 255, 100);
@@ -23,56 +33,59 @@ ICON_STYLE_BRIGHT = """
     }
 """
 
-PANEL_STYLE = """
-    QFrame {
-        background-color: rgba(30, 30, 30, 240);
+PANEL_STYLE = f"""
+    QFrame {{
+        background-color: {COLOR_BG_PANEL};
         border-radius: 12px;
-        border: 1px solid rgba(255, 255, 255, 30);
-    }
-    QLabel {
+        border: 1px solid {COLOR_BORDER};
+    }}
+    QLabel {{
         color: white;
         font-family: Arial, sans-serif;
         background: transparent;
-    }
+    }}
 """
 
-BUTTON_STYLE = """
-    QPushButton {
+BUTTON_STYLE = f"""
+    QPushButton {{
         background-color: rgba(60, 60, 60, 200);
         color: white;
-        border: 1px solid rgba(255, 255, 255, 30);
+        border: 1px solid {COLOR_BORDER};
         border-radius: 6px;
         padding: 6px 12px;
         font-size: 11px;
-    }
-    QPushButton:hover {
-        background-color: rgba(80, 80, 80, 200);
-    }
-    QPushButton:checked {
-        background-color: rgba(255, 59, 48, 200);
-    }
+    }}
+    QPushButton:hover {{
+        background-color: {COLOR_HOVER};
+    }}
+    QPushButton:checked {{
+        background-color: {COLOR_DANGER};
+    }}
 """
 
-SLIDER_STYLE = """
-    QSlider::groove:horizontal {
+SLIDER_STYLE = f"""
+    QSlider::groove:horizontal {{
         height: 6px;
-        background: rgba(255, 255, 255, 30);
+        background: {COLOR_BORDER};
         border-radius: 3px;
-    }
-    QSlider::handle:horizontal {
+    }}
+    QSlider::handle:horizontal {{
         width: 16px;
         height: 16px;
         margin: -5px 0;
         background: white;
         border-radius: 8px;
-    }
-    QSlider::sub-page:horizontal {
-        background: #58a6ff;
+    }}
+    QSlider::sub-page:horizontal {{
+        background: {COLOR_ACCENT};
         border-radius: 3px;
-    }
+    }}
 """
 
 
+# =============================================================================
+# Base Widgets
+# =============================================================================
 class HoverIcon(QLabel):
     """Base class for clickable icons with hover effect."""
 
