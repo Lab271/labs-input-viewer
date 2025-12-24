@@ -31,15 +31,13 @@ hidden_imports.extend([
 
 # Data files to include
 datas = [
-    ('logo.png', '.'),
-    ('no_signal_icon.png', '.'),
+    ('assets/logo.png', 'assets'),
+    ('assets/no_signal_icon.png', 'assets'),
+    ('assets/elgato_no_source.png', 'assets'),
+    ('assets/zed.png', 'assets'),
+    ('assets/icon.icns', 'assets'),
     ('settings.json', '.'),
-    ('elgato_no_source.png', '.'),
 ]
-
-# Add no_signal_frames if it exists
-if os.path.exists(os.path.join(spec_dir, 'no_signal_frames')):
-    datas.append(('no_signal_frames', 'no_signal_frames'))
 
 a = Analysis(
     ['hdmi_viewer/__main__.py'],
