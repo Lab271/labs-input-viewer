@@ -88,7 +88,7 @@ class CameraFeed:
     def _is_no_signal(self, frame) -> bool:
         """
         Detect if the frame is the Elgato 'No Signal' screen.
-        
+
         Uses smart detection:
         - If currently no-signal: quick check if still dark grey
         - If currently has signal: quick check if became dark, then full check
