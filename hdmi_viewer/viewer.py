@@ -140,6 +140,9 @@ class DualVideoViewer(QWidget):
         # State variables
         self._setup_state()
 
+        # Enable mouse tracking on all child widgets for cursor auto-hide
+        self._enable_mouse_tracking_recursive(self)
+
         # Start fullscreen if configured
         if FULLSCREEN:
             self.showFullScreen()
@@ -148,6 +151,12 @@ class DualVideoViewer(QWidget):
 
         # Start frame update timer
         self.timer.start(TIMER_INTERVAL_MS)
+
+    def _enable_mouse_tracking_recursive(self, widget):
+        """Enable mouse tracking on widget and all children."""
+        widget.setMouseTracking(True)
+        for child in widget.findChildren(QWidget):
+            child.setMouseTracking(True)
 
     def _setup_overlays(self):
         """Set up all overlay widgets."""
@@ -195,10 +204,10 @@ class DualVideoViewer(QWidget):
         self.cursor_hidden = False
 
         # Shake detection for cursor reveal
-        self._mouse_history = deque(maxlen=10)  # (timestamp, x, y)
-        self._shake_threshold = 3  # Number of direction reversals to detect shake
+        self._mouse_history = deque(maxlen=50)  # (timestamp, x, y)
+        self._shake_threshold = 2  # Number of direction reversals to detect shake
         self._shake_time_window = 0.5  # Seconds to look back for shake detection
-        self._min_shake_distance = 30  # Minimum pixels for a movement to count
+        self._min_shake_distance = 20  # Minimum pixels for a movement to count
 
         # Screensaver mode
         self.screensaver_active = False
@@ -246,6 +255,7 @@ class DualVideoViewer(QWidget):
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         label.setStyleSheet("background-color: black;")
+        label.setMouseTracking(True)  # Enable mouse tracking for cursor auto-hide
         return label
 
     def _create_spacer(self, width: int) -> QLabel:
@@ -253,6 +263,7 @@ class DualVideoViewer(QWidget):
         spacer = QLabel()
         spacer.setFixedWidth(width)
         spacer.setStyleSheet("background-color: black;")
+        spacer.setMouseTracking(True)  # Enable mouse tracking for cursor auto-hide
         return spacer
 
     def _create_logo_label(self, width: int) -> QLabel:
@@ -261,6 +272,7 @@ class DualVideoViewer(QWidget):
         label.setFixedWidth(width)
         label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         label.setStyleSheet("background-color: black;")
+        label.setMouseTracking(True)  # Enable mouse tracking for cursor auto-hide
 
         logo_path = get_resource_path(LOGO_FILENAME)
         if os.path.exists(logo_path):
@@ -363,18 +375,26 @@ class DualVideoViewer(QWidget):
             return False
 
         # Count horizontal direction reversals
+        # Track cumulative movement from a reference point, reset on reversal
         reversals = 0
         last_direction = None
-        last_x = recent[0][1]
+        reference_x = recent[0][1]
+        cumulative_distance = 0
 
         for _, x, _ in recent[1:]:
-            dx = x - last_x
+            dx = x - reference_x
+            
             if abs(dx) >= self._min_shake_distance:
                 direction = 1 if dx > 0 else -1
-                if last_direction is not None and direction != last_direction:
+                if last_direction is None:
+                    # First significant movement - establish direction
+                    last_direction = direction
+                    reference_x = x
+                elif direction != last_direction:
+                    # Direction changed - count reversal and reset reference
                     reversals += 1
-                last_direction = direction
-                last_x = x
+                    last_direction = direction
+                    reference_x = x
 
         return reversals >= self._shake_threshold
 
