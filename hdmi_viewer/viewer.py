@@ -31,6 +31,7 @@ from hdmi_viewer.config import (
     get_all_enabled_inputs,
     get_all_input_configs,
     get_available_input_indices,
+    get_display_settings,
     get_left_input_index,
     get_right_input_index,
     reload_config,
@@ -109,14 +110,17 @@ class DualVideoViewer(QWidget):
         self.setWindowTitle("Space Presenter")
         self.setStyleSheet("background-color: black;")
 
+        # Load display settings first (needed for spacer/logo sizes)
+        self._load_display_settings()
+
         # Create video labels
         self.left_label = self._create_video_label()
         self.right_label = self._create_video_label()
 
-        # Spacers and logo
-        self.left_spacer = self._create_spacer(SIDE_MARGIN)
-        self.center_logo = self._create_logo_label(CENTER_GAP)
-        self.right_spacer = self._create_spacer(SIDE_MARGIN)
+        # Spacers and logo (use loaded display settings)
+        self.left_spacer = self._create_spacer(self.side_margin)
+        self.center_logo = self._create_logo_label(self.center_gap)
+        self.right_spacer = self._create_spacer(self.side_margin)
 
         # Layout: [margin] [video] [logo] [video] [margin]
         layout = QHBoxLayout()
@@ -173,6 +177,7 @@ class DualVideoViewer(QWidget):
         self.settings_icon.mousePressEvent = self._on_settings_click
         self.settings_panel = SettingsPanel(self)
         self.settings_panel.config_reloaded.connect(self._on_config_reloaded)
+        self.settings_panel.display_settings_changed.connect(self._on_display_settings_changed)
 
         # Audio icon and panel
         self.audio_icon = AudioIcon(self)
@@ -212,7 +217,8 @@ class DualVideoViewer(QWidget):
         # Screensaver mode
         self.screensaver_active = False
         self.no_signal_start_time = None
-        self.screensaver_delay = 60  # Seconds before screensaver activates
+
+        # Note: display settings (screensaver_delay, etc.) are loaded earlier in __init__
 
         # Freeze frame feature
         self.freeze_left = False
@@ -326,6 +332,38 @@ class DualVideoViewer(QWidget):
         """Handle configuration reload from settings panel."""
         self._reload_input_configs()
 
+    def _load_display_settings(self):
+        """Load display settings from config."""
+        settings = get_display_settings()
+        self.screensaver_delay = settings["screensaver_delay"]
+        self.cursor_hide_delay_ms = settings["cursor_hide_delay"] * 1000
+        self.side_margin = settings["side_margin"]
+        self.center_gap = settings["center_gap"]
+
+    def _on_display_settings_changed(self):
+        """Handle display settings change from settings panel."""
+        self._load_display_settings()
+        # Update layout margins
+        self.left_spacer.setFixedWidth(self.side_margin)
+        self.right_spacer.setFixedWidth(self.side_margin)
+        self.center_logo.setFixedWidth(self.center_gap)
+        # Reload logo at new size
+        self._reload_center_logo()
+        Log.info(f"Display settings updated: screensaver={self.screensaver_delay}s, cursor_hide={self.cursor_hide_delay_ms}ms")
+
+    def _reload_center_logo(self):
+        """Reload the center logo at the current gap width."""
+        import os
+        logo_path = get_resource_path(LOGO_FILENAME)
+        if os.path.exists(logo_path):
+            from PyQt6.QtGui import QPixmap
+            pixmap = QPixmap(logo_path)
+            scaled = pixmap.scaledToWidth(
+                self.center_gap - 20,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            self.center_logo.setPixmap(scaled)
+
     # =========================================================================
     # CURSOR AUTO-HIDE
     # =========================================================================
@@ -340,7 +378,7 @@ class DualVideoViewer(QWidget):
         if self.cursor_hidden:
             self.setCursor(Qt.CursorShape.ArrowCursor)
             self.cursor_hidden = False
-        self.cursor_hide_timer.start(CURSOR_HIDE_DELAY_MS)
+        self.cursor_hide_timer.start(self.cursor_hide_delay_ms)
 
     def mouseMoveEvent(self, event):
         """Handle mouse movement - show cursor on shake or restart timer."""
@@ -622,15 +660,15 @@ class DualVideoViewer(QWidget):
             self.left_label.show()
             self.right_label.show()
             self.center_logo.show()
-            self.left_spacer.setFixedWidth(SIDE_MARGIN)
-            self.right_spacer.setFixedWidth(SIDE_MARGIN)
+            self.left_spacer.setFixedWidth(self.side_margin)
+            self.right_spacer.setFixedWidth(self.side_margin)
             Log.info(f"Layout: DUAL (Left: {self.left_input_index}, Right: {self.right_input_index})")
 
         elif mode == LayoutMode.SINGLE_LEFT:
             self.left_label.show()
             self.right_label.hide()
             self.center_logo.hide()
-            total_margin = SIDE_MARGIN * 2 + CENTER_GAP
+            total_margin = self.side_margin * 2 + self.center_gap
             self.left_spacer.setFixedWidth(total_margin)
             self.right_spacer.setFixedWidth(total_margin)
             Log.info(f"Layout: SINGLE LEFT (input {self.left_input_index})")
@@ -639,7 +677,7 @@ class DualVideoViewer(QWidget):
             self.left_label.hide()
             self.right_label.show()
             self.center_logo.hide()
-            total_margin = SIDE_MARGIN * 2 + CENTER_GAP
+            total_margin = self.side_margin * 2 + self.center_gap
             self.left_spacer.setFixedWidth(total_margin)
             self.right_spacer.setFixedWidth(total_margin)
             Log.info(f"Layout: SINGLE RIGHT (input {self.right_input_index})")

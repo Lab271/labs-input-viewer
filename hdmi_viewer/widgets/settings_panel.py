@@ -10,6 +10,8 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QPushButton,
     QScrollArea,
+    QSlider,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
@@ -31,10 +33,11 @@ class SettingsPanel(QFrame):
     default_changed = pyqtSignal(int)  # (index)
     settings_closed = pyqtSignal()
     config_reloaded = pyqtSignal()  # Emitted when config is reloaded
+    display_settings_changed = pyqtSignal()  # Emitted when display settings change
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedSize(400, 450)
+        self.setFixedSize(400, 550)
         self.setStyleSheet("""
             QFrame#settingsPanel {
                 background-color: rgba(30, 30, 30, 240);
@@ -57,10 +60,38 @@ class SettingsPanel(QFrame):
             QLineEdit:focus {
                 border: 1px solid rgba(88, 166, 255, 200);
             }
+            QSpinBox {
+                background-color: rgba(60, 60, 60, 200);
+                border: 1px solid rgba(255, 255, 255, 30);
+                border-radius: 6px;
+                color: white;
+                padding: 4px 8px;
+                font-size: 13px;
+            }
+            QSpinBox:focus {
+                border: 1px solid rgba(88, 166, 255, 200);
+            }
+            QSlider::groove:horizontal {
+                height: 6px;
+                background: rgba(255, 255, 255, 30);
+                border-radius: 3px;
+            }
+            QSlider::handle:horizontal {
+                width: 16px;
+                height: 16px;
+                margin: -5px 0;
+                background: white;
+                border-radius: 8px;
+            }
+            QSlider::sub-page:horizontal {
+                background: #58a6ff;
+                border-radius: 3px;
+            }
         """)
         self.setObjectName("settingsPanel")
 
         self.input_widgets = []
+        self.display_widgets = {}
         self._setup_ui()
         self.hide()
 
@@ -119,10 +150,156 @@ class SettingsPanel(QFrame):
         scroll.setWidget(scroll_content)
         layout.addWidget(scroll)
 
+        # Display Settings Section
+        display_section = self._create_display_settings_section()
+        layout.addWidget(display_section)
+
+    def _create_display_settings_section(self) -> QFrame:
+        """Create the display settings section."""
+        section = QFrame()
+        section.setStyleSheet("""
+            QFrame {
+                background-color: rgba(50, 50, 50, 150);
+                border-radius: 8px;
+            }
+        """)
+
+        layout = QVBoxLayout(section)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(10)
+
+        # Section title
+        title = QLabel("🖥 Display Settings")
+        title.setStyleSheet("font-size: 14px; font-weight: bold; color: #88ccff;")
+        layout.addWidget(title)
+
+        # Screensaver delay
+        screensaver_row = self._create_slider_row(
+            "Screensaver delay:",
+            "screensaver_delay",
+            min_val=10,
+            max_val=300,
+            suffix="s"
+        )
+        layout.addLayout(screensaver_row)
+
+        # Cursor hide delay
+        cursor_row = self._create_slider_row(
+            "Cursor hide delay:",
+            "cursor_hide_delay",
+            min_val=1,
+            max_val=30,
+            suffix="s"
+        )
+        layout.addLayout(cursor_row)
+
+        # Side margin
+        margin_row = self._create_slider_row(
+            "Side margin:",
+            "side_margin",
+            min_val=0,
+            max_val=500,
+            suffix="px"
+        )
+        layout.addLayout(margin_row)
+
+        # Center gap
+        gap_row = self._create_slider_row(
+            "Center gap:",
+            "center_gap",
+            min_val=0,
+            max_val=500,
+            suffix="px"
+        )
+        layout.addLayout(gap_row)
+
+        # Reset to defaults button
+        reset_btn = QPushButton("Reset to Defaults")
+        reset_btn.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(60, 60, 60, 200);
+                color: white;
+                border: 1px solid rgba(255, 255, 255, 30);
+                border-radius: 6px;
+                padding: 6px 12px;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background-color: rgba(80, 80, 80, 200);
+            }
+        """)
+        reset_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        reset_btn.clicked.connect(self._reset_display_settings)
+        layout.addWidget(reset_btn)
+
+        return section
+
+    def _create_slider_row(self, label: str, key: str, min_val: int, max_val: int, suffix: str) -> QHBoxLayout:
+        """Create a row with label, slider and spinbox."""
+        row = QHBoxLayout()
+        row.setSpacing(8)
+
+        lbl = QLabel(label)
+        lbl.setStyleSheet("font-size: 12px;")
+        lbl.setFixedWidth(115)
+        row.addWidget(lbl)
+
+        slider = QSlider(Qt.Orientation.Horizontal)
+        slider.setMinimum(min_val)
+        slider.setMaximum(max_val)
+        slider.setFixedWidth(120)
+        row.addWidget(slider)
+
+        spinbox = QSpinBox()
+        spinbox.setMinimum(min_val)
+        spinbox.setMaximum(max_val)
+        spinbox.setSuffix(f" {suffix}")
+        spinbox.setFixedWidth(70)
+        row.addWidget(spinbox)
+
+        # Connect slider and spinbox
+        slider.valueChanged.connect(spinbox.setValue)
+        spinbox.valueChanged.connect(slider.setValue)
+        spinbox.valueChanged.connect(lambda v, k=key: self._on_display_setting_changed(k, v))
+
+        self.display_widgets[key] = {"slider": slider, "spinbox": spinbox}
+
+        row.addStretch()
+        return row
+
     def _on_close(self):
         """Handle close button click."""
         self.hide()
         self.settings_closed.emit()
+
+    def _on_display_setting_changed(self, key: str, value: int):
+        """Handle display setting change."""
+        settings = load_settings()
+        if "display" not in settings:
+            settings["display"] = {}
+        settings["display"][key] = value
+        save_settings(settings)
+        self.display_settings_changed.emit()
+
+    def _reset_display_settings(self):
+        """Reset display settings to defaults."""
+        defaults = {
+            "screensaver_delay": 60,
+            "cursor_hide_delay": 3,
+            "side_margin": 150,
+            "center_gap": 200,
+        }
+
+        # Update UI
+        for key, value in defaults.items():
+            if key in self.display_widgets:
+                self.display_widgets[key]["spinbox"].setValue(value)
+
+        # Save to settings
+        settings = load_settings()
+        settings["display"] = defaults.copy()
+        save_settings(settings)
+        self.display_settings_changed.emit()
 
     def refresh(self):
         """Refresh the settings panel with current input configurations."""
@@ -208,6 +385,30 @@ class SettingsPanel(QFrame):
             })
 
         self.inputs_layout.addStretch()
+
+        # Load display settings
+        self._refresh_display_settings(settings)
+
+    def _refresh_display_settings(self, settings: dict):
+        """Refresh display settings from loaded settings."""
+        display = settings.get("display", {})
+        defaults = {
+            "screensaver_delay": 60,
+            "cursor_hide_delay": 3,
+            "side_margin": 150,
+            "center_gap": 200,
+        }
+
+        for key, default in defaults.items():
+            if key in self.display_widgets:
+                value = display.get(key, default)
+                # Block signals to avoid triggering save during refresh
+                self.display_widgets[key]["spinbox"].blockSignals(True)
+                self.display_widgets[key]["slider"].blockSignals(True)
+                self.display_widgets[key]["spinbox"].setValue(value)
+                self.display_widgets[key]["slider"].setValue(value)
+                self.display_widgets[key]["spinbox"].blockSignals(False)
+                self.display_widgets[key]["slider"].blockSignals(False)
 
     def _on_name_changed(self, index: int, name: str):
         """Handle input name change."""

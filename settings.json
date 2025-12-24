@@ -24,5 +24,11 @@
             "enabled": false,
             "default": false
         }
-    ]
+    ],
+    "display": {
+        "screensaver_delay": 60,
+        "cursor_hide_delay": 11,
+        "side_margin": 80,
+        "center_gap": 200
+    }
 }

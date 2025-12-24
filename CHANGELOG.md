@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2024-12-24
+
+### Added
+
+- Display Settings panel with configurable options:
+  - Screensaver delay (10-300 seconds)
+  - Cursor hide delay (1-30 seconds)
+  - Side margin (0-500 pixels)
+  - Center gap (0-500 pixels)
+- Reset to Defaults button for display settings
+- Settings are saved to settings.json and applied in real-time
+
+### Changed
+
+- Reduced default capture resolution from 4K to 1080p for better performance
+
 ## [1.4.6] - 2024-12-24
 
 ### Fixed

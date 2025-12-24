@@ -37,8 +37,8 @@ class InputConfig:
 # =============================================================================
 
 # Capture settings
-TARGET_WIDTH = 3840
-TARGET_HEIGHT = 2160
+TARGET_WIDTH = 1920
+TARGET_HEIGHT = 1080
 TARGET_FPS = 30
 
 # Layout spacing (in pixels)
@@ -94,7 +94,13 @@ def load_settings() -> dict:
             {"index": 1, "name": "Input 2", "enabled": True, "default": False},
             {"index": 2, "name": "Input 3", "enabled": True, "default": False},
             {"index": 3, "name": "Input 4", "enabled": False, "default": False},
-        ]
+        ],
+        "display": {
+            "screensaver_delay": 60,
+            "cursor_hide_delay": 3,
+            "side_margin": 150,
+            "center_gap": 200,
+        }
     }
 
 
@@ -128,6 +134,18 @@ def get_input_configs(settings: dict) -> list[InputConfig]:
 def get_enabled_inputs(inputs: list[InputConfig]) -> list[InputConfig]:
     """Get list of enabled inputs."""
     return [inp for inp in inputs if inp.enabled]
+
+
+def get_display_settings() -> dict:
+    """Get display settings with defaults."""
+    settings = load_settings()
+    display = settings.get("display", {})
+    return {
+        "screensaver_delay": display.get("screensaver_delay", 60),
+        "cursor_hide_delay": display.get("cursor_hide_delay", 3),
+        "side_margin": display.get("side_margin", 150),
+        "center_gap": display.get("center_gap", 200),
+    }
 
 
 def get_default_input(inputs: list[InputConfig]) -> InputConfig | None:
