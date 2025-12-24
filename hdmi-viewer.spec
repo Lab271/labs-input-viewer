@@ -31,7 +31,7 @@ hidden_imports.extend([
 
 # Data files to include
 datas = [
-    ('Logo-3-OnDark.png', '.'),
+    ('logo.png', '.'),
     ('no_signal_icon.png', '.'),
     ('settings.json', '.'),
     ('elgato_no_source.png', '.'),
