@@ -105,6 +105,11 @@ class DualVideoViewer(QWidget):
         # Start workers
         self.left_worker.start()
         self.right_worker.start()
+        
+        # If both feeds start on same input, pause right worker (we'll mirror left)
+        # This prevents Windows from failing to open the same camera twice
+        if self.left_input_index == self.right_input_index:
+            self.right_worker.pause()
 
         # Window setup
         self.setWindowTitle("Space Presenter")
@@ -522,6 +527,12 @@ class DualVideoViewer(QWidget):
             if self.freeze_right and self.frozen_right_pixmap:
                 self._display_frame(self.right_label, self.frozen_right_pixmap)
                 right_has_signal = True
+            elif self.left_input_index == self.right_input_index:
+                # Same input as left - mirror left feed to right
+                if self._left_has_signal and self._left_pixmap:
+                    self._display_frame(self.right_label, self._left_pixmap)
+                else:
+                    self._show_no_signal(self.right_label)
             elif self._right_has_signal and self._right_pixmap:
                 self._display_frame(self.right_label, self._right_pixmap)
             else:
@@ -697,12 +708,28 @@ class DualVideoViewer(QWidget):
 
     def _switch_feed(self, feed: str, new_index: int):
         """Switch a feed to a new input index (thread-safe)."""
+        old_left = self.left_input_index
+        old_right = self.right_input_index
+        
         if feed in ("left", "both"):
             self.left_input_index = new_index
             self.left_worker.switch_camera(new_index)
+            self.left_worker.resume()  # Ensure it's running
+            
         if feed in ("right", "both"):
             self.right_input_index = new_index
-            self.right_worker.switch_camera(new_index)
+            
+        # Handle right worker based on whether inputs are the same
+        # On Windows, we can't open the same camera device twice
+        if self.left_input_index == self.right_input_index:
+            # Same input - pause right worker, we'll mirror left feed
+            self.right_worker.pause()
+        else:
+            # Different inputs - right worker needs its own camera
+            if feed in ("right", "both") or old_left == old_right:
+                # Switch right camera if right changed OR if we were mirroring before
+                self.right_worker.switch_camera(self.right_input_index)
+            self.right_worker.resume()
 
     def switch_input(self, feed: str, direction: int):
         """Switch input index for a feed. direction: 1=next, -1=previous"""
