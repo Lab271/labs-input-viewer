@@ -354,6 +354,13 @@ class DualVideoViewer(QWidget):
             # Only show cursor if we detect a shake
             if self._detect_shake():
                 self._show_cursor()
+                # Also exit screensaver mode if active
+                if self.screensaver_active:
+                    self.screensaver_active = False
+                    self.screensaver.hide()
+                    # Reset the no-signal timer so screensaver doesn't immediately reactivate
+                    self.no_signal_start_time = None
+                    Log.info("Screensaver exited via mouse shake")
         else:
             # Cursor visible - restart hide timer on any movement
             self._show_cursor()
