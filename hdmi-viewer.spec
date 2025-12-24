@@ -33,9 +33,11 @@ hidden_imports.extend([
 datas = [
     ('assets/logo.png', 'assets'),
     ('assets/no_signal_icon.png', 'assets'),
+    ('assets/no_signal.mp4', 'assets'),
     ('assets/elgato_no_source.png', 'assets'),
     ('assets/zed.png', 'assets'),
     ('assets/icon.icns', 'assets'),
+    ('assets/icon.ico', 'assets'),
     ('settings.json', '.'),
 ]
 

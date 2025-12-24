@@ -51,19 +51,24 @@ class CameraWorker(QThread):
         self._create_feed()
 
         while self._running:
-            # Check for camera switch request
-            if self._switch_to_index is not None:
-                self._do_switch()
+            try:
+                # Check for camera switch request
+                if self._switch_to_index is not None:
+                    self._do_switch()
 
-            # Skip if paused
-            if self._paused:
-                self.msleep(50)
-                continue
+                # Skip if paused
+                if self._paused:
+                    self.msleep(50)
+                    continue
 
-            # Read frame
-            if self.feed:
-                pixmap, has_signal = self.feed.read_frame()
-                self.frame_ready.emit(pixmap, has_signal)
+                # Read frame
+                if self.feed:
+                    pixmap, has_signal = self.feed.read_frame()
+                    self.frame_ready.emit(pixmap, has_signal)
+
+            except Exception as e:
+                Log.error(f"{self.label} worker error: {e}")
+                self.msleep(100)  # Wait a bit before retrying
 
             # Small sleep to prevent CPU spinning (target ~30fps = 33ms)
             self.msleep(16)  # ~60fps capture, UI will display at its own rate

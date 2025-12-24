@@ -565,8 +565,10 @@ class DualVideoViewer(QWidget):
             frame = self._create_no_signal_frame(size.width(), size.height())
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             h, w, ch = frame_rgb.shape
-            qimg = QImage(frame_rgb.data, w, h, ch * w, QImage.Format.Format_RGB888)
-            label.setPixmap(QPixmap.fromImage(qimg))
+            # Make a copy to ensure data persists for QImage (fixes Windows crash)
+            frame_copy = frame_rgb.copy()
+            qimg = QImage(frame_copy.data, w, h, ch * w, QImage.Format.Format_RGB888)
+            label.setPixmap(QPixmap.fromImage(qimg.copy()))
 
     def _create_no_signal_frame(self, width: int, height: int) -> np.ndarray:
         """Generate no-signal frame from MP4 video loop."""

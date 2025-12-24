@@ -68,8 +68,14 @@ class CameraFeed:
 
     def _open_camera(self, index: int) -> cv2.VideoCapture:
         """Open a camera with platform-specific backend."""
+        cap = None
+        
         if sys.platform.startswith("win"):
+            # Try DirectShow first, then fallback to default
             cap = cv2.VideoCapture(index, cv2.CAP_DSHOW)
+            if not cap.isOpened():
+                Log.warning(f"DirectShow failed for camera {index}, trying default backend")
+                cap = cv2.VideoCapture(index)
         elif sys.platform == "darwin":
             cap = cv2.VideoCapture(index, cv2.CAP_AVFOUNDATION)
         else:
@@ -77,11 +83,15 @@ class CameraFeed:
             if not cap.isOpened():
                 cap = cv2.VideoCapture(index)
 
-        if cap.isOpened():
-            cap.set(cv2.CAP_PROP_FRAME_WIDTH, TARGET_WIDTH)
-            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, TARGET_HEIGHT)
-            cap.set(cv2.CAP_PROP_FPS, TARGET_FPS)
-            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        if cap and cap.isOpened():
+            # Set properties with error handling for Windows
+            try:
+                cap.set(cv2.CAP_PROP_FRAME_WIDTH, TARGET_WIDTH)
+                cap.set(cv2.CAP_PROP_FRAME_HEIGHT, TARGET_HEIGHT)
+                cap.set(cv2.CAP_PROP_FPS, TARGET_FPS)
+                cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+            except Exception as e:
+                Log.warning(f"Could not set all camera properties: {e}")
 
         return cap
 
@@ -157,11 +167,10 @@ class CameraFeed:
         h, w, ch = frame_rgb.shape
         bytes_per_line = ch * w
 
-        qimg = QImage(
-            frame_rgb.copy().data, w, h, bytes_per_line, QImage.Format.Format_RGB888
-        )
-
-        return QPixmap.fromImage(qimg), True
+        # Create QImage and immediately copy it to ensure data persists
+        # This fixes crashes on Windows where the numpy array might be freed
+        qimg = QImage(frame_rgb.data, w, h, bytes_per_line, QImage.Format.Format_RGB888)
+        return QPixmap.fromImage(qimg.copy()), True
 
     def release(self):
         """Release the camera capture."""
