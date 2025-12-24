@@ -20,7 +20,6 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from hdmi_viewer.camera import CameraFeed
 from hdmi_viewer.config import (
     CENTER_GAP,
     CURSOR_HIDE_DELAY_MS,
@@ -48,6 +47,7 @@ from hdmi_viewer.widgets.overlays import (
 )
 from hdmi_viewer.widgets.settings_panel import SettingsPanel
 from hdmi_viewer.widgets.thumbnails import ThumbnailsPanel
+from hdmi_viewer.worker import CameraWorker
 
 
 class SettingsIcon(HoverIcon):
@@ -83,13 +83,27 @@ class DualVideoViewer(QWidget):
         self.left_input_index = get_left_input_index()
         self.right_input_index = get_right_input_index()
 
-        # Open both inputs
-        self.left_feed = CameraFeed(
+        # Latest frame data from workers (updated via signals)
+        self._left_pixmap: QPixmap | None = None
+        self._left_has_signal: bool = False
+        self._right_pixmap: QPixmap | None = None
+        self._right_has_signal: bool = False
+
+        # Create camera workers (threaded)
+        self.left_worker = CameraWorker(
             self.left_input_index, test_mode, "LEFT", switch_signals, always_no_signal
         )
-        self.right_feed = CameraFeed(
+        self.right_worker = CameraWorker(
             self.right_input_index, test_mode, "RIGHT", switch_signals, always_no_signal
         )
+
+        # Connect worker signals
+        self.left_worker.frame_ready.connect(self._on_left_frame)
+        self.right_worker.frame_ready.connect(self._on_right_frame)
+
+        # Start workers
+        self.left_worker.start()
+        self.right_worker.start()
 
         # Window setup
         self.setWindowTitle("Space Presenter")
@@ -205,6 +219,22 @@ class DualVideoViewer(QWidget):
         self._no_signal_cache = None
         self._no_signal_frame_idx = 0
         self._no_signal_video = None  # cv2.VideoCapture for MP4
+
+    # =========================================================================
+    # FRAME SIGNAL HANDLERS (from worker threads)
+    # =========================================================================
+
+    def _on_left_frame(self, pixmap: QPixmap | None, has_signal: bool):
+        """Handle new frame from left camera worker."""
+        self._left_pixmap = pixmap
+        self._left_has_signal = has_signal
+        self._check_auto_switch(self.left_input_index, has_signal)
+
+    def _on_right_frame(self, pixmap: QPixmap | None, has_signal: bool):
+        """Handle new frame from right camera worker."""
+        self._right_pixmap = pixmap
+        self._right_has_signal = has_signal
+        self._check_auto_switch(self.right_input_index, has_signal)
 
     # =========================================================================
     # UI CREATION
@@ -357,9 +387,9 @@ class DualVideoViewer(QWidget):
         if feed in ("left", "both"):
             self.freeze_left = not self.freeze_left
             if self.freeze_left:
-                pixmap, has_signal = self.left_feed.read_frame()
-                if has_signal and pixmap:
-                    self.frozen_left_pixmap = pixmap
+                # Use cached frame from worker
+                if self._left_has_signal and self._left_pixmap:
+                    self.frozen_left_pixmap = self._left_pixmap
                 Log.info("Left feed FROZEN")
             else:
                 self.frozen_left_pixmap = None
@@ -368,9 +398,9 @@ class DualVideoViewer(QWidget):
         if feed in ("right", "both"):
             self.freeze_right = not self.freeze_right
             if self.freeze_right:
-                pixmap, has_signal = self.right_feed.read_frame()
-                if has_signal and pixmap:
-                    self.frozen_right_pixmap = pixmap
+                # Use cached frame from worker
+                if self._right_has_signal and self._right_pixmap:
+                    self.frozen_right_pixmap = self._right_pixmap
                 Log.info("Right feed FROZEN")
             else:
                 self.frozen_right_pixmap = None
@@ -408,58 +438,41 @@ class DualVideoViewer(QWidget):
     # =========================================================================
 
     def update_frames(self):
-        """Update video feeds based on current layout mode."""
-        left_has_signal = False
-        right_has_signal = False
+        """Update video display from cached frames (workers update in background)."""
+        left_has_signal = self._left_has_signal
+        right_has_signal = self._right_has_signal
 
         # Left feed
         if self.layout_mode in (LayoutMode.DUAL, LayoutMode.SINGLE_LEFT):
             if self.freeze_left and self.frozen_left_pixmap:
-                scaled = self.frozen_left_pixmap.scaled(
-                    self.left_label.size(),
-                    Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation,
-                )
-                self.left_label.setPixmap(scaled)
+                self._display_frame(self.left_label, self.frozen_left_pixmap)
                 left_has_signal = True
+            elif self._left_has_signal and self._left_pixmap:
+                self._display_frame(self.left_label, self._left_pixmap)
             else:
-                left_pixmap, left_has_signal = self.left_feed.read_frame()
-                self._check_auto_switch(self.left_input_index, left_has_signal)
-                if left_has_signal and left_pixmap:
-                    scaled = left_pixmap.scaled(
-                        self.left_label.size(),
-                        Qt.AspectRatioMode.KeepAspectRatio,
-                        Qt.TransformationMode.SmoothTransformation,
-                    )
-                    self.left_label.setPixmap(scaled)
-                else:
-                    self._show_no_signal(self.left_label)
+                self._show_no_signal(self.left_label)
 
         # Right feed
         if self.layout_mode in (LayoutMode.DUAL, LayoutMode.SINGLE_RIGHT):
             if self.freeze_right and self.frozen_right_pixmap:
-                scaled = self.frozen_right_pixmap.scaled(
-                    self.right_label.size(),
-                    Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation,
-                )
-                self.right_label.setPixmap(scaled)
+                self._display_frame(self.right_label, self.frozen_right_pixmap)
                 right_has_signal = True
+            elif self._right_has_signal and self._right_pixmap:
+                self._display_frame(self.right_label, self._right_pixmap)
             else:
-                right_pixmap, right_has_signal = self.right_feed.read_frame()
-                self._check_auto_switch(self.right_input_index, right_has_signal)
-                if right_has_signal and right_pixmap:
-                    scaled = right_pixmap.scaled(
-                        self.right_label.size(),
-                        Qt.AspectRatioMode.KeepAspectRatio,
-                        Qt.TransformationMode.SmoothTransformation,
-                    )
-                    self.right_label.setPixmap(scaled)
-                else:
-                    self._show_no_signal(self.right_label)
+                self._show_no_signal(self.right_label)
 
         # Check for screensaver mode
         self._update_screensaver_state(left_has_signal, right_has_signal)
+
+    def _display_frame(self, label: QLabel, pixmap: QPixmap):
+        """Scale and display a frame on a label."""
+        scaled = pixmap.scaled(
+            label.size(),
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        label.setPixmap(scaled)
 
     def _update_screensaver_state(self, left_has_signal: bool, right_has_signal: bool):
         """Update screensaver state based on signal status."""
@@ -493,7 +506,7 @@ class DualVideoViewer(QWidget):
     def _create_no_signal_frame(self, width: int, height: int) -> np.ndarray:
         """Generate no-signal frame from MP4 video loop."""
         cache_key = (width, height)
-        
+
         # Check if we need to reload (size changed or not cached)
         if (
             not self._no_signal_cache
@@ -504,47 +517,47 @@ class DualVideoViewer(QWidget):
                 # Load all frames from the video
                 cap = cv2.VideoCapture(video_path)
                 frames = []
-                
+
                 # Text settings
                 text = "Please connect a source"
                 font = cv2.FONT_HERSHEY_SIMPLEX
                 font_scale = max(0.6, width / 1920)  # Scale font with resolution
                 font_thickness = max(1, int(width / 960))
                 text_color = (128, 128, 128)  # Grey
-                
+
                 # Calculate text size for positioning
                 (text_w, text_h), baseline = cv2.getTextSize(text, font, font_scale, font_thickness)
-                
+
                 while True:
                     ret, frame = cap.read()
                     if not ret:
                         break
-                    
+
                     # Resize frame to fit the target size while maintaining aspect ratio
                     frame_h, frame_w = frame.shape[:2]
                     scale = min(width / frame_w, height / frame_h)
                     new_w = int(frame_w * scale)
                     new_h = int(frame_h * scale)
-                    
+
                     # Resize and center on black background
                     resized = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
-                    
+
                     # Create black background and center the video
                     output = np.zeros((height, width, 3), dtype=np.uint8)
                     x_offset = (width - new_w) // 2
                     y_offset = (height - new_h) // 2
                     output[y_offset:y_offset + new_h, x_offset:x_offset + new_w] = resized
-                    
+
                     # Add text below the animation
                     text_x = (width - text_w) // 2
                     text_y = y_offset + new_h + text_h + 30  # 30px below video
                     if text_y < height - 10:  # Ensure text fits
                         cv2.putText(output, text, (text_x, text_y), font, font_scale, text_color, font_thickness, cv2.LINE_AA)
-                    
+
                     frames.append(output)
-                
+
                 cap.release()
-                
+
                 if frames:
                     self._no_signal_cache = {
                         "size": cache_key,
@@ -615,23 +628,14 @@ class DualVideoViewer(QWidget):
                 return inp.name
         return f"Input {index}"
 
-    def _create_feed(self, input_index: int, label: str) -> CameraFeed:
-        """Create a new CameraFeed with current settings."""
-        return CameraFeed(
-            input_index, self.test_mode, label,
-            self.switch_signals, self.always_no_signal
-        )
-
     def _switch_feed(self, feed: str, new_index: int):
-        """Switch a feed to a new input index."""
+        """Switch a feed to a new input index (thread-safe)."""
         if feed in ("left", "both"):
             self.left_input_index = new_index
-            self.left_feed.release()
-            self.left_feed = self._create_feed(new_index, "LEFT")
+            self.left_worker.switch_camera(new_index)
         if feed in ("right", "both"):
             self.right_input_index = new_index
-            self.right_feed.release()
-            self.right_feed = self._create_feed(new_index, "RIGHT")
+            self.right_worker.switch_camera(new_index)
 
     def switch_input(self, feed: str, direction: int):
         """Switch input index for a feed. direction: 1=next, -1=previous"""
@@ -806,14 +810,14 @@ class DualVideoViewer(QWidget):
         # Test mode: toggle no-signal simulation
         elif key == Qt.Key.Key_N and self.test_mode:
             if self.layout_mode == LayoutMode.SINGLE_LEFT:
-                has_signal = self.left_feed.toggle_signal()
+                has_signal = self.left_worker.toggle_signal()
                 Log.info(f"Left feed signal: {'ON' if has_signal else 'OFF'}")
             elif self.layout_mode == LayoutMode.SINGLE_RIGHT:
-                has_signal = self.right_feed.toggle_signal()
+                has_signal = self.right_worker.toggle_signal()
                 Log.info(f"Right feed signal: {'ON' if has_signal else 'OFF'}")
             else:
-                self.left_feed.toggle_signal()
-                has_signal = self.right_feed.toggle_signal()
+                self.left_worker.toggle_signal()
+                has_signal = self.right_worker.toggle_signal()
                 Log.info(f"Both feeds signal: {'ON' if has_signal else 'OFF'}")
 
         else:
@@ -828,7 +832,9 @@ class DualVideoViewer(QWidget):
         if self.timer.isActive():
             self.timer.stop()
 
-        self.left_feed.release()
-        self.right_feed.release()
+        # Stop worker threads
+        self.left_worker.stop()
+        self.right_worker.stop()
+
         cv2.destroyAllWindows()
         event.accept()

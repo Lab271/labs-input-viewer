@@ -104,10 +104,10 @@ class CameraFeed:
         if self._last_no_signal_result:
             # Currently in no-signal state - quick check if still dark grey
             still_no_signal = self.detector.quick_check_still_no_signal(frame)
-            
+
             # Force full check every 60 frames (~2 seconds) even if quick check passes
             force_full_check = (self.frame_counter % 60 == 0)
-            
+
             if still_no_signal and not force_full_check:
                 # Still dark grey, no need for full check
                 return True
