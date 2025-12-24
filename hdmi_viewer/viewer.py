@@ -784,6 +784,16 @@ class DualVideoViewer(QWidget):
         """Handle keyboard shortcuts."""
         key = event.key()
 
+        # Exit screensaver on any key press
+        if self.screensaver_active:
+            self.screensaver_active = False
+            self.screensaver.hide()
+            self.no_signal_start_time = None
+            self._show_cursor()
+            Log.info("Screensaver exited via keyboard")
+            # Don't process further - just exit screensaver
+            return
+
         # Fullscreen toggle
         if key in (Qt.Key.Key_F11, Qt.Key.Key_F):
             if self.isFullScreen():

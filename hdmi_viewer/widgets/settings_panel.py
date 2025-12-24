@@ -43,7 +43,7 @@ class SettingsPanel(QFrame):
             }
             QLabel {
                 color: white;
-                font-family: 'TT Interphases Pro', Arial, sans-serif;
+                font-family: 'TT Interphases', Arial, sans-serif;
                 background: transparent;
             }
             QLineEdit {
