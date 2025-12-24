@@ -26,11 +26,22 @@ Keyboard shortcuts:
 
 import argparse
 import sys
+import traceback
 
 from PyQt6.QtWidgets import QApplication
 
 from hdmi_viewer.log import Log
 from hdmi_viewer.viewer import DualVideoViewer
+
+
+def exception_handler(exc_type, exc_value, exc_tb):
+    """Global exception handler to log crashes."""
+    error_msg = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
+    Log.error(f"CRASH: {exc_type.__name__}: {exc_value}", force=True)
+    Log.error(f"Traceback:\n{error_msg}", force=True)
+    # Also print to stderr in case logging fails
+    print(f"CRASH: {error_msg}", file=sys.stderr)
+    sys.__excepthook__(exc_type, exc_value, exc_tb)
 
 
 def parse_args():
@@ -77,6 +88,11 @@ def main():
 
     # Set verbose mode
     Log.set_verbose(args.verbose)
+
+    # Enable file logging for bundled apps (helps debug crashes)
+    if hasattr(sys, "_MEIPASS"):
+        Log.enable_file_logging()
+        sys.excepthook = exception_handler
 
     # Determine test mode
     test_mode = args.mock or args.switch_signals or args.no_signal
