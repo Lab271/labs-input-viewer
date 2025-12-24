@@ -7,5 +7,5 @@ Designed for 6000x1200 resolution displays.
 
 from hdmi_viewer.__main__ import main
 
-__version__ = "1.3.1"
+__version__ = "1.4.0"
 __all__ = ["main"]

@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2024-12-24
+
+### Added
+- Threaded camera capture with `CameraWorker` for non-blocking frame reads
+- `HoverIcon` base class for reusable icon widgets with hover effects
+- Shared stylesheet constants in `widgets/base.py`
+- Architecture documentation (`hdmi_viewer/ARCHITECTURE.md`)
+- Feature testing checklist (`TESTING.md`)
+
+### Changed
+- Camera feeds now run in background threads (~60fps capture)
+- UI timer only handles display, not blocking I/O
+- Refactored `SettingsIcon`, `AudioIcon`, `InfoIcon` to use `HoverIcon` base
+- Simplified `ScreenSaver` into smaller focused methods
+- Reduced code duplication in input switching logic
+- Cleaned up `ToggleSwitch` - removed deprecated callback
+
+### Performance
+- Smoother frame rate due to parallel camera capture
+- Reduced UI blocking during frame reads
+- Better CPU utilization with threaded workers
+
 ## [1.3.0] - 2025-12-16
 
 ### Changed
