@@ -18,7 +18,6 @@
     "build": "electron-builder",
     "build:mac": "electron-builder --mac",
     "build:win": "electron-builder --win",
-    "build:linux": "electron-builder --linux",
     "publish": "electron-builder --publish always"
   },
   "dependencies": {
@@ -87,14 +86,6 @@
       "installerIcon": "build/icon.ico",
       "uninstallerIcon": "build/icon.ico",
       "installerHeaderIcon": "build/icon.ico"
-    },
-    "linux": {
-      "icon": "build/icons",
-      "target": [
-        "AppImage",
-        "deb"
-      ],
-      "category": "Video"
     },
     "publish": {
       "provider": "github",
