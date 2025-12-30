@@ -4,9 +4,38 @@ on:
   push:
     tags:
       - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g., v1.0.0). Leave empty to use latest tag.'
+        required: false
+        type: string
 
 jobs:
+  resolve-tag:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.get_tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get tag
+        id: get_tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ -n "${{ inputs.tag }}" ]; then
+              echo "tag=${{ inputs.tag }}" >> $GITHUB_OUTPUT
+            else
+              echo "tag=$(git describe --tags --abbrev=0)" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "tag=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+          fi
+
   build-mac:
+    needs: resolve-tag
     runs-on: macos-latest
     defaults:
       run:
@@ -51,6 +80,7 @@ jobs:
             input_viewer_electron/dist/latest-mac.yml
 
   build-windows:
+    needs: resolve-tag
     runs-on: windows-latest
     defaults:
       run:
@@ -94,7 +124,7 @@ jobs:
             input_viewer_electron/dist/latest.yml
 
   release:
-    needs: [build-mac, build-windows]
+    needs: [resolve-tag, build-mac, build-windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -118,6 +148,7 @@ jobs:
       - name: Create Release in source repo
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ needs.resolve-tag.outputs.tag }}
           files: |
             ./artifacts/mac/*.dmg
             ./artifacts/mac/*.zip
@@ -130,8 +161,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           repository: LAB271/input-viewer-releases
-          tag_name: ${{ github.ref_name }}
-          name: Input Viewer ${{ github.ref_name }}
+          tag_name: ${{ needs.resolve-tag.outputs.tag }}
+          name: Input Viewer ${{ needs.resolve-tag.outputs.tag }}
           files: |
             ./artifacts/mac/*.dmg
             ./artifacts/mac/*.zip

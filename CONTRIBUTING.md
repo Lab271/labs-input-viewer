@@ -87,3 +87,58 @@ git push
 git tag -a v2.0.0 -m "Release v2.0.0"
 git push origin v2.0.0
 ```
+
+## GitHub Workflows
+
+This project uses GitHub Actions for CI/CD. **Only the Electron app is built/tested** (no Python CI).
+
+### Workflow Files
+
+| File | Purpose |
+|------|---------|
+| `.github/workflows/ci.yml` | Lint & build test on every push/PR |
+| `.github/workflows/auto-release.yml` | Version bump & tag on push to main |
+| `.github/workflows/release.yml` | Build & publish on tag or manual trigger |
+
+### CI (`ci.yml`)
+
+- **Triggers:** Push to any branch, PRs to main
+- **Runner:** macOS (required for build testing)
+- **Steps:** npm lint → electron-vite build → macOS DMG build test
+- **Purpose:** Validate code before merge
+
+### Auto Release (`auto-release.yml`)
+
+- **Triggers:** Push to main (ignores docs, assets)
+- **Steps:** Analyze commits → bump VERSION → create git tag
+- **Purpose:** Automatic semantic versioning
+
+### Build & Release (`release.yml`)
+
+- **Triggers:** Tag push (`v*.*.*`), manual `workflow_dispatch`
+- **Builds:** macOS DMG (universal), Windows NSIS installer
+- **Publishes to:** Source repo + `LAB271/input-viewer-releases`
+- **Manual trigger:** Can specify tag or use latest
+
+### Trigger Flow
+
+```
+Push to feature branch ──► CI (lint + build test)
+           │
+           ▼
+Open PR to main ──────────► CI (lint + build test)
+           │
+           ▼
+Merge PR to main ─────────► Auto-release (bump version, create tag)
+           │
+           ▼
+Tag created ──────────────► Release (build macOS + Windows, publish)
+```
+
+### Re-running Failed Builds
+
+Use the manual `workflow_dispatch` trigger on the Release workflow:
+1. Go to Actions → "Build and Release"
+2. Click "Run workflow"
+3. Enter tag (e.g., `v1.2.0`) or leave empty for latest tag
+
