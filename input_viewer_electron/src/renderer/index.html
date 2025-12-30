@@ -8,6 +8,9 @@
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
+  <!-- Left Border -->
+  <div id="left-border" class="edge-border"></div>
+  
   <!-- Video Container -->
   <div id="video-wrapper">
     <div id="left-feed" class="video-feed">
@@ -31,6 +34,9 @@
       </div>
     </div>
   </div>
+  
+  <!-- Right Border -->
+  <div id="right-border" class="edge-border"></div>
 
   <!-- Center Logo (shown when no inputs) -->
   <div id="center-logo" class="hidden">
@@ -74,6 +80,16 @@
             <button id="layout-dual" class="layout-btn active" title="Double View">D</button>
             <button id="layout-single" class="layout-btn" title="Single View">S</button>
           </div>
+        </div>
+        <div class="setting-row">
+          <label>Center Gap</label>
+          <input type="range" id="center-gap" min="20" max="200" value="60">
+          <span id="center-gap-value">60px</span>
+        </div>
+        <div class="setting-row">
+          <label>Borders</label>
+          <input type="range" id="border-width" min="0" max="200" value="0">
+          <span id="border-width-value">0px</span>
         </div>
       </div>
       

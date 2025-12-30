@@ -4,9 +4,8 @@
 
 - [x] Dual camera feed display (side by side)
 - [x] Video quality (1920x1080 @ 30fps)
-- [x] Center logo between feeds
-- [x] Layout gap slider
-- [x] **D/L/R** keys - Layout switching
+- [x] Center logo between feeds (scales with gap)
+- [x] **D/S** buttons - Dual/Single view mode
 - [x] **1-4** keys - Select input directly
 - [x] Input name overlay on switch
 - [x] **F11/F** - Toggle fullscreen
@@ -14,24 +13,40 @@
 - [x] **Q** - Quit application
 - [x] Starts in fullscreen
 - [x] Cursor hides after inactivity
-- [x] Settings panel with input selection
-- [x] Info panel with keyboard shortcuts
-- [x] Auto-updater (check, download, notify)
+- [x] **Freeze frame** - Space key to pause feed
+  - Freeze indicator overlay (❙❙ FROZEN / ▶ LIVE)
+- [x] **Settings persistence** - Save to settings.json
+  - Remember selected inputs on restart
+  - Remember layout preferences
+- [x] **Edit input names** - Rename inputs in settings
+- [x] **Enable/disable inputs** - Toggle switches in settings
+- [x] Auto-updater with dialog prompts (uses public releases repo)
 - [x] No-signal overlay (basic)
+- [x] Screen aspect ratio detection (auto D/S on startup)
+- [x] Dropdown panel (hover arrow at top)
+- [x] Center gap slider (adjustable divider width)
+- [x] Border width slider (left/right black borders)
+- [x] Logo overlay in single view mode
 
 ---
 
 ## 🔴 P1 - Must Have
 
-Essential features for basic usability:
+Essential features for release:
 
-- [ ] **Freeze frame** - Space key to pause feed
-  - Freeze indicator overlay (❙❙ FROZEN / ▶ LIVE)
-- [ ] **Settings persistence** - Save to settings.json
-  - Remember selected inputs on restart
-  - Remember layout gap preference
-- [ ] **Edit input names** - Rename inputs in settings
-- [ ] **Enable/disable inputs** - Toggle switches in settings
+- [ ] **Update GitHub workflows** - Fix release.yml for electron-vite
+  - Test build on macOS and Windows
+  - Publish to input-viewer-releases repo
+- [ ] **Windows compatibility** - Test and fix Windows-specific issues
+  - Camera permissions handling
+  - Path separators and file system
+  - Code signing for Windows builds
+- [ ] **Elgato no-signal detection** - Detect capture card "no signal" screen
+  - Template matching for Elgato screens
+  - Custom animated overlay when no signal detected
+- [ ] **DVD-style screensaver** - When feeds lose signal
+  - Bouncing logo animation
+  - Color changes on bounce
 
 ---
 
@@ -42,9 +57,6 @@ Important features from Python version:
 - [ ] **Thumbnails panel** - T key to open
   - Live preview of all inputs
   - Click to select input
-- [ ] **No-signal detection** - Template matching
-  - Detect capture card "no signal" screen
-  - Animated no-signal icon (spinning)
 - [ ] **Auto-switch mode** - A key to toggle
   - Auto-switch when signal detected
   - Indicator overlay
@@ -55,9 +67,6 @@ Important features from Python version:
 
 Polish and enhancement features:
 
-- [ ] **Screensaver** - When both feeds lose signal
-  - DVD-style bouncing logo
-  - Color changes on bounce
 - [ ] **Layout animations** - Smooth transitions
 - [ ] **Cursor shake detection** - Show cursor on shake
 - [ ] **Audio controls** - ♪ panel

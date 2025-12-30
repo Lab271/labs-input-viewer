@@ -14,10 +14,11 @@ const state = {
   rightDeviceId: null,
   leftStream: null,
   rightStream: null,
-  layoutMode: 'dual', // 'dual', 'left', 'right'
+  layoutMode: 'dual', // 'dual', 'single'
   cursorTimeout: null,
   cursorHideDelay: 3000,
-  layoutGap: 20,
+  centerGap: 60,
+  borderWidth: 0,
   frozen: false,
   settings: null // Will be loaded from file
 }
@@ -33,6 +34,8 @@ const elements = {
   rightVideo: document.getElementById('right-video'),
   videoWrapper: document.getElementById('video-wrapper'),
   centerDivider: document.getElementById('center-divider'),
+  leftBorder: document.getElementById('left-border'),
+  rightBorder: document.getElementById('right-border'),
   inputNameOverlay: document.getElementById('input-name-overlay'),
   inputNameText: document.getElementById('input-name-text'),
   freezeOverlay: document.getElementById('freeze-overlay'),
@@ -43,6 +46,10 @@ const elements = {
   inputList: document.getElementById('input-list'),
   layoutDual: document.getElementById('layout-dual'),
   layoutSingle: document.getElementById('layout-single'),
+  centerGap: document.getElementById('center-gap'),
+  centerGapValue: document.getElementById('center-gap-value'),
+  borderWidth: document.getElementById('border-width'),
+  borderWidthValue: document.getElementById('border-width-value'),
   updateNotification: document.getElementById('update-notification'),
   updateMessage: document.getElementById('update-message')
 }
@@ -70,7 +77,8 @@ async function saveSettings() {
         leftDeviceId: state.leftDeviceId,
         rightDeviceId: state.rightDeviceId,
         layoutMode: state.layoutMode,
-        layoutGap: state.layoutGap,
+        centerGap: state.centerGap,
+        borderWidth: state.borderWidth,
         inputs: state.settings.inputs
       }
       await window.electronAPI.saveSettings(settingsToSave)
@@ -83,7 +91,8 @@ async function saveSettings() {
 function getDefaultSettings() {
   return {
     inputs: {},
-    layoutGap: 20,
+    centerGap: 60,
+    borderWidth: 0,
     leftDeviceId: null,
     rightDeviceId: null,
     layoutMode: null // null means use screen-based detection
@@ -347,6 +356,29 @@ function setLayout(mode) {
   saveSettings()
 }
 
+function setCenterGap(gap) {
+  state.centerGap = gap
+  state.settings.centerGap = gap
+  elements.centerDivider.style.width = `${gap}px`
+  // Scale logo to fit within the gap (80% of gap width, max 120px)
+  const logoSize = Math.min(gap * 0.8, 120)
+  const logo = elements.centerDivider.querySelector('.divider-logo')
+  if (logo) {
+    logo.style.maxWidth = `${logoSize}px`
+    logo.style.maxHeight = `${logoSize}px`
+  }
+  elements.centerGapValue.textContent = `${gap}px`
+  saveSettings()
+}
+
+function setBorderWidth(width) {
+  state.borderWidth = width
+  state.settings.borderWidth = width
+  document.documentElement.style.setProperty('--border-width', `${width}px`)
+  elements.borderWidthValue.textContent = `${width}px`
+  saveSettings()
+}
+
 // =============================================================================
 // Input Selection
 // =============================================================================
@@ -524,6 +556,15 @@ function setupEventListeners() {
   elements.layoutDual.addEventListener('click', () => setLayout('dual'))
   elements.layoutSingle.addEventListener('click', () => setLayout('single'))
   
+  // Gap and border sliders
+  elements.centerGap.addEventListener('input', (e) => {
+    setCenterGap(parseInt(e.target.value))
+  })
+  
+  elements.borderWidth.addEventListener('input', (e) => {
+    setBorderWidth(parseInt(e.target.value))
+  })
+  
   // Device changes (when plugging/unplugging devices)
   navigator.mediaDevices.addEventListener('devicechange', async () => {
     console.log('Device change detected')
@@ -570,6 +611,15 @@ async function init() {
   // Use saved layout mode if available, otherwise use screen-based default
   const layoutMode = state.settings.layoutMode || defaultLayout
   setLayout(layoutMode)
+  
+  // Initialize center gap and border width from settings
+  const centerGap = state.settings.centerGap || 60
+  setCenterGap(centerGap)
+  elements.centerGap.value = centerGap
+  
+  const borderWidth = state.settings.borderWidth || 0
+  setBorderWidth(borderWidth)
+  elements.borderWidth.value = borderWidth
   
   // Get video devices and start streams
   await getVideoDevices()
