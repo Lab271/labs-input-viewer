@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; media-src 'self' blob:;">
+  <title>Input Viewer</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Main viewer container -->
+  <div id="viewer-container">
+    <!-- Video feeds -->
+    <div id="video-wrapper">
+      <div id="left-feed" class="video-feed">
+        <video id="left-video" autoplay playsinline muted></video>
+        <div class="no-signal-overlay hidden">
+          <div class="no-signal-icon">📺</div>
+          <div class="no-signal-text">No Signal</div>
+        </div>
+        <div class="input-label"></div>
+      </div>
+      <div id="right-feed" class="video-feed">
+        <video id="right-video" autoplay playsinline muted></video>
+        <div class="no-signal-overlay hidden">
+          <div class="no-signal-icon">📺</div>
+          <div class="no-signal-text">No Signal</div>
+        </div>
+        <div class="input-label"></div>
+      </div>
+    </div>
+    
+    <!-- Input name overlay (shown when switching) -->
+    <div id="input-name-overlay" class="hidden">
+      <span id="input-name-text"></span>
+    </div>
+  </div>
+
+  <!-- Info icon and panel -->
+  <div id="info-icon" class="icon-button" title="Keyboard Shortcuts">ⓘ</div>
+  <div id="info-panel" class="panel hidden">
+    <h3>Keyboard Shortcuts</h3>
+    <table>
+      <tr><td><kbd>D</kbd></td><td>Dual view (both feeds)</td></tr>
+      <tr><td><kbd>L</kbd></td><td>Single view: left feed</td></tr>
+      <tr><td><kbd>R</kbd></td><td>Single view: right feed</td></tr>
+      <tr><td><kbd>1-4</kbd></td><td>Select input directly</td></tr>
+      <tr><td><kbd>F11</kbd> / <kbd>F</kbd></td><td>Toggle fullscreen</td></tr>
+      <tr><td><kbd>Escape</kbd></td><td>Exit fullscreen</td></tr>
+      <tr><td><kbd>Q</kbd></td><td>Quit</td></tr>
+    </table>
+    <div class="attribution">Input Viewer by Labs for Space</div>
+  </div>
+
+  <!-- Settings icon and panel -->
+  <div id="settings-icon" class="icon-button" title="Settings">⚙</div>
+  <div id="settings-panel" class="panel hidden">
+    <h3>Input Settings</h3>
+    <div id="input-list"></div>
+    <div class="panel-section">
+      <h4>Display Settings</h4>
+      <div class="setting-row">
+        <label>Layout Gap</label>
+        <input type="range" id="layout-gap" min="0" max="200" value="20">
+        <span id="layout-gap-value">20px</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Update notification -->
+  <div id="update-notification" class="hidden">
+    <span id="update-message"></span>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
