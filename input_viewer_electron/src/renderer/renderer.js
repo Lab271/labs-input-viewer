@@ -91,12 +91,10 @@ async function getVideoDevices() {
       enabled: true
     }));
     
-    // Set default devices if not set
-    if (!state.leftDeviceId && state.devices.length > 0) {
+    // Set default devices - both left and right use first device (index 0)
+    if (state.devices.length > 0) {
       state.leftDeviceId = state.devices[0].deviceId;
-    }
-    if (!state.rightDeviceId && state.devices.length > 1) {
-      state.rightDeviceId = state.devices[1].deviceId;
+      state.rightDeviceId = state.devices[0].deviceId;
     }
     
     renderInputList();

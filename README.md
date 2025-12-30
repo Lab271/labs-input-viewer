@@ -3,9 +3,39 @@
 [![CI](https://github.com/LAB271/input-viewer/actions/workflows/ci.yml/badge.svg)](https://github.com/LAB271/input-viewer/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/LAB271/input-viewer)](https://github.com/LAB271/input-viewer/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 
 A lightweight video input viewer — **OBS without the complexity**. View and manage capture card feeds with a clean, simple interface designed for users who need to display video inputs without the overhead of full streaming software.
+
+## Versions
+
+This repository contains two implementations:
+
+| Version | Location | Stack | Status |
+|---------|----------|-------|--------|
+| **Electron** | [`input_viewer_electron/`](input_viewer_electron/) | Electron + JavaScript | **Recommended** |
+| **Python** | [`input_viewer_python/`](input_viewer_python/) | PyQt6 + OpenCV | Legacy |
+
+### Electron Version (Recommended)
+
+The Electron version is faster, has native installers with auto-updates, and provides a smoother experience.
+
+```bash
+cd input_viewer_electron
+npm install
+npm start
+```
+
+See [input_viewer_electron/README.md](input_viewer_electron/README.md) for full details.
+
+### Python Version
+
+The original Python implementation using PyQt6 and OpenCV.
+
+```bash
+cd input_viewer_python
+pip install -e .
+python input-viewer.py
+```
 
 ## Features
 
@@ -14,55 +44,9 @@ A lightweight video input viewer — **OBS without the complexity**. View and ma
 - **Direct input selection** — Number keys 1-4 to switch inputs instantly
 - **Settings panel** — Configure inputs with toggle switches
 - **No-signal detection** — Custom animated overlay when source disconnects
-- **Live reload** — Settings update without restarting the app
-- **Test modes** — Mock sources for development without hardware
 - **Fullscreen support** — Designed for dedicated display setups
 - **Any capture card** — Works with any video capture device
-
-## Installation
-
-### Option 1: Download Release (Recommended)
-
-Download the latest release for your platform from the [Releases page](https://github.com/LAB271/input-viewer/releases/latest):
-
-- **macOS**: `input-viewer-macos`
-- **Windows**: `input-viewer-windows.exe`
-- **Linux**: `input-viewer-linux`
-
-### Option 2: Run from Source
-
-```bash
-# Clone the repository
-git clone https://github.com/LAB271/input-viewer.git
-cd input-viewer
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-make install
-# Or manually: pip install PyQt6 opencv-python numpy Pillow
-
-# Run the application
-make run
-# Or: python input-viewer.py
-```
-
-## Usage
-
-### Production Mode
-```bash
-python input-viewer.py              # Real camera inputs
-python input-viewer.py --verbose    # With debug logging
-```
-
-### Test Mode
-```bash
-python input-viewer.py --mock           # Animated mock sources
-python input-viewer.py --no-signal      # Always show no-signal overlay
-python input-viewer.py --switch-signals # Cycle signal/no-signal every 10s
-```
+- **Auto-updater** — (Electron) Automatic updates from GitHub releases
 
 ## Keyboard Shortcuts
 
@@ -106,21 +90,22 @@ Settings are stored in `settings.json`:
 
 ## Development
 
+### Electron
+
 ```bash
-# Install dev dependencies
-make install-dev
+cd input_viewer_electron
+npm install
+npm start          # Development mode
+npm run build      # Build installers
+```
 
-# Run tests
+### Python
+
+```bash
+cd input_viewer_python
+pip install -e ".[dev]"
 make test
-
-# Run linter
 make lint
-
-# Format code
-make format
-
-# Run all checks
-make check
 ```
 
 ## Hardware Setup
@@ -128,25 +113,7 @@ make check
 Works with:
 - **Any capture card** — USB or PCIe capture devices
 - **Any display** — Adapts to your screen resolution
-- **Platform**: macOS, Windows, Linux
-
-## Releasing
-
-To create a new release:
-
-```bash
-# Update VERSION file
-echo "1.1.0" > VERSION
-
-# Create and push tag
-git tag -a v1.1.0 -m "Release v1.1.0"
-git push origin v1.1.0
-```
-
-The GitHub Actions workflow will automatically:
-1. Run tests on all platforms
-2. Build executables for macOS, Windows, and Linux
-3. Create a GitHub Release with the binaries
+- **Platforms**: macOS, Windows
 
 ## License
 

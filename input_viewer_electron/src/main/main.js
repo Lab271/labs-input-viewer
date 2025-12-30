@@ -22,6 +22,7 @@ function createWindow() {
     backgroundColor: '#000000',
     titleBarStyle: 'hiddenInset',
     frame: process.platform === 'darwin' ? true : false,
+    fullscreen: true,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
