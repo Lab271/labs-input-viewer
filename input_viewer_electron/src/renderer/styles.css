@@ -168,12 +168,12 @@ body.cursor-visible .input-label {
   display: none;
 }
 
-/* In single view, overlay the logo on top of the video */
+/* In single view, overlay the logo at the top center of the video */
 #center-divider.overlay {
   position: absolute;
-  top: 50%;
+  top: 20px;
   left: 50%;
-  transform: translate(-50%, -50%);
+  transform: translateX(-50%);
   width: auto;
   height: auto;
   background-color: transparent;
