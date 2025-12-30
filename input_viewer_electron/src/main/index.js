@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, systemPreferences } = require('electron')
+const { app, BrowserWindow, ipcMain, systemPreferences, dialog } = require('electron')
 const { autoUpdater } = require('electron-updater')
 const path = require('path')
 const fs = require('fs')
@@ -7,7 +7,19 @@ const fs = require('fs')
 let mainWindow
 
 // Check if running in development mode
-const isDev = process.env.NODE_ENV === 'development'
+// electron-vite sets ELECTRON_RENDERER_URL only during `dev` command
+const isDev = !!process.env.ELECTRON_RENDERER_URL
+
+// Configure auto-updater to use the public releases repository
+autoUpdater.setFeedURL({
+  provider: 'github',
+  owner: 'LAB271',
+  repo: 'input-viewer-releases'
+})
+
+// Don't auto-download - prompt user first
+autoUpdater.autoDownload = false
+autoUpdater.autoInstallOnAppQuit = true
 
 // Settings file path
 const settingsPath = path.join(app.getPath('userData'), 'settings.json')
@@ -81,9 +93,13 @@ function createWindow() {
   })
 
   // Check for updates after window is ready (not in dev mode)
+  // Add a delay to ensure the app is fully loaded
   mainWindow.once('ready-to-show', () => {
     if (!isDev) {
-      autoUpdater.checkForUpdatesAndNotify()
+      setTimeout(() => {
+        log('[AutoUpdater] Starting update check...')
+        autoUpdater.checkForUpdates()
+      }, 3000)
     }
   })
 }
@@ -163,35 +179,61 @@ ipcMain.handle('get-settings-path', () => {
 // =============================================================================
 
 autoUpdater.on('checking-for-update', () => {
-  sendStatusToWindow('Checking for update...')
+  log('[AutoUpdater] Checking for update...')
 })
 
 autoUpdater.on('update-available', (info) => {
-  sendStatusToWindow('Update available: ' + info.version)
+  log(`[AutoUpdater] Update available: ${info.version}`)
+  dialog.showMessageBox(mainWindow, {
+    type: 'info',
+    title: 'Update Available',
+    message: `A new version (${info.version}) is available.`,
+    detail: 'Would you like to download it now?',
+    buttons: ['Download', 'Later'],
+    defaultId: 0,
+    cancelId: 1
+  }).then((result) => {
+    if (result.response === 0) {
+      autoUpdater.downloadUpdate()
+    }
+  })
 })
 
 autoUpdater.on('update-not-available', () => {
-  sendStatusToWindow('App is up to date')
+  log('[AutoUpdater] App is up to date')
 })
 
 autoUpdater.on('error', (err) => {
-  sendStatusToWindow('Error in auto-updater: ' + err)
+  log(`[AutoUpdater] Error: ${err}`)
 })
 
 autoUpdater.on('download-progress', (progressObj) => {
-  let message = `Download speed: ${progressObj.bytesPerSecond}`
-  message += ` - Downloaded ${progressObj.percent}%`
-  message += ` (${progressObj.transferred}/${progressObj.total})`
-  sendStatusToWindow(message)
-})
-
-autoUpdater.on('update-downloaded', () => {
-  sendStatusToWindow('Update downloaded. Will install on quit.')
-})
-
-function sendStatusToWindow(text) {
+  const percent = Math.round(progressObj.percent)
+  log(`[AutoUpdater] Download progress: ${percent}%`)
+  
+  // Send progress to renderer for display
   if (mainWindow) {
-    mainWindow.webContents.send('updater-message', text)
+    mainWindow.webContents.send('updater-progress', percent)
   }
-  console.log('[AutoUpdater]', text)
+})
+
+autoUpdater.on('update-downloaded', (info) => {
+  log(`[AutoUpdater] Update downloaded: ${info.version}`)
+  dialog.showMessageBox(mainWindow, {
+    type: 'info',
+    title: 'Update Ready',
+    message: 'Update downloaded successfully.',
+    detail: 'The application will restart to install the update.',
+    buttons: ['Restart Now', 'Later'],
+    defaultId: 0,
+    cancelId: 1
+  }).then((result) => {
+    if (result.response === 0) {
+      autoUpdater.quitAndInstall()
+    }
+  })
+})
+
+function log(text) {
+  console.log(text)
 }
