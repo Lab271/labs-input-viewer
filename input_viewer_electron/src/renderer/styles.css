@@ -1,5 +1,20 @@
 /* =============================================================================
-   Input Viewer - Styles
+   CSS Variables
+   ============================================================================= */
+
+:root {
+  --bg-color: #000000;
+  --text-color: #ffffff;
+  --text-muted: rgba(255, 255, 255, 0.6);
+  --accent-color: #0066ff;
+  --panel-bg: rgba(30, 30, 30, 0.95);
+  --panel-border: rgba(255, 255, 255, 0.1);
+  --hover-color: rgba(255, 255, 255, 0.1);
+  --layout-gap: 20px;
+}
+
+/* =============================================================================
+   Base Styles
    ============================================================================= */
 
 * {
@@ -8,24 +23,12 @@
   box-sizing: border-box;
 }
 
-:root {
-  --bg-color: #000000;
-  --panel-bg: rgba(30, 30, 30, 0.95);
-  --panel-border: rgba(255, 255, 255, 0.1);
-  --text-color: #ffffff;
-  --text-muted: rgba(255, 255, 255, 0.6);
-  --accent-color: #007AFF;
-  --hover-color: rgba(255, 255, 255, 0.1);
-  --danger-color: #ff3b30;
-}
-
 body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
   background-color: var(--bg-color);
   color: var(--text-color);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
   overflow: hidden;
   cursor: none;
-  user-select: none;
   -webkit-app-region: drag;
 }
 
@@ -33,49 +36,35 @@ body.cursor-visible {
   cursor: default;
 }
 
+.hidden {
+  display: none !important;
+}
+
 /* =============================================================================
    Video Container
    ============================================================================= */
 
-#viewer-container {
+#video-wrapper {
+  position: fixed;
+  top: 0;
+  left: 0;
   width: 100vw;
   height: 100vh;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  gap: var(--layout-gap);
   background-color: var(--bg-color);
 }
 
-#video-wrapper {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--layout-gap, 20px);
-  width: 100%;
-  height: 100%;
-  padding: 20px;
-}
-
 .video-feed {
-  position: relative;
   flex: 1;
-  max-width: 50%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: #111;
-  border-radius: 8px;
+  position: relative;
   overflow: hidden;
+  background-color: #111;
 }
 
 .video-feed.single {
-  max-width: 80%;
   flex: none;
-}
-
-.video-feed.hidden {
-  display: none;
+  width: 100%;
 }
 
 .video-feed video {
@@ -85,65 +74,6 @@ body.cursor-visible {
   background-color: #000;
 }
 
-/* =============================================================================
-   Center Logo
-   ============================================================================= */
-
-#center-logo {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 5;
-  pointer-events: none;
-}
-
-#center-logo img {
-  max-width: 120px;
-  max-height: 120px;
-  opacity: 0.9;
-  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.5));
-}
-
-/* =============================================================================
-   No Signal Overlay
-   ============================================================================= */
-
-.no-signal-overlay {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  background-color: rgba(0, 0, 0, 0.9);
-  z-index: 10;
-}
-
-.no-signal-overlay.hidden {
-  display: none;
-}
-
-.no-signal-icon {
-  font-size: 64px;
-  margin-bottom: 20px;
-  animation: pulse 2s ease-in-out infinite;
-}
-
-.no-signal-text {
-  font-size: 24px;
-  color: var(--text-muted);
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 0.5; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.05); }
-}
-
-/* =============================================================================
-   Input Label
-   ============================================================================= */
-
 .input-label {
   position: absolute;
   bottom: 20px;
@@ -152,42 +82,145 @@ body.cursor-visible {
   background-color: rgba(0, 0, 0, 0.7);
   border-radius: 6px;
   font-size: 14px;
-  font-weight: 500;
   opacity: 0;
   transition: opacity 0.3s ease;
 }
 
-.video-feed:hover .input-label {
+body.cursor-visible .input-label {
   opacity: 1;
 }
 
 /* =============================================================================
-   Input Name Overlay (when switching)
+   No Signal Overlay
    ============================================================================= */
 
-#input-name-overlay {
+.no-signal-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.9);
+  z-index: 10;
+}
+
+.no-signal-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+  animation: pulse 2s infinite;
+}
+
+.no-signal-text {
+  font-size: 18px;
+  color: var(--text-muted);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+/* =============================================================================
+   Center Logo
+   ============================================================================= */
+
+#center-logo {
   position: fixed;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  padding: 20px 40px;
-  background-color: rgba(0, 0, 0, 0.8);
-  border-radius: 12px;
-  font-size: 32px;
-  font-weight: 600;
-  z-index: 100;
-  animation: fadeInOut 2s ease-in-out forwards;
+  text-align: center;
+  z-index: 5;
 }
 
-#input-name-overlay.hidden {
-  display: none;
+.logo-text {
+  font-size: 48px;
+  font-weight: 300;
+  letter-spacing: 4px;
+  margin-bottom: 16px;
+}
+
+.logo-subtext {
+  font-size: 16px;
+  color: var(--text-muted);
+}
+
+/* =============================================================================
+   Freeze Frame
+   ============================================================================= */
+
+#freeze-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 20;
+  pointer-events: none;
+}
+
+#freeze-canvas {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+#freeze-indicator {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 20px;
+  background-color: rgba(255, 0, 0, 0.8);
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#freeze-indicator.frozen {
+  background-color: rgba(255, 0, 0, 0.8);
+}
+
+#freeze-indicator:not(.frozen) {
+  background-color: rgba(0, 200, 0, 0.8);
+}
+
+.freeze-icon {
+  font-size: 12px;
+}
+
+/* =============================================================================
+   Input Name Overlay
+   ============================================================================= */
+
+#input-name-overlay {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 16px 32px;
+  background-color: rgba(0, 0, 0, 0.8);
+  border-radius: 12px;
+  font-size: 24px;
+  font-weight: 500;
+  z-index: 90;
+  animation: fadeInOut 2s ease-in-out;
 }
 
 @keyframes fadeInOut {
-  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
-  15% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-  85% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-  100% { opacity: 0; transform: translate(-50%, -50%) scale(0.9); }
+  0% { opacity: 0; transform: translateX(-50%) translateY(20px); }
+  15% { opacity: 1; transform: translateX(-50%) translateY(0); }
+  85% { opacity: 1; transform: translateX(-50%) translateY(0); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-20px); }
 }
 
 /* =============================================================================
@@ -202,6 +235,7 @@ body.cursor-visible {
   align-items: center;
   justify-content: center;
   background-color: rgba(0, 0, 0, 0.5);
+  border: none;
   border-radius: 50%;
   font-size: 20px;
   cursor: pointer;
@@ -341,16 +375,40 @@ kbd {
   border-radius: 4px;
   font-size: 12px;
   font-weight: 600;
+  flex-shrink: 0;
 }
 
-.input-item .input-name {
+.input-name-wrapper {
   flex: 1;
-  font-size: 14px;
+  min-width: 0;
+}
+
+.input-name-field {
+  width: 100%;
+  padding: 6px 10px;
+  background-color: rgba(255, 255, 255, 0.1);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text-color);
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.input-name-field:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
+.input-name-field:focus {
+  border-color: var(--accent-color);
+  background-color: rgba(255, 255, 255, 0.2);
 }
 
 .input-item .input-actions {
   display: flex;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .input-item button {
@@ -364,8 +422,13 @@ kbd {
   transition: background-color 0.2s ease;
 }
 
-.input-item button:hover {
+.input-item button:hover:not(:disabled) {
   background-color: var(--hover-color);
+}
+
+.input-item button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .input-item button.active {
@@ -419,6 +482,7 @@ kbd {
   border-radius: 12px;
   cursor: pointer;
   transition: background-color 0.2s ease;
+  flex-shrink: 0;
 }
 
 .toggle-switch.active {
