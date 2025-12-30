@@ -336,14 +336,15 @@ function setLayout(mode) {
     case 'dual':
       elements.leftFeed.classList.remove('hidden', 'single')
       elements.rightFeed.classList.remove('hidden', 'single')
-      elements.centerDivider.classList.remove('hidden')
+      elements.centerDivider.classList.remove('hidden', 'overlay')
       break
     case 'single':
       elements.leftFeed.classList.remove('hidden')
       elements.leftFeed.classList.add('single')
       elements.rightFeed.classList.add('hidden')
-      // Keep logo visible in single view
+      // Keep logo visible in single view, but as overlay
       elements.centerDivider.classList.remove('hidden')
+      elements.centerDivider.classList.add('overlay')
       break
   }
   
