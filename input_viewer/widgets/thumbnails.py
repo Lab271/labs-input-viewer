@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
 )
 
-from hdmi_viewer.config import get_all_input_configs
+from input_viewer.config import get_all_input_configs
 
 
 class ThumbnailsPanel(QFrame):

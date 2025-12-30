@@ -6,8 +6,8 @@ Uses QThread to read frames from cameras without blocking the UI.
 
 from PyQt6.QtCore import QThread, pyqtSignal
 
-from hdmi_viewer.camera import CameraFeed
-from hdmi_viewer.log import Log
+from input_viewer.camera import CameraFeed
+from input_viewer.log import Log
 
 
 class CameraWorker(QThread):

@@ -1,4 +1,4 @@
-# HDMI Viewer Architecture
+# Input Viewer Architecture
 
 ## Diagram
 
@@ -101,7 +101,7 @@ flowchart TB
 
 ## Overview
 
-HDMI Viewer is a dual Elgato capture card viewer designed for ultrawide displays (6000x1200). It displays two camera feeds side by side with configurable spacing and various overlay features.
+Input Viewer is a lightweight video input viewer - OBS without the complexity. It displays video capture feeds with configurable layouts and various overlay features.
 
 ## Entry Point
 

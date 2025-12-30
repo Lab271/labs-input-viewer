@@ -16,12 +16,12 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from hdmi_viewer.config import (
+from input_viewer.config import (
     load_settings,
     reload_config,
     save_settings,
 )
-from hdmi_viewer.widgets.toggle_switch import ToggleSwitch
+from input_viewer.widgets.toggle_switch import ToggleSwitch
 
 
 class SettingsPanel(QFrame):

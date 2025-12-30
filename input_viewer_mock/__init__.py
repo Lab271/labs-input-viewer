@@ -1,8 +1,8 @@
 """
-HDMI Viewer Mock - Virtual camera server for testing.
+Input Viewer Mock - Virtual camera server for testing.
 
 This package provides a virtual camera that can be used to test
-the HDMI viewer application without real capture hardware.
+the Input Viewer application without real capture hardware.
 """
 
 __version__ = "1.0.0"

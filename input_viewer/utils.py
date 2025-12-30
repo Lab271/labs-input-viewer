@@ -31,7 +31,7 @@ def get_user_data_path(filename: str) -> str:
         elif sys.platform == "win32":
             data_dir = os.path.join(os.environ.get("APPDATA", ""), "Space Presenter")
         else:
-            data_dir = os.path.expanduser("~/.config/hdmi-viewer")
+            data_dir = os.path.expanduser("~/.config/input-viewer")
         os.makedirs(data_dir, exist_ok=True)
         return os.path.join(data_dir, filename)
     else:

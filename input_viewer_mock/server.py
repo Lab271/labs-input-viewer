@@ -18,7 +18,7 @@ class VirtualCameraServer:
     Streams test patterns to a virtual camera device.
 
     Uses pyvirtualcam to create a virtual webcam that can be
-    captured by the main HDMI Viewer application.
+    captured by the main Input Viewer application.
     """
 
     def __init__(

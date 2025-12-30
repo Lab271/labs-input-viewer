@@ -1,6 +1,6 @@
 # Assets Directory
 
-This directory contains assets for the HDMI Viewer application.
+This directory contains assets for the Input Viewer application.
 
 ## Required for Release Builds
 

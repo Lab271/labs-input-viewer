@@ -1,6 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-PyInstaller spec file for Space Presenter
+PyInstaller spec file for Input Viewer
 
 This spec file creates a properly bundled application with all resources.
 """
@@ -14,8 +14,8 @@ block_cipher = None
 # Get the directory containing the spec file
 spec_dir = os.path.dirname(os.path.abspath(SPEC))
 
-# Collect all hdmi_viewer submodules
-hidden_imports = collect_submodules('hdmi_viewer')
+# Collect all input_viewer submodules
+hidden_imports = collect_submodules('input_viewer')
 hidden_imports.extend([
     'cv2',
     'numpy',
@@ -42,7 +42,7 @@ datas = [
 ]
 
 a = Analysis(
-    ['hdmi_viewer/__main__.py'],
+    ['input_viewer/__main__.py'],
     pathex=[spec_dir],
     binaries=[],
     datas=datas,
@@ -66,7 +66,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='Space Presenter',
+    name='Input Viewer',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -86,15 +86,15 @@ exe = EXE(
 if sys.platform == 'darwin':
     app = BUNDLE(
         exe,
-        name='Space Presenter.app',
+        name='Input Viewer.app',
         icon='assets/icon.icns',
-        bundle_identifier='com.lab271.space-presenter',
+        bundle_identifier='com.lab271.input-viewer',
         info_plist={
-            'CFBundleName': 'Space Presenter',
-            'CFBundleDisplayName': 'Space Presenter',
+            'CFBundleName': 'Input Viewer',
+            'CFBundleDisplayName': 'Input Viewer',
             'CFBundleVersion': open('VERSION').read().strip(),
             'CFBundleShortVersionString': open('VERSION').read().strip(),
             'NSHighResolutionCapable': True,
-            'NSCameraUsageDescription': 'Space Presenter needs camera access to display capture card feeds.',
+            'NSCameraUsageDescription': 'Input Viewer needs camera access to display capture card feeds.',
         },
     )

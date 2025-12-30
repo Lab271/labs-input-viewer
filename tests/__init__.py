@@ -1,1 +1,1 @@
-# HDMI Viewer Tests
+# Input Viewer Tests

@@ -2,7 +2,7 @@
     "inputs": [
         {
             "index": 0,
-            "name": "HDMI-Cable",
+            "name": "Input 1",
             "enabled": true,
             "default": true
         },

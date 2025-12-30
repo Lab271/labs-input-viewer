@@ -73,7 +73,7 @@ class ControlPanel(QMainWindow):
         self.server = server
         self.server_thread = ServerThread(server)
 
-        self.setWindowTitle("HDMI Viewer Mock - Control Panel")
+        self.setWindowTitle("Input Viewer Mock - Control Panel")
         self.setMinimumSize(500, 400)
 
         self._setup_ui()

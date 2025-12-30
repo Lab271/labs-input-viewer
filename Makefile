@@ -1,11 +1,11 @@
-# HDMI Viewer Makefile
+# Input Viewer Makefile
 # ====================
 
 .PHONY: help install install-dev run run-mock test lint format clean build
 
 # Default target
 help:
-	@echo "HDMI Viewer - Available commands:"
+	@echo "Input Viewer - Available commands:"
 	@echo ""
 	@echo "  make install       Install production dependencies"
 	@echo "  make install-dev   Install development dependencies (includes test tools)"
@@ -36,14 +36,14 @@ install-all:
 
 # Running the application
 run:
-	uv run python hdmi_viewer
+	uv run python input_viewer
 
 run-verbose:
-	uv run python -m hdmi_viewer --verbose
+	uv run python -m input_viewer --verbose
 
 # Running the mock server (separate process)
 run-mock:
-	uv run python -m hdmi_viewer_mock
+	uv run python -m input_viewer_mock
 
 # Testing
 test:
@@ -53,31 +53,31 @@ test-verbose:
 	uv run pytest tests/ -v -s
 
 test-coverage:
-	uv run pytest tests/ -v --cov=hdmi_viewer --cov-report=html
+	uv run pytest tests/ -v --cov=input_viewer --cov-report=html
 
 # Linting and formatting
 lint:
-	uv run ruff check hdmi_viewer hdmi_viewer_mock
+	uv run ruff check input_viewer input_viewer_mock
 
 lint-fix:
-	uv run ruff check hdmi_viewer hdmi_viewer_mock --fix
+	uv run ruff check input_viewer input_viewer_mock --fix
 
 format:
-	uv run ruff format hdmi_viewer hdmi_viewer_mock
+	uv run ruff format input_viewer input_viewer_mock
 
 check: lint test
 	@echo "All checks passed!"
 
 # Building
 build:
-	uv run pyinstaller hdmi-viewer.spec
+	uv run pyinstaller input-viewer.spec
 
 # Cleaning
 clean:
 	rm -rf __pycache__
-	rm -rf hdmi_viewer/__pycache__
-	rm -rf hdmi_viewer/widgets/__pycache__
-	rm -rf hdmi_viewer_mock/__pycache__
+	rm -rf input_viewer/__pycache__
+	rm -rf input_viewer/widgets/__pycache__
+	rm -rf input_viewer_mock/__pycache__
 	rm -rf tests/__pycache__
 	rm -rf .pytest_cache
 	rm -rf .ruff_cache

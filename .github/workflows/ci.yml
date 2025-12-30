@@ -22,10 +22,10 @@ jobs:
         run: pip install ruff
 
       - name: Run ruff linter
-        run: ruff check HDMI-viewer.py
+        run: ruff check input-viewer.py
 
       - name: Run ruff formatter check
-        run: ruff format --check HDMI-viewer.py
+        run: ruff format --check input-viewer.py
 
   test:
     name: Test

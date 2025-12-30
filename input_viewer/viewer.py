@@ -20,7 +20,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from hdmi_viewer.config import (
+from input_viewer.config import (
     CENTER_GAP,
     CURSOR_HIDE_DELAY_MS,
     FULLSCREEN,
@@ -36,19 +36,19 @@ from hdmi_viewer.config import (
     get_right_input_index,
     reload_config,
 )
-from hdmi_viewer.log import Log
-from hdmi_viewer.utils import get_resource_path
-from hdmi_viewer.widgets.audio_panel import AudioIcon, AudioPanel
-from hdmi_viewer.widgets.base import HoverIcon
-from hdmi_viewer.widgets.overlays import (
+from input_viewer.log import Log
+from input_viewer.utils import get_resource_path
+from input_viewer.widgets.audio_panel import AudioIcon, AudioPanel
+from input_viewer.widgets.base import HoverIcon
+from input_viewer.widgets.overlays import (
     InfoIcon,
     InfoPanel,
     InputNameOverlay,
     ScreenSaver,
 )
-from hdmi_viewer.widgets.settings_panel import SettingsPanel
-from hdmi_viewer.widgets.thumbnails import ThumbnailsPanel
-from hdmi_viewer.worker import CameraWorker
+from input_viewer.widgets.settings_panel import SettingsPanel
+from input_viewer.widgets.thumbnails import ThumbnailsPanel
+from input_viewer.worker import CameraWorker
 
 
 class SettingsIcon(HoverIcon):

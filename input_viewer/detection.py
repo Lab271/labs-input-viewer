@@ -10,8 +10,8 @@ import os
 import cv2
 import numpy as np
 
-from hdmi_viewer.log import Log
-from hdmi_viewer.utils import get_resource_path
+from input_viewer.log import Log
+from input_viewer.utils import get_resource_path
 
 
 class NoSignalDetector:

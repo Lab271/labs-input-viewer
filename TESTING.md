@@ -1,4 +1,4 @@
-# HDMI Viewer - Feature Testing Checklist
+# Input Viewer - Feature Testing Checklist
 
 Rate each feature: **1** (not working), **2** (works but not good), **3** (works fine)
 

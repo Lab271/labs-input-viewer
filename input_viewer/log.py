@@ -14,7 +14,7 @@ def _get_log_file_path():
     elif sys.platform == "darwin":
         log_dir = os.path.expanduser("~/Library/Logs/Space Presenter")
     else:
-        log_dir = os.path.expanduser("~/.local/share/hdmi-viewer")
+        log_dir = os.path.expanduser("~/.local/share/input-viewer")
     os.makedirs(log_dir, exist_ok=True)
     return os.path.join(log_dir, "app.log")
 

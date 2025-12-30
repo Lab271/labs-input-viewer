@@ -1,9 +1,9 @@
 """
-Entry point for HDMI Viewer application.
+Entry point for Input Viewer application.
 
 Usage:
-    python -m hdmi_viewer                  # Production mode (real cameras)
-    python -m hdmi_viewer --verbose        # With verbose logging
+    python -m input_viewer                  # Production mode (real cameras)
+    python -m input_viewer --verbose        # With verbose logging
 
 Keyboard shortcuts:
     F11 / F  - Toggle fullscreen
@@ -30,8 +30,8 @@ import traceback
 
 from PyQt6.QtWidgets import QApplication
 
-from hdmi_viewer.log import Log
-from hdmi_viewer.viewer import DualVideoViewer
+from input_viewer.log import Log
+from input_viewer.viewer import DualVideoViewer
 
 
 def exception_handler(exc_type, exc_value, exc_tb):
@@ -47,7 +47,7 @@ def exception_handler(exc_type, exc_value, exc_tb):
 def parse_args():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description="Dual Elgato Capture Card Viewer for Ultrawide Displays"
+        description="Input Viewer - A lightweight video input viewer"
     )
 
     # Test mode group

@@ -13,9 +13,9 @@ from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QImage, QPixmap
 from PyQt6.QtWidgets import QFrame, QLabel, QVBoxLayout
 
-from hdmi_viewer.config import LOGO_FILENAME
-from hdmi_viewer.utils import get_resource_path
-from hdmi_viewer.widgets.base import HoverIcon
+from input_viewer.config import LOGO_FILENAME
+from input_viewer.utils import get_resource_path
+from input_viewer.widgets.base import HoverIcon
 
 
 class InputNameOverlay(QLabel):

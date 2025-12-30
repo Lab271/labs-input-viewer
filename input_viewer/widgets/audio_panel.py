@@ -10,8 +10,8 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
 )
 
-from hdmi_viewer.log import Log
-from hdmi_viewer.widgets.base import BUTTON_STYLE, SLIDER_STYLE, HoverIcon
+from input_viewer.log import Log
+from input_viewer.widgets.base import BUTTON_STYLE, SLIDER_STYLE, HoverIcon
 
 
 class AudioPanel(QFrame):

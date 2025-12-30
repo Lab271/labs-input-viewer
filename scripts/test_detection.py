@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Isolated test for Elgato no-signal detection.
+Isolated test for no-signal detection.
 
 Usage:
     python scripts/test_detection.py [camera_index]
@@ -21,8 +21,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import cv2
 import numpy as np
-from hdmi_viewer.detection import NoSignalDetector
-from hdmi_viewer.utils import get_resource_path
+from input_viewer.detection import NoSignalDetector
+from input_viewer.utils import get_resource_path
 
 
 def list_cameras(max_cameras=10):
@@ -51,7 +51,7 @@ def test_detection(camera_index=0):
     """Run detection test on camera feed."""
     
     # Initialize detector
-    print("\n=== Elgato No-Signal Detection Test ===\n")
+    print("\n=== No-Signal Detection Test ===")
     
     detector = NoSignalDetector()
     

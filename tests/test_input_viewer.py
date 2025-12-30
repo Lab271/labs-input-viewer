@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Tests for HDMI-viewer application.
+Tests for Input Viewer application.
 
 Run with: pytest tests/ -v
 """
@@ -31,8 +31,8 @@ def sample_settings():
     """Sample settings.json content."""
     return {
         "inputs": [
-            {"index": 0, "name": "HDMI-Cable", "enabled": True, "default": True},
-            {"index": 1, "name": "Apple TV", "enabled": True, "default": False},
+            {"index": 0, "name": "Laptop", "enabled": True, "default": True},
+            {"index": 1, "name": "Desktop", "enabled": True, "default": False},
             {"index": 2, "name": "Input 3", "enabled": False, "default": False},
             {"index": 3, "name": "Input 4", "enabled": False, "default": False},
         ]
@@ -186,7 +186,7 @@ class TestInputConfigParsing:
             )
         
         assert len(inputs) == 4
-        assert inputs[0].name == "HDMI-Cable"
+        assert inputs[0].name == "Laptop"
         assert inputs[0].enabled is True
         assert inputs[0].default is True
         assert inputs[2].enabled is False
@@ -206,8 +206,8 @@ class TestInputConfigParsing:
         enabled = [inp for inp in inputs if inp.enabled]
         
         assert len(enabled) == 2
-        assert enabled[0].name == "HDMI-Cable"
-        assert enabled[1].name == "Apple TV"
+        assert enabled[0].name == "Laptop"
+        assert enabled[1].name == "Desktop"
 
     def test_get_default_input(self, sample_settings):
         """Test getting the default input."""
@@ -230,7 +230,7 @@ class TestInputConfigParsing:
                 break
         
         assert default is not None
-        assert default.name == "HDMI-Cable"
+        assert default.name == "Laptop"
         assert default.index == 0
 
     def test_get_default_input_fallback(self):

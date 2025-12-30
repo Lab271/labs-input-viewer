@@ -1,5 +1,5 @@
 """
-Configuration management for HDMI Viewer.
+Configuration management for Input Viewer.
 
 Handles settings loading/saving, input configuration, and application constants.
 """
@@ -10,8 +10,8 @@ import shutil
 from dataclasses import dataclass
 from enum import Enum, auto
 
-from hdmi_viewer.log import Log
-from hdmi_viewer.utils import get_resource_path, get_user_data_path
+from input_viewer.log import Log
+from input_viewer.utils import get_resource_path, get_user_data_path
 
 
 class LayoutMode(Enum):
@@ -49,7 +49,7 @@ CENTER_GAP = 200  # Black space between the two feeds
 LOGO_FILENAME = "logo.png"  # Logo file in the assets folder
 
 # No signal message
-NO_SIGNAL_MESSAGE = "Please connect your computer to the HDMI"
+NO_SIGNAL_MESSAGE = "No signal detected"
 
 # Display settings
 FULLSCREEN = True

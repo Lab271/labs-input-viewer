@@ -16,11 +16,11 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-            asset_name: hdmi-viewer-macos
+            asset_name: input-viewer-macos
           - os: windows-latest
-            asset_name: hdmi-viewer-windows
+            asset_name: input-viewer-windows
           - os: ubuntu-latest
-            asset_name: hdmi-viewer-linux
+            asset_name: input-viewer-linux
 
     steps:
       - uses: actions/checkout@v4
@@ -57,14 +57,14 @@ jobs:
         shell: bash
         run: |
           if [ "$RUNNER_OS" == "macOS" ]; then
-            pyinstaller hdmi-viewer.spec
-            cd dist && zip -r ../space-presenter-macos.zip "Space Presenter.app"
+            pyinstaller input-viewer.spec
+            cd dist && zip -r ../input-viewer-macos.zip "Input Viewer.app"
           elif [ "$RUNNER_OS" == "Windows" ]; then
-            pyinstaller hdmi-viewer.spec
-            mv "dist/Space Presenter.exe" dist/space-presenter-windows.exe
+            pyinstaller input-viewer.spec
+            mv "dist/Input Viewer.exe" dist/input-viewer-windows.exe
           else
-            pyinstaller hdmi-viewer.spec
-            cd dist && tar -czvf ../space-presenter-linux.tar.gz "Space Presenter"
+            pyinstaller input-viewer.spec
+            cd dist && tar -czvf ../input-viewer-linux.tar.gz "Input Viewer"
           fi
 
       - name: Upload artifact
@@ -72,9 +72,9 @@ jobs:
         with:
           name: ${{ matrix.asset_name }}
           path: |
-            space-presenter-*.zip
-            space-presenter-*.tar.gz
-            dist/space-presenter-*.exe
+            input-viewer-*.zip
+            input-viewer-*.tar.gz
+            dist/input-viewer-*.exe
 
   release:
     name: Create Release
@@ -95,7 +95,7 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          name: Space Presenter v${{ steps.version.outputs.version }}
+          name: Input Viewer v${{ steps.version.outputs.version }}
           draft: false
           prerelease: false
           generate_release_notes: true

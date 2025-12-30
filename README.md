@@ -1,15 +1,15 @@
-# HDMI Viewer
+# Input Viewer
 
-[![CI](https://github.com/LAB271/hdmi-viewer/actions/workflows/ci.yml/badge.svg)](https://github.com/LAB271/hdmi-viewer/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/LAB271/hdmi-viewer)](https://github.com/LAB271/hdmi-viewer/releases/latest)
+[![CI](https://github.com/LAB271/input-viewer/actions/workflows/ci.yml/badge.svg)](https://github.com/LAB271/input-viewer/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/LAB271/input-viewer)](https://github.com/LAB271/input-viewer/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 
-Dual HDMI capture card viewer for ultrawide displays. Displays two camera feeds side by side with configurable spacing, designed for 6000x1200 resolution displays with Elgato Cam Link Pro.
+A lightweight video input viewer — **OBS without the complexity**. View and manage capture card feeds with a clean, simple interface designed for users who need to display video inputs without the overhead of full streaming software.
 
 ## Features
 
-- **Dual feed display** — Two HDMI inputs side by side
+- **Multi-input display** — View one or two video feeds side by side
 - **Layout switching** — Dual view or single feed centered (D/L/R keys)
 - **Direct input selection** — Number keys 1-4 to switch inputs instantly
 - **Settings panel** — Configure inputs with toggle switches
@@ -17,23 +17,24 @@ Dual HDMI capture card viewer for ultrawide displays. Displays two camera feeds 
 - **Live reload** — Settings update without restarting the app
 - **Test modes** — Mock sources for development without hardware
 - **Fullscreen support** — Designed for dedicated display setups
+- **Any capture card** — Works with any video capture device
 
 ## Installation
 
 ### Option 1: Download Release (Recommended)
 
-Download the latest release for your platform from the [Releases page](https://github.com/LAB271/hdmi-viewer/releases/latest):
+Download the latest release for your platform from the [Releases page](https://github.com/LAB271/input-viewer/releases/latest):
 
-- **macOS**: `hdmi-viewer-macos`
-- **Windows**: `hdmi-viewer-windows.exe`
-- **Linux**: `hdmi-viewer-linux`
+- **macOS**: `input-viewer-macos`
+- **Windows**: `input-viewer-windows.exe`
+- **Linux**: `input-viewer-linux`
 
 ### Option 2: Run from Source
 
 ```bash
 # Clone the repository
-git clone https://github.com/LAB271/hdmi-viewer.git
-cd hdmi-viewer
+git clone https://github.com/LAB271/input-viewer.git
+cd input-viewer
 
 # Create virtual environment
 python -m venv venv
@@ -45,22 +46,22 @@ make install
 
 # Run the application
 make run
-# Or: python HDMI-viewer.py
+# Or: python input-viewer.py
 ```
 
 ## Usage
 
 ### Production Mode
 ```bash
-python HDMI-viewer.py              # Real camera inputs
-python HDMI-viewer.py --verbose    # With debug logging
+python input-viewer.py              # Real camera inputs
+python input-viewer.py --verbose    # With debug logging
 ```
 
 ### Test Mode
 ```bash
-python HDMI-viewer.py --mock           # Animated mock sources
-python HDMI-viewer.py --no-signal      # Always show no-signal overlay
-python HDMI-viewer.py --switch-signals # Cycle signal/no-signal every 10s
+python input-viewer.py --mock           # Animated mock sources
+python input-viewer.py --no-signal      # Always show no-signal overlay
+python input-viewer.py --switch-signals # Cycle signal/no-signal every 10s
 ```
 
 ## Keyboard Shortcuts
@@ -95,8 +96,8 @@ Settings are stored in `settings.json`:
 ```json
 {
     "inputs": [
-        {"index": 0, "name": "HDMI-Cable", "enabled": true, "default": true},
-        {"index": 1, "name": "Apple TV", "enabled": true, "default": false},
+        {"index": 0, "name": "Laptop", "enabled": true, "default": true},
+        {"index": 1, "name": "Desktop", "enabled": true, "default": false},
         {"index": 2, "name": "Input 3", "enabled": false, "default": false},
         {"index": 3, "name": "Input 4", "enabled": false, "default": false}
     ]
@@ -124,9 +125,9 @@ make check
 
 ## Hardware Setup
 
-Designed for:
-- **Capture card**: Elgato Cam Link Pro (4× HDMI inputs)
-- **Display**: Ultrawide monitor (6000×1200 resolution)
+Works with:
+- **Any capture card** — USB or PCIe capture devices
+- **Any display** — Adapts to your screen resolution
 - **Platform**: macOS, Windows, Linux
 
 ## Releasing

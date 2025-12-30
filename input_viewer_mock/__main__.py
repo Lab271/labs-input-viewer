@@ -1,7 +1,7 @@
 """
 Mock server entry point.
 
-Run with: python -m hdmi_viewer_mock
+Run with: python -m input_viewer_mock
 """
 
 import argparse
@@ -11,7 +11,7 @@ import sys
 def parse_args():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description="HDMI Viewer Mock - Virtual camera server for testing",
+        description="Input Viewer Mock - Virtual camera server for testing",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:

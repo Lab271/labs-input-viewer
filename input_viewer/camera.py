@@ -9,9 +9,9 @@ import sys
 import cv2
 from PyQt6.QtGui import QImage, QPixmap
 
-from hdmi_viewer.config import TARGET_FPS, TARGET_HEIGHT, TARGET_WIDTH
-from hdmi_viewer.detection import get_no_signal_detector
-from hdmi_viewer.log import Log
+from input_viewer.config import TARGET_FPS, TARGET_HEIGHT, TARGET_WIDTH
+from input_viewer.detection import get_no_signal_detector
+from input_viewer.log import Log
 
 
 class CameraFeed:

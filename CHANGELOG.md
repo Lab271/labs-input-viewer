@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - File logging for bundled apps to help debug crashes
 - Global exception handler to catch and log crashes with full stack traces
-- Log file location: `%APPDATA%\Space Presenter\app.log` (Windows)
+- Log file location: `%APPDATA%\Input Viewer\app.log` (Windows)
 
 ## [1.5.2] - 2024-12-24
 
@@ -77,7 +77,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Threaded camera capture with `CameraWorker` for non-blocking frame reads
 - `HoverIcon` base class for reusable icon widgets with hover effects
 - Shared stylesheet constants in `widgets/base.py`
-- Architecture documentation (`hdmi_viewer/ARCHITECTURE.md`)
+- Architecture documentation (`input_viewer/ARCHITECTURE.md`)
 - Feature testing checklist (`TESTING.md`)
 
 ### Changed
@@ -96,7 +96,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.3.0] - 2025-12-16
 
 ### Changed
-- Renamed application to "Space Presenter"
 - Updated capture resolution to 4K (3840x2160) at 30Hz
 - Added "By Labs for _Space" attribution in info panel
 
@@ -115,12 +114,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.0] - 2025-12-13
 
 ### Added
-- Dual HDMI feed display for ultrawide monitors (6000x1200)
+- Multi-input video feed display
 - Layout modes: Dual view, Single left, Single right
 - Direct input selection with number keys 1-4
 - Settings panel with toggle switches for input configuration
 - Live settings reload without app restart
-- Custom no-signal animation with animated HDMI cable
+- Custom no-signal animation
 - Verbose logging mode with colored output
 - Test modes: mock sources, signal cycling, always no-signal
 - Fullscreen support
@@ -130,7 +129,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Configuration
 - `settings.json` for input configuration (name, enabled, default)
 - Customizable side margins and center gap
-- Support for Elgato Cam Link Pro (4 inputs)
+- Works with any capture card
 
 ### Keyboard Shortcuts
 - `D` - Dual view
@@ -140,4 +139,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `F11/F` - Toggle fullscreen
 - `Q` - Quit
 
-[1.0.0]: https://github.com/LAB271/hdmi-viewer/releases/tag/v1.0.0
+[1.0.0]: https://github.com/LAB271/input-viewer/releases/tag/v1.0.0
