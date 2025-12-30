@@ -37,9 +37,9 @@ flowchart TB
     end
 
     subgraph IO["I/O"]
-        cameras[("Capture Cards<br/>(Elgato)")]
+        cameras[("Capture Cards")]
         settingsfile[("settings.json")]
-        assets[("assets/<br/>• logo.png<br/>• elgato_no_source.png")]
+        assets[("assets/<br/>• logo.png<br/>• no_source.png")]
     end
 
     %% Entry flow
@@ -114,8 +114,8 @@ Input Viewer is a lightweight video input viewer - OBS without the complexity. I
 | Module | Class | Purpose |
 |--------|-------|---------|
 | `viewer.py` | `DualVideoViewer` | Main widget - manages layout modes (dual/single left/single right), keyboard shortcuts, cursor hiding, and coordinates all UI components |
-| `camera.py` | `CameraFeed` | Handles video capture from Elgato cards via OpenCV with platform-specific backends (AVFoundation on macOS, DirectShow on Windows, V4L2 on Linux). Supports mock mode for testing |
-| `detection.py` | `NoSignalDetector` | Uses multi-scale template matching to detect Elgato "no signal" screens. Includes quick-check optimizations to reduce CPU usage |
+| `camera.py` | `CameraFeed` | Handles video capture from capture cards via OpenCV with platform-specific backends (AVFoundation on macOS, DirectShow on Windows, V4L2 on Linux). Supports mock mode for testing |
+| `detection.py` | `NoSignalDetector` | Uses multi-scale template matching to detect "no signal" screens from capture cards. Includes quick-check optimizations to reduce CPU usage |
 | `config.py` | - | Configuration management - loads/saves `settings.json`, defines constants (resolution, margins, intervals), manages input configurations |
 
 ## Widgets (`widgets/`)

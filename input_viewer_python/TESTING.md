@@ -93,7 +93,7 @@ Rate each feature: **1** (not working), **2** (works but not good), **3** (works
 
 | # | Feature | Rating | Comment |
 |---|---------|--------|---------|
-| 37 | Detects Elgato "no signal" screen | | |
+| 37 | Detects "no signal" screen | | |
 | 38 | Shows no-signal animation/message | | |
 | 39 | Recovers when signal returns | | |
 | 40 | Detection speed (quick vs slow) | | |
