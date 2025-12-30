@@ -33,6 +33,6 @@ jobs:
         run: npm run build
 
       - name: Test macOS build
-        run: npm run build:mac
+        run: npm run build && electron-builder --mac --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
