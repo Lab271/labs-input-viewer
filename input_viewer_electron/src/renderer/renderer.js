@@ -38,15 +38,11 @@ const elements = {
   freezeOverlay: document.getElementById('freeze-overlay'),
   freezeIndicator: document.getElementById('freeze-indicator'),
   freezeCanvas: document.getElementById('freeze-canvas'),
-  infoIcon: document.getElementById('info-icon'),
-  infoPanel: document.getElementById('info-panel'),
-  settingsIcon: document.getElementById('settings-icon'),
-  settingsPanel: document.getElementById('settings-panel'),
+  dropdownTrigger: document.getElementById('dropdown-trigger'),
+  dropdownPanel: document.getElementById('dropdown-panel'),
   inputList: document.getElementById('input-list'),
   layoutDual: document.getElementById('layout-dual'),
   layoutSingle: document.getElementById('layout-single'),
-  layoutGap: document.getElementById('layout-gap'),
-  layoutGapValue: document.getElementById('layout-gap-value'),
   updateNotification: document.getElementById('update-notification'),
   updateMessage: document.getElementById('update-message')
 }
@@ -351,14 +347,6 @@ function setLayout(mode) {
   saveSettings()
 }
 
-function setLayoutGap(gap) {
-  state.layoutGap = gap
-  state.settings.layoutGap = gap
-  elements.videoWrapper.style.setProperty('--layout-gap', `${gap}px`)
-  elements.layoutGapValue.textContent = `${gap}px`
-  saveSettings()
-}
-
 // =============================================================================
 // Input Selection
 // =============================================================================
@@ -455,19 +443,6 @@ function renderInputList() {
 }
 
 // =============================================================================
-// Panel Toggles
-// =============================================================================
-
-function togglePanel(panel) {
-  panel.classList.toggle('hidden')
-}
-
-function closeAllPanels() {
-  elements.infoPanel.classList.add('hidden')
-  elements.settingsPanel.classList.add('hidden')
-}
-
-// =============================================================================
 // Cursor Management
 // =============================================================================
 
@@ -530,29 +505,19 @@ function setupEventListeners() {
   // Keyboard shortcuts
   document.addEventListener('keydown', handleKeyDown)
   
-  // Panel toggles
-  elements.infoIcon.addEventListener('click', (e) => {
-    e.stopPropagation()
-    elements.settingsPanel.classList.add('hidden')
-    togglePanel(elements.infoPanel)
+  // Keep cursor visible when hovering dropdown
+  elements.dropdownTrigger.addEventListener('mouseenter', () => {
+    document.body.classList.add('cursor-visible')
+    clearTimeout(state.cursorTimeout)
   })
   
-  elements.settingsIcon.addEventListener('click', (e) => {
-    e.stopPropagation()
-    elements.infoPanel.classList.add('hidden')
-    togglePanel(elements.settingsPanel)
+  elements.dropdownPanel.addEventListener('mouseenter', () => {
+    document.body.classList.add('cursor-visible')
+    clearTimeout(state.cursorTimeout)
   })
   
-  // Close panels when clicking outside
-  document.addEventListener('click', (e) => {
-    if (!e.target.closest('.panel') && !e.target.closest('.icon-button')) {
-      closeAllPanels()
-    }
-  })
-  
-  // Layout gap slider
-  elements.layoutGap.addEventListener('input', (e) => {
-    setLayoutGap(parseInt(e.target.value))
+  elements.dropdownPanel.addEventListener('mouseleave', () => {
+    showCursor() // Reset cursor timeout
   })
   
   // Layout mode buttons
@@ -605,10 +570,6 @@ async function init() {
   // Use saved layout mode if available, otherwise use screen-based default
   const layoutMode = state.settings.layoutMode || defaultLayout
   setLayout(layoutMode)
-  
-  // Initialize layout gap
-  setLayoutGap(state.settings.layoutGap || 20)
-  elements.layoutGap.value = state.layoutGap
   
   // Get video devices and start streams
   await getVideoDevices()

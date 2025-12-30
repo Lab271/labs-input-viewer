@@ -53,46 +53,44 @@
     <span id="input-name-text"></span>
   </div>
 
-  <!-- Icon Buttons -->
-  <button id="info-icon" class="icon-button" title="Keyboard Shortcuts">ℹ️</button>
-  <button id="settings-icon" class="icon-button" title="Settings">⚙️</button>
-
-  <!-- Info Panel -->
-  <div id="info-panel" class="panel hidden">
-    <h3>Keyboard Shortcuts</h3>
-    <table>
-      <tr><td><kbd>1</kbd>-<kbd>4</kbd></td><td>Select input</td></tr>
-      <tr><td><kbd>Space</kbd></td><td>Freeze frame</td></tr>
-      <tr><td><kbd>F</kbd></td><td>Toggle fullscreen</td></tr>
-      <tr><td><kbd>Esc</kbd></td><td>Exit fullscreen/unfreeze</td></tr>
-      <tr><td><kbd>Q</kbd></td><td>Quit</td></tr>
-    </table>
-    <div class="attribution">
-      <p>Input Viewer v2.0.0</p>
-      <p>© Labs for Space</p>
-    </div>
+  <!-- Dropdown Panel Trigger -->
+  <div id="dropdown-trigger">
+    <span class="dropdown-arrow">▼</span>
   </div>
 
-  <!-- Settings Panel -->
-  <div id="settings-panel" class="panel hidden">
-    <h3>Settings</h3>
-    
-    <h4>Inputs</h4>
-    <div id="input-list"></div>
-    
-    <div class="panel-section">
-      <h4>Layout</h4>
-      <div class="setting-row">
-        <label>View Mode</label>
-        <div class="layout-buttons">
-          <button id="layout-dual" class="layout-btn active" title="Double View">D</button>
-          <button id="layout-single" class="layout-btn" title="Single View">S</button>
+  <!-- Combined Dropdown Panel -->
+  <div id="dropdown-panel">
+    <div class="dropdown-content">
+      <div class="dropdown-section">
+        <h4>Inputs</h4>
+        <div id="input-list"></div>
+      </div>
+      
+      <div class="dropdown-section">
+        <h4>Layout</h4>
+        <div class="setting-row">
+          <label>View Mode</label>
+          <div class="layout-buttons">
+            <button id="layout-dual" class="layout-btn active" title="Double View">D</button>
+            <button id="layout-single" class="layout-btn" title="Single View">S</button>
+          </div>
         </div>
       </div>
-      <div class="setting-row">
-        <label>Gap</label>
-        <input type="range" id="layout-gap" min="0" max="100" value="20">
-        <span id="layout-gap-value">20px</span>
+      
+      <div class="dropdown-section">
+        <h4>Shortcuts</h4>
+        <table>
+          <tr><td><kbd>1</kbd>-<kbd>4</kbd></td><td>Select input</td></tr>
+          <tr><td><kbd>Space</kbd></td><td>Freeze frame</td></tr>
+          <tr><td><kbd>F</kbd></td><td>Fullscreen</td></tr>
+          <tr><td><kbd>Esc</kbd></td><td>Exit/unfreeze</td></tr>
+          <tr><td><kbd>Q</kbd></td><td>Quit</td></tr>
+        </table>
+      </div>
+      
+      <div class="dropdown-footer">
+        <span>Input Viewer v2.0.0</span>
+        <span>© Labs for Space</span>
       </div>
     </div>
   </div>
