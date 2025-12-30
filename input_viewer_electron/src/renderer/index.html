@@ -12,16 +12,19 @@
   <div id="video-wrapper">
     <div id="left-feed" class="video-feed">
       <video id="left-video" autoplay playsinline muted></video>
-      <div class="input-label"></div>
       <div class="no-signal-overlay hidden">
         <div class="no-signal-icon">📺</div>
         <div class="no-signal-text">No Signal</div>
       </div>
     </div>
     
+    <!-- Center Logo Divider (shown in dual view) -->
+    <div id="center-divider">
+      <img src="./logo.png" alt="Input Viewer" class="divider-logo">
+    </div>
+    
     <div id="right-feed" class="video-feed">
       <video id="right-video" autoplay playsinline muted></video>
-      <div class="input-label"></div>
       <div class="no-signal-overlay hidden">
         <div class="no-signal-icon">📺</div>
         <div class="no-signal-text">No Signal</div>
@@ -59,9 +62,6 @@
     <h3>Keyboard Shortcuts</h3>
     <table>
       <tr><td><kbd>1</kbd>-<kbd>4</kbd></td><td>Select input</td></tr>
-      <tr><td><kbd>D</kbd></td><td>Dual view</td></tr>
-      <tr><td><kbd>L</kbd></td><td>Left view only</td></tr>
-      <tr><td><kbd>R</kbd></td><td>Right view only</td></tr>
       <tr><td><kbd>Space</kbd></td><td>Freeze frame</td></tr>
       <tr><td><kbd>F</kbd></td><td>Toggle fullscreen</td></tr>
       <tr><td><kbd>Esc</kbd></td><td>Exit fullscreen/unfreeze</td></tr>
@@ -82,6 +82,13 @@
     
     <div class="panel-section">
       <h4>Layout</h4>
+      <div class="setting-row">
+        <label>View Mode</label>
+        <div class="layout-buttons">
+          <button id="layout-dual" class="layout-btn active" title="Double View">D</button>
+          <button id="layout-single" class="layout-btn" title="Single View">S</button>
+        </div>
+      </div>
       <div class="setting-row">
         <label>Gap</label>
         <input type="range" id="layout-gap" min="0" max="100" value="20">

@@ -32,6 +32,7 @@ const elements = {
   leftVideo: document.getElementById('left-video'),
   rightVideo: document.getElementById('right-video'),
   videoWrapper: document.getElementById('video-wrapper'),
+  centerDivider: document.getElementById('center-divider'),
   inputNameOverlay: document.getElementById('input-name-overlay'),
   inputNameText: document.getElementById('input-name-text'),
   freezeOverlay: document.getElementById('freeze-overlay'),
@@ -42,6 +43,8 @@ const elements = {
   settingsIcon: document.getElementById('settings-icon'),
   settingsPanel: document.getElementById('settings-panel'),
   inputList: document.getElementById('input-list'),
+  layoutDual: document.getElementById('layout-dual'),
+  layoutSingle: document.getElementById('layout-single'),
   layoutGap: document.getElementById('layout-gap'),
   layoutGapValue: document.getElementById('layout-gap-value'),
   updateNotification: document.getElementById('update-notification'),
@@ -87,7 +90,7 @@ function getDefaultSettings() {
     layoutGap: 20,
     leftDeviceId: null,
     rightDeviceId: null,
-    layoutMode: 'dual'
+    layoutMode: null // null means use screen-based detection
   }
 }
 
@@ -325,20 +328,22 @@ function setLayout(mode) {
   state.layoutMode = mode
   state.settings.layoutMode = mode
   
+  // Update layout button states
+  elements.layoutDual.classList.toggle('active', mode === 'dual')
+  elements.layoutSingle.classList.toggle('active', mode === 'single')
+  
   switch (mode) {
     case 'dual':
       elements.leftFeed.classList.remove('hidden', 'single')
       elements.rightFeed.classList.remove('hidden', 'single')
+      elements.centerDivider.classList.remove('hidden')
       break
-    case 'left':
+    case 'single':
       elements.leftFeed.classList.remove('hidden')
       elements.leftFeed.classList.add('single')
       elements.rightFeed.classList.add('hidden')
-      break
-    case 'right':
-      elements.rightFeed.classList.add('hidden')
-      elements.leftFeed.classList.remove('hidden')
-      elements.leftFeed.classList.add('single')
+      // Keep logo visible in single view
+      elements.centerDivider.classList.remove('hidden')
       break
   }
   
@@ -487,18 +492,6 @@ function handleKeyDown(event) {
       event.preventDefault()
       toggleFreeze()
       break
-    case 'd':
-      setLayout('dual')
-      showInputName('Dual View')
-      break
-    case 'l':
-      setLayout('left')
-      showInputName('Left View')
-      break
-    case 'r':
-      setLayout('right')
-      showInputName('Right View')
-      break
     case '1':
     case '2':
     case '3':
@@ -561,6 +554,10 @@ function setupEventListeners() {
     setLayoutGap(parseInt(e.target.value))
   })
   
+  // Layout mode buttons
+  elements.layoutDual.addEventListener('click', () => setLayout('dual'))
+  elements.layoutSingle.addEventListener('click', () => setLayout('single'))
+  
   // Device changes (when plugging/unplugging devices)
   navigator.mediaDevices.addEventListener('devicechange', async () => {
     console.log('Device change detected')
@@ -595,10 +592,18 @@ async function init() {
   // Setup event listeners
   setupEventListeners()
   
-  // Restore layout mode
-  if (state.settings.layoutMode) {
-    setLayout(state.settings.layoutMode)
-  }
+  // Detect screen aspect ratio and set default layout
+  // If aspect ratio >= 3:1 (super wide) → dual view
+  // If aspect ratio < 3:1 (normal/square) → single view
+  const screenAspectRatio = window.screen.width / window.screen.height
+  console.log(`Screen width: ${window.screen.width}, height: ${window.screen.height}`)
+  console.log(`Calculated screen aspect ratio: ${screenAspectRatio.toFixed(2)}`)
+  const defaultLayout = screenAspectRatio >= 3 ? 'dual' : 'single'
+  console.log(`Screen aspect ratio: ${screenAspectRatio.toFixed(2)} → default layout: ${defaultLayout}`)
+  
+  // Use saved layout mode if available, otherwise use screen-based default
+  const layoutMode = state.settings.layoutMode || defaultLayout
+  setLayout(layoutMode)
   
   // Initialize layout gap
   setLayoutGap(state.settings.layoutGap || 20)
