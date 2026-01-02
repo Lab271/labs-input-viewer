@@ -34,6 +34,7 @@ const elements = {
   rightVideo: document.getElementById('right-video'),
   videoWrapper: document.getElementById('video-wrapper'),
   centerDivider: document.getElementById('center-divider'),
+  bottomLogo: document.getElementById('bottom-logo'),
   leftBorder: document.getElementById('left-border'),
   rightBorder: document.getElementById('right-border'),
   inputNameOverlay: document.getElementById('input-name-overlay'),
@@ -339,17 +340,20 @@ function setLayout(mode) {
   
   switch (mode) {
     case 'dual':
+      document.body.classList.remove('single-view')
       elements.leftFeed.classList.remove('hidden', 'single')
       elements.rightFeed.classList.remove('hidden', 'single')
       elements.centerDivider.classList.remove('hidden', 'overlay')
+      elements.bottomLogo.classList.add('hidden')
       break
     case 'single':
+      document.body.classList.add('single-view')
       elements.leftFeed.classList.remove('hidden')
       elements.leftFeed.classList.add('single')
       elements.rightFeed.classList.add('hidden')
-      // Keep logo visible in single view, but as overlay
-      elements.centerDivider.classList.remove('hidden')
+      // Hide center divider in single view
       elements.centerDivider.classList.add('overlay')
+      elements.bottomLogo.classList.remove('hidden')
       break
   }
   

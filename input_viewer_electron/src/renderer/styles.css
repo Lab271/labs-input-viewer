@@ -88,6 +88,11 @@ body.cursor-visible {
   width: 100%;
 }
 
+/* When bottom logo is visible, reduce video height */
+body.single-view #video-wrapper {
+  height: calc(100vh - 60px);
+}
+
 .video-feed video {
   width: 100%;
   height: 100%;
@@ -189,15 +194,9 @@ body.cursor-visible .input-label {
   display: none;
 }
 
-/* In single view, overlay the logo at the top center of the video */
+/* In single view, hide the center divider completely */
 #center-divider.overlay {
-  position: absolute;
-  top: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: auto;
-  height: auto;
-  background-color: transparent;
+  display: none;
 }
 
 .divider-logo {
@@ -206,8 +205,29 @@ body.cursor-visible .input-label {
   width: auto;
   height: auto;
   object-fit: contain;
-  opacity: 0.6;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+}
+
+/* Bottom Logo (shown in single view) */
+#bottom-logo {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--bg-color);
+  z-index: 15;
+}
+
+#bottom-logo .divider-logo {
+  opacity: 1;
+}
+
+#bottom-logo.hidden {
+  display: none;
 }
 
 /* =============================================================================
