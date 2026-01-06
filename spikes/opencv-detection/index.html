@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>OpenCV.js Detection Spike</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #1a1a1a;
+      color: #fff;
+    }
+    h1 { color: #0af; }
+    .container {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+    .panel {
+      background: #2a2a2a;
+      padding: 20px;
+      border-radius: 8px;
+      flex: 1;
+      min-width: 300px;
+    }
+    canvas, video, img {
+      max-width: 100%;
+      border: 2px solid #444;
+      border-radius: 4px;
+    }
+    button {
+      background: #0af;
+      color: #000;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin: 5px;
+      font-size: 14px;
+    }
+    button:hover { background: #0cf; }
+    button:disabled { background: #555; color: #888; cursor: not-allowed; }
+    #log {
+      background: #111;
+      padding: 10px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 12px;
+      height: 300px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+    .success { color: #0f0; }
+    .error { color: #f00; }
+    .info { color: #0af; }
+    .warn { color: #fa0; }
+    input[type="file"] {
+      margin: 10px 0;
+    }
+    label {
+      display: block;
+      margin: 10px 0 5px;
+    }
+    select {
+      padding: 8px;
+      border-radius: 4px;
+      background: #333;
+      color: #fff;
+      border: 1px solid #555;
+    }
+  </style>
+  <script>
+    // Set up Module BEFORE loading opencv.js
+    var Module = {
+      onRuntimeInitialized: function() {
+        console.log('OpenCV.js ready via Module.onRuntimeInitialized');
+        document.dispatchEvent(new Event('opencv-ready'));
+      }
+    };
+  </script>
+  <script src="opencv.js" type="text/javascript"></script>
+</head>
+<body>
+  <h1>🔍 OpenCV.js Detection Spike</h1>
+  
+  <div class="container">
+    <div class="panel">
+      <h3>1. OpenCV.js Status</h3>
+      <span id="opencvStatus">Loading...</span>
+      
+      <h3>2. Load Template Image</h3>
+      <input type="file" id="templateInput" accept="image/*">
+      <p>Or use default: <button id="loadDefaultTemplate">Load Elgato Template</button></p>
+      <img id="templateImg" style="max-height: 150px; display: none;">
+      
+      <h3>3. Test Image/Video</h3>
+      <input type="file" id="testInput" accept="image/*,video/*">
+      <p>Or: <button id="useWebcam">Use Webcam</button></p>
+      
+      <h3>4. Run Detection</h3>
+      <button id="runDetection" disabled>Run Detection</button>
+      <button id="runContinuous" disabled>Run Continuous</button>
+      <button id="stopContinuous" disabled>Stop</button>
+    </div>
+    
+    <div class="panel">
+      <h3>Test Source</h3>
+      <video id="testVideo" autoplay playsinline muted style="display: none;"></video>
+      <img id="testImg" style="display: none;">
+      <canvas id="testCanvas"></canvas>
+    </div>
+    
+    <div class="panel">
+      <h3>Detection Log</h3>
+      <div id="log"></div>
+      <button onclick="document.getElementById('log').innerHTML=''">Clear Log</button>
+    </div>
+  </div>
+
+  <script>
+    // ===========================================
+    // Logging
+    // ===========================================
+    function log(msg, type = 'info') {
+      const logEl = document.getElementById('log');
+      const time = new Date().toLocaleTimeString();
+      logEl.innerHTML += `<span class="${type}">[${time}] ${msg}</span>\n`;
+      logEl.scrollTop = logEl.scrollHeight;
+      console.log(msg);
+    }
+
+    // ===========================================
+    // State
+    // ===========================================
+    let cv = null;
+    let templateMat = null;
+    let continuousInterval = null;
+
+    // Detection config (same as detection.js)
+    const CONFIG = {
+      greyTolerance: 15,          // How close R,G,B must be to count as grey (reduced for stricter grey detection)
+      darkThreshold: 100,         // Max brightness for "dark" pixels
+      backgroundGreyRatio: 0.95,  // 95% of pixels must be grey for "no signal" (increased)
+      matchThreshold: 0.7,        // Template match threshold
+      scaleMin: 0.1,
+      scaleMax: 0.8,
+      scaleSteps: 10,
+      // New: variance/edge detection to distinguish uniform grey from content
+      edgeThreshold: 5,           // Minimum edges to consider "has content"
+      varianceThreshold: 50,      // Min color variance to have content
+      uniformityThreshold: 0.98   // If >98% pixels are nearly identical = no signal
+    };
+
+    // ===========================================
+    // OpenCV.js Auto-Init on Startup
+    // ===========================================
+    document.addEventListener('opencv-ready', () => {
+      // OpenCV API is on Module object
+      cv = Module;
+      window.cv = Module;
+      log('✓ OpenCV.js ready!', 'success');
+      document.getElementById('opencvStatus').textContent = '✓ Loaded';
+      document.getElementById('opencvStatus').style.color = '#0f0';
+      updateButtons();
+    });
+
+    // Helper: create Mat from ImageData (use cv.matFromImageData if available)
+    function matFromImageData(imageData) {
+      if (cv.matFromImageData) {
+        return cv.matFromImageData(imageData);
+      }
+      // Fallback: manual creation
+      const mat = new cv.Mat(imageData.height, imageData.width, cv.CV_8UC4);
+      mat.data.set(imageData.data);
+      return mat;
+    }
+
+    // ===========================================
+    // Load Template
+    // ===========================================
+    document.getElementById('templateInput').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) loadTemplateFromFile(file);
+    });
+
+    document.getElementById('loadDefaultTemplate').addEventListener('click', () => {
+      // Load from the public assets folder
+      const img = document.getElementById('templateImg');
+      img.src = '../src/renderer/public/assets/no-signal/elgato.png';
+      img.onload = () => {
+        log('✓ Default template loaded: ' + img.width + 'x' + img.height, 'success');
+        img.style.display = 'block';
+        if (cv) createTemplateMat();
+        updateButtons();
+      };
+      img.onerror = () => {
+        log('✗ Failed to load default template', 'error');
+      };
+    });
+
+    function loadTemplateFromFile(file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = document.getElementById('templateImg');
+        img.src = e.target.result;
+        img.onload = () => {
+          log('✓ Template loaded: ' + img.width + 'x' + img.height, 'success');
+          img.style.display = 'block';
+          if (cv) createTemplateMat();
+          updateButtons();
+        };
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function createTemplateMat() {
+      const img = document.getElementById('templateImg');
+      if (!img.complete || !cv) return;
+      
+      // Extract center 40% as template (like detection.js)
+      const canvas = document.createElement('canvas');
+      const centerX = Math.floor(img.width * 0.3);
+      const centerY = Math.floor(img.height * 0.3);
+      const centerW = Math.floor(img.width * 0.4);
+      const centerH = Math.floor(img.height * 0.4);
+      
+      canvas.width = centerW;
+      canvas.height = centerH;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, centerX, centerY, centerW, centerH, 0, 0, centerW, centerH);
+      
+      const imgData = ctx.getImageData(0, 0, centerW, centerH);
+      const mat = matFromImageData(imgData);
+      templateMat = new cv.Mat();
+      cv.cvtColor(mat, templateMat, cv.COLOR_RGBA2GRAY);
+      mat.delete();
+      
+      log('✓ Template Mat created: ' + templateMat.cols + 'x' + templateMat.rows, 'success');
+    }
+
+    // ===========================================
+    // Load Test Source
+    // ===========================================
+    document.getElementById('testInput').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      if (file.type.startsWith('video/')) {
+        const video = document.getElementById('testVideo');
+        video.src = URL.createObjectURL(file);
+        video.style.display = 'block';
+        document.getElementById('testImg').style.display = 'none';
+        log('✓ Video loaded', 'success');
+      } else {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = document.getElementById('testImg');
+          img.src = e.target.result;
+          img.style.display = 'block';
+          document.getElementById('testVideo').style.display = 'none';
+          document.getElementById('testVideo').srcObject = null;
+          img.onload = () => {
+            log('✓ Test image loaded: ' + img.width + 'x' + img.height, 'success');
+            drawToCanvas();
+          };
+        };
+        reader.readAsDataURL(file);
+      }
+      updateButtons();
+    });
+
+    document.getElementById('useWebcam').addEventListener('click', async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        const video = document.getElementById('testVideo');
+        video.srcObject = stream;
+        video.style.display = 'block';
+        document.getElementById('testImg').style.display = 'none';
+        log('✓ Webcam connected', 'success');
+        updateButtons();
+      } catch (err) {
+        log('✗ Webcam error: ' + err.message, 'error');
+      }
+    });
+
+    function drawToCanvas() {
+      const canvas = document.getElementById('testCanvas');
+      const ctx = canvas.getContext('2d');
+      const video = document.getElementById('testVideo');
+      const img = document.getElementById('testImg');
+      
+      let source = null;
+      if (video.srcObject || video.src) {
+        source = video;
+        canvas.width = video.videoWidth || 640;
+        canvas.height = video.videoHeight || 480;
+      } else if (img.src) {
+        source = img;
+        canvas.width = img.width;
+        canvas.height = img.height;
+      }
+      
+      if (source && canvas.width > 0) {
+        ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
+      }
+      
+      return ctx.getImageData(0, 0, canvas.width, canvas.height);
+    }
+
+    // ===========================================
+    // Detection
+    // ===========================================
+    document.getElementById('runDetection').addEventListener('click', () => {
+      runDetection();
+    });
+
+    document.getElementById('runContinuous').addEventListener('click', () => {
+      document.getElementById('runContinuous').disabled = true;
+      document.getElementById('stopContinuous').disabled = false;
+      continuousInterval = setInterval(runDetection, 1000);
+    });
+
+    document.getElementById('stopContinuous').addEventListener('click', () => {
+      clearInterval(continuousInterval);
+      document.getElementById('runContinuous').disabled = false;
+      document.getElementById('stopContinuous').disabled = true;
+    });
+
+    function runDetection() {
+      if (!cv || !cv.Mat) {
+        log('OpenCV not ready', 'error');
+        return;
+      }
+      
+      log('─── Running Detection ───', 'info');
+      
+      const imageData = drawToCanvas();
+      if (!imageData || imageData.width === 0) {
+        log('No image data', 'error');
+        return;
+      }
+      
+      log(`Frame size: ${imageData.width}x${imageData.height}`, 'info');
+      
+      // Stage 1: Grey background check
+      const greyResult = isGreyBackground(imageData);
+      
+      if (!greyResult.isGrey) {
+        log(`Result: HAS SIGNAL (not grey background)`, 'success');
+        return;
+      }
+      
+      // Stage 2: Template matching
+      if (!templateMat) {
+        log('No template loaded, skipping template match', 'warn');
+        log(`Result: PROBABLY NO SIGNAL (grey background only)`, 'warn');
+        return;
+      }
+      
+      const matchResult = templateMatch(imageData);
+      
+      if (matchResult.matched) {
+        log(`Result: NO SIGNAL DETECTED ✓`, 'error');
+      } else {
+        log(`Result: HAS SIGNAL (template not matched)`, 'success');
+      }
+    }
+
+    function isGreyBackground(imageData) {
+      let greyCount = 0;
+      let darkCount = 0;
+      let sampleCount = 0;
+      let coloredPixels = 0;  // Non-grey colored pixels (like syntax highlighting)
+      
+      // Track color histogram for uniformity detection
+      const colorBuckets = new Map();
+      let sumR = 0, sumG = 0, sumB = 0;
+      let sumRSq = 0, sumGSq = 0, sumBSq = 0;
+      
+      for (let i = 0; i < imageData.data.length; i += 16) {
+        sampleCount++;
+        const r = imageData.data[i];
+        const g = imageData.data[i + 1];
+        const b = imageData.data[i + 2];
+        
+        // Track for variance calculation
+        sumR += r; sumG += g; sumB += b;
+        sumRSq += r * r; sumGSq += g * g; sumBSq += b * b;
+        
+        // Bucket colors (quantize to 8 levels per channel)
+        const bucket = `${Math.floor(r / 32)}-${Math.floor(g / 32)}-${Math.floor(b / 32)}`;
+        colorBuckets.set(bucket, (colorBuckets.get(bucket) || 0) + 1);
+        
+        const maxChannel = Math.max(r, g, b);
+        const minChannel = Math.min(r, g, b);
+        const saturation = maxChannel > 0 ? (maxChannel - minChannel) / maxChannel : 0;
+        
+        // Count colored pixels (saturation > 0.2 means it has actual color, not grey)
+        // This catches syntax highlighting (green, blue, orange, etc.)
+        if (saturation > 0.2 && maxChannel > 30) {
+          coloredPixels++;
+        }
+        
+        if (maxChannel > CONFIG.darkThreshold) continue;
+        darkCount++;
+        
+        if (maxChannel - minChannel <= CONFIG.greyTolerance) {
+          greyCount++;
+        }
+      }
+      
+      const greyRatio = greyCount / sampleCount;
+      const darkRatio = darkCount / sampleCount;
+      const coloredRatio = coloredPixels / sampleCount;
+      
+      // Calculate color variance
+      const meanR = sumR / sampleCount;
+      const meanG = sumG / sampleCount;
+      const meanB = sumB / sampleCount;
+      const varR = (sumRSq / sampleCount) - (meanR * meanR);
+      const varG = (sumGSq / sampleCount) - (meanG * meanG);
+      const varB = (sumBSq / sampleCount) - (meanB * meanB);
+      const totalVariance = Math.sqrt(varR + varG + varB);
+      
+      // Check uniformity - find most common color bucket
+      let maxBucketCount = 0;
+      for (const count of colorBuckets.values()) {
+        maxBucketCount = Math.max(maxBucketCount, count);
+      }
+      const uniformity = maxBucketCount / sampleCount;
+      const uniqueColors = colorBuckets.size;
+      
+      // Edge detection using simple gradient
+      const edgeCount = countEdges(imageData);
+      const edgeRatio = edgeCount / sampleCount;
+      
+      log(`Grey: ${(greyRatio * 100).toFixed(1)}%, Dark: ${(darkRatio * 100).toFixed(1)}%`, 'info');
+      log(`Colored pixels: ${(coloredRatio * 100).toFixed(2)}%, Edges: ${(edgeRatio * 100).toFixed(2)}%`, 'info');
+      log(`Variance: ${totalVariance.toFixed(1)}, Uniformity: ${(uniformity * 100).toFixed(1)}%, Unique colors: ${uniqueColors}`, 'info');
+      
+      // Has content if ANY of these are true:
+      // 1. Has colored pixels (syntax highlighting, UI elements)
+      // 2. Has significant edges (text, icons, UI)
+      // 3. Has many unique colors
+      // 4. Low uniformity (varied content)
+      const hasColoredContent = coloredRatio > 0.005;  // Even 0.5% colored pixels = content
+      const hasEdges = edgeRatio > 0.01;               // 1% edges = text/content
+      const hasColorVariety = uniqueColors > 20;       // Many different colors
+      const isNotUniform = uniformity < 0.90;          // Less than 90% same color
+      
+      const hasContent = hasColoredContent || hasEdges || hasColorVariety || isNotUniform;
+      
+      // A "no signal" screen must be:
+      // 1. Mostly grey/dark
+      // 2. NO content indicators
+      const isNoSignal = greyRatio >= CONFIG.backgroundGreyRatio && !hasContent;
+      
+      if (isNoSignal) {
+        log(`→ Detected as NO SIGNAL (uniform grey, no content)`, 'warn');
+      } else {
+        const reasons = [];
+        if (hasColoredContent) reasons.push(`colored pixels: ${(coloredRatio * 100).toFixed(2)}%`);
+        if (hasEdges) reasons.push(`edges: ${(edgeRatio * 100).toFixed(2)}%`);
+        if (hasColorVariety) reasons.push(`${uniqueColors} unique colors`);
+        if (isNotUniform) reasons.push(`non-uniform: ${(uniformity * 100).toFixed(1)}%`);
+        log(`→ HAS SIGNAL - content detected: ${reasons.join(', ')}`, 'success');
+      }
+      
+      return {
+        isGrey: isNoSignal,
+        greyRatio,
+        darkRatio,
+        coloredRatio,
+        edgeRatio,
+        variance: totalVariance,
+        uniformity,
+        uniqueColors
+      };
+    }
+    
+    function countEdges(imageData) {
+      // Simple Sobel-like edge detection
+      const width = imageData.width;
+      const height = imageData.height;
+      const data = imageData.data;
+      let edgeCount = 0;
+      const threshold = 30;  // Edge strength threshold
+      
+      // Sample every 4th pixel for performance
+      for (let y = 1; y < height - 1; y += 2) {
+        for (let x = 1; x < width - 1; x += 2) {
+          const idx = (y * width + x) * 4;
+          
+          // Get grayscale values of neighbors
+          const getGray = (i) => (data[i] + data[i + 1] + data[i + 2]) / 3;
+          
+          const center = getGray(idx);
+          const left = getGray(idx - 4);
+          const right = getGray(idx + 4);
+          const top = getGray(idx - width * 4);
+          const bottom = getGray(idx + width * 4);
+          
+          // Simple gradient magnitude
+          const gx = Math.abs(right - left);
+          const gy = Math.abs(bottom - top);
+          const gradient = gx + gy;
+          
+          if (gradient > threshold) {
+            edgeCount++;
+          }
+        }
+      }
+      
+      return edgeCount;
+    }
+
+    function templateMatch(imageData) {
+      try {
+        const frameMat = matFromImageData(imageData);
+        const greyFrame = new cv.Mat();
+        cv.cvtColor(frameMat, greyFrame, cv.COLOR_RGBA2GRAY);
+        frameMat.delete();
+        
+        log(`Frame: ${greyFrame.cols}x${greyFrame.rows}, Template: ${templateMat.cols}x${templateMat.rows}`, 'info');
+        
+        let bestMatch = 0;
+        let bestScale = 0;
+        
+        const scales = [];
+        for (let i = 0; i < CONFIG.scaleSteps; i++) {
+          scales.push(CONFIG.scaleMin + (CONFIG.scaleMax - CONFIG.scaleMin) * (i / (CONFIG.scaleSteps - 1)));
+        }
+        
+        for (const scale of scales) {
+          const scaledW = Math.floor(templateMat.cols * scale * greyFrame.cols / templateMat.cols);
+          const scaledH = Math.floor(templateMat.rows * scale * greyFrame.rows / templateMat.rows);
+          
+          if (scaledW >= greyFrame.cols || scaledH >= greyFrame.rows || scaledW < 10 || scaledH < 10) {
+            continue;
+          }
+          
+          try {
+            const scaledTemplate = new cv.Mat();
+            cv.resize(templateMat, scaledTemplate, new cv.Size(scaledW, scaledH), 0, 0, cv.INTER_AREA);
+            
+            const result = new cv.Mat();
+            cv.matchTemplate(greyFrame, scaledTemplate, result, cv.TM_CCOEFF_NORMED);
+            
+            const minMax = cv.minMaxLoc(result);
+            
+            if (minMax.maxVal > bestMatch) {
+              bestMatch = minMax.maxVal;
+              bestScale = scale;
+            }
+            
+            scaledTemplate.delete();
+            result.delete();
+          } catch (e) {
+            continue;
+          }
+        }
+        
+        greyFrame.delete();
+        
+        const matched = bestMatch >= CONFIG.matchThreshold;
+        log(`Best match: ${(bestMatch * 100).toFixed(1)}% at scale ${bestScale.toFixed(2)} (threshold: ${CONFIG.matchThreshold * 100}%)`, matched ? 'success' : 'warn');
+        
+        return { matched, confidence: bestMatch, scale: bestScale };
+      } catch (err) {
+        log('Template match error: ' + err.message, 'error');
+        return { matched: false, confidence: 0, scale: 0 };
+      }
+    }
+
+    function updateButtons() {
+      const hasCV = cv && cv.Mat;
+      const hasTemplate = document.getElementById('templateImg').src;
+      const hasSource = document.getElementById('testVideo').srcObject || 
+                        document.getElementById('testVideo').src || 
+                        document.getElementById('testImg').src;
+      
+      document.getElementById('runDetection').disabled = !hasCV || !hasSource;
+      document.getElementById('runContinuous').disabled = !hasCV || !hasSource;
+    }
+  </script>
+</body>
+</html>
