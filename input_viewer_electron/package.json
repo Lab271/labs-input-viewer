@@ -14,7 +14,7 @@
   },
   "scripts": {
     "dev": "electron-vite dev",
-    "clean": "rm -rf out dist",
+    "clean": "node -e \"require('fs').rmSync('out', {recursive:true, force:true}); require('fs').rmSync('dist', {recursive:true, force:true})\"",
     "build": "npm run clean && electron-vite build",
     "start": "electron-vite preview",
     "build:mac": "npm run build && electron-builder --mac --config",
