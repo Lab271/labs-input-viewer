@@ -1,4 +1,8 @@
 import { defineConfig } from 'electron-vite'
+import path from 'path'
+import { fileURLToPath } from 'url'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig({
   main: {
@@ -22,11 +26,14 @@ export default defineConfig({
     }
   },
   renderer: {
+    root: 'src/renderer',
+    publicDir: './public',
     build: {
-      outDir: 'out/renderer',
+      outDir: path.resolve(__dirname, 'out/renderer'),
+      emptyOutDir: true,
       rollupOptions: {
         input: {
-          index: 'src/renderer/index.html'
+          index: path.resolve(__dirname, 'src/renderer/index.html')
         }
       }
     }

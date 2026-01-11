@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; media-src blob: mediastream:; img-src 'self' data: blob:">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; media-src blob: mediastream:; img-src 'self' data: blob:; connect-src 'self' data: blob:">
   <title>Input Viewer</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
@@ -109,6 +109,12 @@
         </table>
       </div>
       
+      <div class="dropdown-section">
+        <button id="setup-detection-btn" class="setup-btn">
+          📷 Setup No-Signal Detection
+        </button>
+      </div>
+      
       <div class="dropdown-footer">
         <span>Input Viewer v2.0.0</span>
         <span>© Labs for Space</span>
@@ -119,6 +125,58 @@
   <!-- Update Notification -->
   <div id="update-notification" class="hidden">
     <span id="update-message"></span>
+  </div>
+
+  <!-- Setup Wizard Modal -->
+  <div id="setup-wizard" class="modal hidden">
+    <div class="modal-content">
+      <h2>No-Signal Detection Setup</h2>
+      <p class="wizard-instructions">
+        To detect when your capture card shows "no signal", we need to capture what that screen looks like.
+      </p>
+      <div class="wizard-steps">
+        <div class="wizard-step">
+          <div class="step-number">1</div>
+          <div class="step-content">
+            <h3>Disconnect your video source</h3>
+            <p>Unplug the HDMI cable or turn off your device so the capture card shows its "no signal" screen.</p>
+          </div>
+        </div>
+        <div class="wizard-step">
+          <div class="step-number">2</div>
+          <div class="step-content">
+            <h3>Select which input to calibrate</h3>
+            <div class="wizard-input-select">
+              <label>
+                <input type="radio" name="wizard-input" value="left" checked>
+                Left Input
+              </label>
+              <label>
+                <input type="radio" name="wizard-input" value="right">
+                Right Input
+              </label>
+            </div>
+          </div>
+        </div>
+        <div class="wizard-step">
+          <div class="step-number">3</div>
+          <div class="step-content">
+            <h3>Preview and capture</h3>
+            <div class="wizard-preview">
+              <canvas id="wizard-preview-canvas"></canvas>
+              <div id="wizard-preview-status" class="preview-status">Ready to capture</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="wizard-actions">
+        <button id="wizard-capture-btn" class="btn-primary">Capture No-Signal Screen</button>
+        <button id="wizard-skip-btn" class="btn-secondary">Skip Setup</button>
+      </div>
+      <div class="wizard-footer">
+        You can recalibrate anytime from the settings panel.
+      </div>
+    </div>
   </div>
 
   <script type="module" src="./renderer.js"></script>

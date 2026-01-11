@@ -4,6 +4,16 @@
  * Handles video capture, UI interactions, and keyboard shortcuts
  */
 
+import { 
+  checkNoSignal, 
+  isReady as isDetectionReady, 
+  saveReferenceScreenshot,
+  hasReferenceScreenshot,
+  captureScreenshot,
+  serializeReferences,
+  deserializeReferences
+} from './detection-simple.js'
+
 // =============================================================================
 // State Management
 // =============================================================================
@@ -20,7 +30,15 @@ const state = {
   centerGap: 60,
   borderWidth: 0,
   frozen: false,
-  settings: null // Will be loaded from file
+  settings: null, // Will be loaded from file
+  // No-signal detection state
+  detectionCanvas: null,
+  detectionRunning: false,
+  detectionFrameCount: 0, // Frame counter for detection sampling
+  noSignalState: {
+    left: false,
+    right: false
+  }
 }
 
 // =============================================================================
@@ -52,7 +70,14 @@ const elements = {
   borderWidth: document.getElementById('border-width'),
   borderWidthValue: document.getElementById('border-width-value'),
   updateNotification: document.getElementById('update-notification'),
-  updateMessage: document.getElementById('update-message')
+  updateMessage: document.getElementById('update-message'),
+  // Setup wizard elements
+  setupWizard: document.getElementById('setup-wizard'),
+  setupDetectionBtn: document.getElementById('setup-detection-btn'),
+  wizardCaptureBtn: document.getElementById('wizard-capture-btn'),
+  wizardSkipBtn: document.getElementById('wizard-skip-btn'),
+  wizardPreviewCanvas: document.getElementById('wizard-preview-canvas'),
+  wizardPreviewStatus: document.getElementById('wizard-preview-status')
 }
 
 // =============================================================================
@@ -80,7 +105,9 @@ async function saveSettings() {
         layoutMode: state.layoutMode,
         centerGap: state.centerGap,
         borderWidth: state.borderWidth,
-        inputs: state.settings.inputs
+        inputs: state.settings.inputs,
+        initialSetupComplete: state.settings.initialSetupComplete,
+        noSignalReferences: state.settings.noSignalReferences
       }
       await window.electronAPI.saveSettings(settingsToSave)
     }
@@ -96,7 +123,9 @@ function getDefaultSettings() {
     borderWidth: 0,
     leftDeviceId: null,
     rightDeviceId: null,
-    layoutMode: null // null means use screen-based detection
+    layoutMode: null, // null means use screen-based detection
+    initialSetupComplete: false,
+    noSignalReferences: null
   }
 }
 
@@ -318,12 +347,14 @@ function showNoSignal(side) {
   const feed = side === 'left' ? elements.leftFeed : elements.rightFeed
   const overlay = feed.querySelector('.no-signal-overlay')
   overlay.classList.remove('hidden')
+  state.noSignalState[side] = true
 }
 
 function hideNoSignal(side) {
   const feed = side === 'left' ? elements.leftFeed : elements.rightFeed
   const overlay = feed.querySelector('.no-signal-overlay')
   overlay.classList.add('hidden')
+  state.noSignalState[side] = false
 }
 
 // =============================================================================
@@ -569,6 +600,22 @@ function setupEventListeners() {
     setBorderWidth(parseInt(e.target.value))
   })
   
+  // Setup wizard buttons
+  elements.setupDetectionBtn.addEventListener('click', () => {
+    console.log('[Setup] Setup button clicked')
+    showSetupWizard()
+  })
+  
+  elements.wizardCaptureBtn.addEventListener('click', () => {
+    console.log('[Setup] Capture button clicked')
+    captureNoSignalReference()
+  })
+  
+  elements.wizardSkipBtn.addEventListener('click', () => {
+    console.log('[Setup] Skip button clicked')
+    hideSetupWizard()
+  })
+  
   // Device changes (when plugging/unplugging devices)
   navigator.mediaDevices.addEventListener('devicechange', async () => {
     console.log('Device change detected')
@@ -588,6 +635,237 @@ function setupEventListeners() {
       }
     })
   }
+}
+
+// =============================================================================
+// No-Signal Detection
+// =============================================================================
+
+/**
+ * Initialize the no-signal detection system
+ */
+async function initNoSignalDetection() {
+  // Create offscreen canvas for frame capture
+  state.detectionCanvas = document.createElement('canvas')
+  
+  // Load saved reference screenshots from settings
+  if (state.settings.noSignalReferences) {
+    await deserializeReferences(state.settings.noSignalReferences)
+  }
+  
+  console.log('[Detection] No-signal detection initialized')
+  startDetectionLoop()
+}
+
+/**
+ * Start the detection loop using requestAnimationFrame
+ * Detection runs once every 100 frames to avoid CPU overload
+ */
+function startDetectionLoop() {
+  if (state.detectionRunning) return
+  state.detectionRunning = true
+  state.detectionFrameCount = 0
+  
+  function detectFrame() {
+    // Stop the loop if detection is disabled
+    if (!state.detectionRunning) {
+      return
+    }
+    
+    state.detectionFrameCount++
+    
+    // Only run detection every 100 frames (~1.6 seconds at 60fps)
+    if (state.detectionFrameCount % 100 === 0 && !state.frozen) {
+      const devicesToCheck = getUniqueActiveDevices()
+      
+      for (const { deviceId, video, side } of devicesToCheck) {
+        if (!video.srcObject || video.readyState < 2) continue
+        
+        // Only check if device has a reference screenshot
+        if (!isDetectionReady(deviceId)) continue
+        
+        const isNoSignal = checkNoSignal(deviceId, video, state.detectionCanvas)
+        
+        // Update UI if state changed
+        if (isNoSignal && !state.noSignalState[side]) {
+          showNoSignal(side)
+          console.log(`[Detection] No signal detected on ${side} (${deviceId})`)
+        } else if (!isNoSignal && state.noSignalState[side]) {
+          hideNoSignal(side)
+          console.log(`[Detection] Signal restored on ${side} (${deviceId})`)
+        }
+        
+        // If same device is on both sides, sync the state
+        if (state.layoutMode === 'dual' && state.leftDeviceId === state.rightDeviceId) {
+          const otherSide = side === 'left' ? 'right' : 'left'
+          if (isNoSignal && !state.noSignalState[otherSide]) {
+            showNoSignal(otherSide)
+            console.log(`[Detection] No signal detected on ${otherSide} (synced from ${side})`)
+          } else if (!isNoSignal && state.noSignalState[otherSide]) {
+            hideNoSignal(otherSide)
+            console.log(`[Detection] Signal restored on ${otherSide} (synced from ${side})`)
+          }
+        }
+      }
+    }
+    
+    // Schedule next frame
+    requestAnimationFrame(detectFrame)
+  }
+  
+  requestAnimationFrame(detectFrame)
+}
+
+/**
+ * Get unique active devices to check (avoid duplicate checks for same device)
+ * @returns {Array<{deviceId: string, video: HTMLVideoElement, side: string}>}
+ */
+function getUniqueActiveDevices() {
+  const devices = []
+  const checkedIds = new Set()
+  
+  // In dual mode, check both feeds if they have different sources
+  // In single mode, only check the visible feed
+  
+  if (state.layoutMode === 'dual') {
+    // Left feed
+    if (state.leftDeviceId && elements.leftVideo.srcObject) {
+      devices.push({ 
+        deviceId: state.leftDeviceId, 
+        video: elements.leftVideo, 
+        side: 'left' 
+      })
+      checkedIds.add(state.leftDeviceId)
+    }
+    
+    // Right feed - only if different device
+    if (state.rightDeviceId && elements.rightVideo.srcObject && !checkedIds.has(state.rightDeviceId)) {
+      devices.push({ 
+        deviceId: state.rightDeviceId, 
+        video: elements.rightVideo, 
+        side: 'right' 
+      })
+    } else if (state.rightDeviceId && checkedIds.has(state.rightDeviceId)) {
+      // Same device on both feeds - copy state from left
+      // This will be handled in the detection result propagation
+    }
+  } else {
+    // Single mode - only check left feed (which shows the active source)
+    if (state.leftDeviceId && elements.leftVideo.srcObject) {
+      devices.push({ 
+        deviceId: state.leftDeviceId, 
+        video: elements.leftVideo, 
+        side: 'left' 
+      })
+    }
+  }
+  
+  return devices
+}
+
+/**
+ * Stop the detection loop
+ */
+function stopDetectionLoop() {
+  state.detectionRunning = false
+}
+
+// =============================================================================
+// Setup Wizard
+// =============================================================================
+
+/**
+ * Show the setup wizard
+ */
+function showSetupWizard() {
+  elements.setupWizard.classList.remove('hidden')
+  
+  // Start preview update loop
+  updateWizardPreview()
+}
+
+/**
+ * Hide the setup wizard
+ */
+function hideSetupWizard() {
+  elements.setupWizard.classList.add('hidden')
+}
+
+/**
+ * Update wizard preview canvas with current video feed
+ */
+function updateWizardPreview() {
+  if (elements.setupWizard.classList.contains('hidden')) {
+    return // Stop updating when wizard is closed
+  }
+  
+  const selectedInput = document.querySelector('input[name="wizard-input"]:checked').value
+  const video = selectedInput === 'left' ? elements.leftVideo : elements.rightVideo
+  
+  if (video && video.srcObject && video.readyState >= 2) {
+    const ctx = elements.wizardPreviewCanvas.getContext('2d')
+    elements.wizardPreviewCanvas.width = video.videoWidth || 640
+    elements.wizardPreviewCanvas.height = video.videoHeight || 480
+    ctx.drawImage(video, 0, 0, elements.wizardPreviewCanvas.width, elements.wizardPreviewCanvas.height)
+    elements.wizardPreviewStatus.textContent = 'Live preview - ready to capture'
+    elements.wizardPreviewStatus.style.color = 'var(--text-muted)'
+  } else {
+    elements.wizardPreviewStatus.textContent = 'No video feed available'
+    elements.wizardPreviewStatus.style.color = '#ff4444'
+  }
+  
+  // Continue updating
+  requestAnimationFrame(updateWizardPreview)
+}
+
+/**
+ * Capture no-signal screenshot from wizard
+ */
+async function captureNoSignalReference() {
+  const selectedInput = document.querySelector('input[name="wizard-input"]:checked').value
+  const video = selectedInput === 'left' ? elements.leftVideo : elements.rightVideo
+  const deviceId = selectedInput === 'left' ? state.leftDeviceId : state.rightDeviceId
+  
+  if (!deviceId) {
+    elements.wizardPreviewStatus.textContent = 'Error: No device selected'
+    elements.wizardPreviewStatus.style.color = '#ff4444'
+    return
+  }
+  
+  if (!video || !video.srcObject || video.readyState < 2) {
+    elements.wizardPreviewStatus.textContent = 'Error: Video feed not ready'
+    elements.wizardPreviewStatus.style.color = '#ff4444'
+    return
+  }
+  
+  // Capture screenshot
+  const canvas = document.createElement('canvas')
+  const imageData = captureScreenshot(video, canvas)
+  
+  if (!imageData) {
+    elements.wizardPreviewStatus.textContent = 'Error: Failed to capture screenshot'
+    elements.wizardPreviewStatus.style.color = '#ff4444'
+    return
+  }
+  
+  // Save reference
+  saveReferenceScreenshot(deviceId, imageData)
+  
+  // Mark initial setup as complete
+  state.settings.initialSetupComplete = true
+  
+  // Save to settings
+  state.settings.noSignalReferences = serializeReferences()
+  await saveSettings()
+  
+  // Show success
+  elements.wizardPreviewStatus.textContent = '✓ Captured successfully!'
+  elements.wizardPreviewStatus.style.color = '#00ff00'
+  
+  // Close wizard after a delay
+  setTimeout(() => {
+    hideSetupWizard()
+  }, 1500)
 }
 
 // =============================================================================
@@ -634,6 +912,17 @@ async function init() {
     if (state.devices.length > 1) {
       await startVideoStream(state.rightDeviceId, elements.rightVideo, 'right')
     }
+  }
+  
+  // Initialize no-signal detection (don't await - let it load in background)
+  initNoSignalDetection().catch(err => {
+    console.error('[Detection] Initialization error:', err)
+  })
+  
+  // Auto-start setup wizard if this is first launch
+  if (!state.settings.initialSetupComplete && state.devices.length > 0) {
+    console.log('[Setup] First launch detected, showing setup wizard')
+    setTimeout(() => showSetupWizard(), 1000) // Delay to let video feeds initialize
   }
   
   // Show cursor initially
