@@ -265,14 +265,33 @@ async function getVideoDevices() {
     // Save settings with new devices
     saveSettings()
     
-    // Set default devices from settings or first device
+    // Set default devices from settings or auto-assign
     if (state.devices.length > 0) {
       // Try to restore from settings
       const savedLeft = state.devices.find(d => d.deviceId === state.settings.leftDeviceId)
       const savedRight = state.devices.find(d => d.deviceId === state.settings.rightDeviceId)
       
-      state.leftDeviceId = savedLeft ? savedLeft.deviceId : state.devices[0].deviceId
-      state.rightDeviceId = savedRight ? savedRight.deviceId : state.devices[0].deviceId
+      // Auto-assign devices if not saved
+      if (savedLeft) {
+        state.leftDeviceId = savedLeft.deviceId
+      } else {
+        // Use first enabled device
+        const firstEnabled = state.devices.find(d => isInputEnabled(d.deviceId))
+        state.leftDeviceId = firstEnabled ? firstEnabled.deviceId : state.devices[0].deviceId
+      }
+      
+      if (savedRight) {
+        state.rightDeviceId = savedRight.deviceId
+      } else {
+        // For dual mode: use second device if available, otherwise duplicate first
+        if (state.devices.length > 1) {
+          const secondEnabled = state.devices.slice(1).find(d => isInputEnabled(d.deviceId))
+          state.rightDeviceId = secondEnabled ? secondEnabled.deviceId : state.devices[1].deviceId
+        } else {
+          // Only one device: duplicate it for dual mode
+          state.rightDeviceId = state.leftDeviceId
+        }
+      }
     }
     
     renderInputList()
@@ -908,8 +927,11 @@ async function init() {
   
   // Start video streams
   if (state.devices.length > 0) {
+    // Always start left stream
     await startVideoStream(state.leftDeviceId, elements.leftVideo, 'left')
-    if (state.devices.length > 1) {
+    
+    // Start right stream in dual mode
+    if (layoutMode === 'dual' && state.rightDeviceId) {
       await startVideoStream(state.rightDeviceId, elements.rightVideo, 'right')
     }
   }

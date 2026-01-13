@@ -49,10 +49,18 @@ function loadSettings() {
 // Save settings to file
 function saveSettings(settings) {
   try {
+    // Ensure userData directory exists
+    const userDataPath = app.getPath('userData')
+    if (!fs.existsSync(userDataPath)) {
+      fs.mkdirSync(userDataPath, { recursive: true })
+    }
+    
     fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), 'utf8')
+    console.log('[Settings] Saved to:', settingsPath)
     return true
   } catch (err) {
-    console.error('Error saving settings:', err)
+    console.error('[Settings] Error saving settings:', err)
+    console.error('[Settings] Settings path:', settingsPath)
     return false
   }
 }
