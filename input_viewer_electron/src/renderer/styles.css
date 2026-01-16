@@ -100,9 +100,9 @@ body.single-view #video-wrapper {
   background-color: #000;
 }
 
-/* Single view: video fills the entire screen */
+/* Single view: video shows full content without cropping */
 body.single-view .video-feed.single video {
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .input-label {
