@@ -3,13 +3,17 @@ name: CI
 on:
   push:
     branches: ['**']
+    paths-ignore:
+      - '*.md'
+      - 'LICENSE'
+      - '.claude/**'
   pull_request:
     branches: [main]
 
 jobs:
   lint-and-build:
-    name: Lint & Build Electron
-    runs-on: macos-latest
+    name: Lint & Build
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: input_viewer_electron
@@ -32,7 +36,72 @@ jobs:
       - name: Build app
         run: npm run build
 
-      - name: Test macOS build
+  build-mac:
+    name: Build macOS
+    needs: lint-and-build
+    runs-on: macos-latest
+    if: github.event_name == 'pull_request'
+    defaults:
+      run:
+        working-directory: input_viewer_electron
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: input_viewer_electron/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build and package for macOS
         run: npm run build && npx electron-builder --mac --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
+
+  build-windows:
+    name: Build Windows
+    needs: lint-and-build
+    runs-on: windows-latest
+    if: github.event_name == 'pull_request'
+    defaults:
+      run:
+        working-directory: input_viewer_electron
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: input_viewer_electron/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build and package for Windows
+        run: npm run build && npx electron-builder --win --publish never
+
+  version-check:
+    name: Version Sync Check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check VERSION and package.json are in sync
+        run: |
+          VERSION_FILE=$(cat VERSION)
+          PACKAGE_VERSION=$(node -p "require('./input_viewer_electron/package.json').version")
+
+          echo "VERSION file: $VERSION_FILE"
+          echo "package.json: $PACKAGE_VERSION"
+
+          if [ "$VERSION_FILE" != "$PACKAGE_VERSION" ]; then
+            echo "::warning::VERSION ($VERSION_FILE) and package.json ($PACKAGE_VERSION) are out of sync"
+            echo "This is OK - auto-release will sync them on merge"
+          fi

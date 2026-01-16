@@ -111,14 +111,30 @@ jobs:
           echo "Current: $CURRENT -> New: $NEW_VERSION ($BUMP)"
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
 
-      - name: Update VERSION file
+      - name: Setup Node.js
+        if: steps.analyze.outputs.bump != 'none'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Update VERSION file and package.json
         if: steps.analyze.outputs.bump != 'none'
         run: |
-          echo "${{ steps.new_version.outputs.version }}" > VERSION
+          VERSION="${{ steps.new_version.outputs.version }}"
+
+          # Update VERSION file
+          echo "$VERSION" > VERSION
+
+          # Update package.json version (without creating git tag)
+          cd input_viewer_electron
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+          cd ..
+
+          # Commit both files
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add VERSION
-          git commit -m "chore: bump version to ${{ steps.new_version.outputs.version }}"
+          git add VERSION input_viewer_electron/package.json
+          git commit -m "chore: bump version to $VERSION"
           git push
 
       - name: Create and push tag
