@@ -337,16 +337,46 @@ async function startVideoStream(deviceId, videoElement, side) {
       return null
     }
     
+    // Request highest resolution the device supports
     const constraints = {
       video: {
         deviceId: { exact: deviceId },
-        width: { exact: 1920 },
-        height: { exact: 1200 }
+        width: { ideal: 4096 },
+        height: { ideal: 2160 }
       }
     }
-    
-    const stream = await navigator.mediaDevices.getUserMedia(constraints)
+
+    let stream = await navigator.mediaDevices.getUserMedia(constraints)
     videoElement.srcObject = stream
+
+    // Some capture devices start at low resolution and need a restart to get high-res
+    // Check resolution after stream starts and retry if too low
+    const track = stream.getVideoTracks()[0]
+    const settings = track.getSettings()
+    const caps = track.getCapabilities()
+
+    if (caps.width && settings.width < caps.width.max) {
+      console.log(`[Video] Got ${settings.width}x${settings.height}, device supports up to ${caps.width.max}x${caps.height.max}. Restarting for higher res...`)
+
+      // Stop current stream
+      stream.getTracks().forEach(t => t.stop())
+
+      // Small delay then request max resolution
+      await new Promise(resolve => setTimeout(resolve, 100))
+
+      const retryConstraints = {
+        video: {
+          deviceId: { exact: deviceId },
+          width: { ideal: caps.width.max },
+          height: { ideal: caps.height.max }
+        }
+      }
+      stream = await navigator.mediaDevices.getUserMedia(retryConstraints)
+      videoElement.srcObject = stream
+
+      const newSettings = stream.getVideoTracks()[0].getSettings()
+      console.log(`[Video] Retry got ${newSettings.width}x${newSettings.height}`)
+    }
     
     // Store stream reference
     if (side === 'left') {
