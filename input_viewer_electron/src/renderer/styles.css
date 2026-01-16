@@ -98,6 +98,10 @@ body.single-view #video-wrapper {
   height: 100%;
   object-fit: contain;
   background-color: #000;
+  /* GPU acceleration and crisp rendering */
+  transform: translateZ(0);
+  will-change: contents;
+  image-rendering: -webkit-optimize-contrast;
 }
 
 /* Single view: video shows full content without cropping */

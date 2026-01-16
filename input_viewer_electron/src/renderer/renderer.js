@@ -342,7 +342,9 @@ async function startVideoStream(deviceId, videoElement, side) {
         deviceId: { exact: deviceId },
         width: { ideal: 4096 },
         height: { ideal: 2160 },
-        frameRate: { ideal: 60 }
+        frameRate: { ideal: 60 },
+        // Use native resolution without browser cropping/scaling
+        resizeMode: 'none'
       }
     }
     
