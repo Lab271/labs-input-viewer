@@ -413,9 +413,9 @@ function setLayout(mode) {
       elements.leftFeed.classList.remove('hidden')
       elements.leftFeed.classList.add('single')
       elements.rightFeed.classList.add('hidden')
-      // Hide center divider in single view
+      // Hide center divider and bottom logo in single view - video fills screen
       elements.centerDivider.classList.add('overlay')
-      elements.bottomLogo.classList.remove('hidden')
+      elements.bottomLogo.classList.add('hidden')
       break
   }
   
@@ -426,13 +426,6 @@ function setCenterGap(gap) {
   state.centerGap = gap
   state.settings.centerGap = gap
   elements.centerDivider.style.width = `${gap}px`
-  // Scale logo to fit within the gap (80% of gap width, max 120px)
-  const logoSize = Math.min(gap * 0.8, 120)
-  const logo = elements.centerDivider.querySelector('.divider-logo')
-  if (logo) {
-    logo.style.maxWidth = `${logoSize}px`
-    logo.style.maxHeight = `${logoSize}px`
-  }
   elements.centerGapValue.textContent = `${gap}px`
   debouncedSaveSettings()
 }
