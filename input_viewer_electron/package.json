@@ -86,7 +86,8 @@
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
-      "deleteAppDataOnUninstall": false
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "Input-Viewer-Setup-${version}.${ext}"
     },
     "publish": {
       "provider": "github",
