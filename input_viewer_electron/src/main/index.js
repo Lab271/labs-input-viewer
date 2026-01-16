@@ -198,6 +198,13 @@ autoUpdater.on('checking-for-update', () => {
 
 autoUpdater.on('update-available', (info) => {
   log(`[AutoUpdater] Update available: ${info.version}`)
+
+  // Ensure window is visible and focused for the dialog
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.focus()
+  }
+
   dialog.showMessageBox(mainWindow, {
     type: 'info',
     title: 'Update Available',
@@ -210,6 +217,8 @@ autoUpdater.on('update-available', (info) => {
     if (result.response === 0) {
       autoUpdater.downloadUpdate()
     }
+  }).catch((err) => {
+    log(`[AutoUpdater] Dialog error: ${err}`)
   })
 })
 
@@ -219,6 +228,17 @@ autoUpdater.on('update-not-available', () => {
 
 autoUpdater.on('error', (err) => {
   log(`[AutoUpdater] Error: ${err}`)
+
+  // Show error to user
+  if (mainWindow) {
+    dialog.showMessageBox(mainWindow, {
+      type: 'error',
+      title: 'Update Error',
+      message: 'Failed to download update',
+      detail: err.message || String(err),
+      buttons: ['OK']
+    }).catch(() => {})
+  }
 })
 
 autoUpdater.on('download-progress', (progressObj) => {
@@ -233,6 +253,13 @@ autoUpdater.on('download-progress', (progressObj) => {
 
 autoUpdater.on('update-downloaded', (info) => {
   log(`[AutoUpdater] Update downloaded: ${info.version}`)
+
+  // Ensure window is visible and focused for the dialog
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.focus()
+  }
+
   dialog.showMessageBox(mainWindow, {
     type: 'info',
     title: 'Update Ready',
@@ -245,6 +272,9 @@ autoUpdater.on('update-downloaded', (info) => {
     if (result.response === 0) {
       autoUpdater.quitAndInstall()
     }
+  }).catch((err) => {
+    log(`[AutoUpdater] Dialog error: ${err}`)
+    // If dialog fails, install on quit anyway
   })
 })
 
