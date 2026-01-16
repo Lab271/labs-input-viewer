@@ -209,8 +209,7 @@ body.cursor-visible .input-label {
 }
 
 .divider-logo {
-  width: auto;
-  height: 100%;
+  max-width: 90%;
   max-height: 80%;
   object-fit: contain;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
