@@ -340,9 +340,8 @@ async function startVideoStream(deviceId, videoElement, side) {
     const constraints = {
       video: {
         deviceId: { exact: deviceId },
-        width: { min: 1280, ideal: 1920 },
-        height: { min: 720, ideal: 1200 },
-        frameRate: { min: 30, ideal: 60 }
+        width: { exact: 1920 },
+        height: { exact: 1200 }
       }
     }
     
