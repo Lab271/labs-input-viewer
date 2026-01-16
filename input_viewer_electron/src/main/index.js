@@ -21,6 +21,11 @@ autoUpdater.setFeedURL({
 autoUpdater.autoDownload = false
 autoUpdater.autoInstallOnAppQuit = true
 
+// Get app version for display in renderer
+function getAppVersion() {
+  return app.getVersion()
+}
+
 // Settings file path
 const settingsPath = path.join(app.getPath('userData'), 'settings.json')
 
@@ -64,10 +69,6 @@ function saveSettings(settings) {
     return false
   }
 }
-
-// Configure auto-updater
-autoUpdater.autoDownload = true
-autoUpdater.autoInstallOnAppQuit = true
 
 function createWindow() {
   // Create the browser window
@@ -180,6 +181,11 @@ ipcMain.handle('save-settings', (event, settings) => {
 // Get settings file path (for debugging)
 ipcMain.handle('get-settings-path', () => {
   return settingsPath
+})
+
+// Get app version for display in UI
+ipcMain.handle('get-app-version', () => {
+  return getAppVersion()
 })
 
 // =============================================================================

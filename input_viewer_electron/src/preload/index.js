@@ -6,14 +6,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
   toggleFullscreen: () => ipcRenderer.invoke('toggle-fullscreen'),
   isFullscreen: () => ipcRenderer.invoke('is-fullscreen'),
   quitApp: () => ipcRenderer.invoke('quit-app'),
-  
+
   // Settings persistence
   loadSettings: () => ipcRenderer.invoke('load-settings'),
   saveSettings: (settings) => ipcRenderer.invoke('save-settings', settings),
   getSettingsPath: () => ipcRenderer.invoke('get-settings-path'),
-  
-  // Updater messages
-  onUpdaterMessage: (callback) => {
-    ipcRenderer.on('updater-message', (event, message) => callback(message))
+
+  // App info
+  getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+
+  // Updater events
+  onUpdaterProgress: (callback) => {
+    ipcRenderer.on('updater-progress', (event, percent) => callback(percent))
   }
 })

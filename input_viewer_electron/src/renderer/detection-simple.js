@@ -6,13 +6,13 @@
 const CONFIG = {
   // Pixel comparison threshold (0-255 per channel)
   pixelDifferenceThreshold: 30,
-  
+
   // Percentage of pixels that must match (0.0 - 1.0)
   matchThreshold: 0.95, // 95% of pixels must match
-  
+
   // Sample every N pixels for faster comparison
   sampleRate: 4, // Check every 4th pixel
-  
+
   // Debug logging
   debugLogging: false
 }
@@ -22,6 +22,9 @@ const referenceScreenshots = new Map()
 
 // Detection state per device
 const deviceStates = new Map()
+
+// Cached canvas contexts (avoids repeated getContext calls)
+const canvasContextCache = new WeakMap()
 
 // =============================================================================
 // Setup and Configuration
@@ -70,12 +73,13 @@ export function getConfiguredDevices() {
  */
 export function serializeReferences() {
   const data = {}
+  // Reuse single canvas for all serializations (avoids repeated canvas creation)
+  const canvas = document.createElement('canvas')
+  const ctx = canvas.getContext('2d')
   for (const [deviceId, imageData] of referenceScreenshots.entries()) {
     // Convert ImageData to base64 for storage
-    const canvas = document.createElement('canvas')
     canvas.width = imageData.width
     canvas.height = imageData.height
-    const ctx = canvas.getContext('2d')
     ctx.putImageData(imageData, 0, 0)
     data[deviceId] = {
       dataUrl: canvas.toDataURL('image/png'),
@@ -149,19 +153,29 @@ export function checkNoSignal(deviceId, video, canvas) {
     if (CONFIG.debugLogging) console.log(`[Detection] No reference screenshot for ${deviceId}`)
     return false
   }
-  
+
   const state = getDeviceState(deviceId)
-  
+
   try {
-    // Capture current frame
-    const ctx = canvas.getContext('2d', { willReadFrequently: true })
-    canvas.width = video.videoWidth || 640
-    canvas.height = video.videoHeight || 480
-    
+    // Get or create cached canvas context (avoids repeated getContext calls)
+    let ctx = canvasContextCache.get(canvas)
+    if (!ctx) {
+      ctx = canvas.getContext('2d', { willReadFrequently: true })
+      canvasContextCache.set(canvas, ctx)
+    }
+
+    // Only resize canvas when dimensions actually change (avoids GPU buffer reallocation)
+    const targetWidth = video.videoWidth || 640
+    const targetHeight = video.videoHeight || 480
+    if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+      canvas.width = targetWidth
+      canvas.height = targetHeight
+    }
+
     if (canvas.width === 0 || canvas.height === 0) {
       return state.lastResult
     }
-    
+
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
     const currentFrame = ctx.getImageData(0, 0, canvas.width, canvas.height)
     
@@ -210,44 +224,36 @@ function compareFrames(frame1, frame2) {
     // For now, if sizes don't match, it's not a match
     return false
   }
-  
+
   const data1 = frame1.data
   const data2 = frame2.data
-  const totalPixels = frame1.width * frame1.height
-  const sampleRate = CONFIG.sampleRate
+  const stride = 4 * CONFIG.sampleRate
+  const threshold = CONFIG.pixelDifferenceThreshold
+  const len = data1.length
   let sampledPixels = 0
   let matchingPixels = 0
-  
-  // Sample pixels for comparison
-  for (let i = 0; i < data1.length; i += 4 * sampleRate) {
+
+  // Optimized pixel sampling with inline abs calculation (avoids Math.abs function calls)
+  for (let i = 0; i < len; i += stride) {
     sampledPixels++
-    
-    const r1 = data1[i]
-    const g1 = data1[i + 1]
-    const b1 = data1[i + 2]
-    
-    const r2 = data2[i]
-    const g2 = data2[i + 1]
-    const b2 = data2[i + 2]
-    
-    // Check if RGB values are within threshold
-    const rDiff = Math.abs(r1 - r2)
-    const gDiff = Math.abs(g1 - g2)
-    const bDiff = Math.abs(b1 - b2)
-    
-    if (rDiff <= CONFIG.pixelDifferenceThreshold && 
-        gDiff <= CONFIG.pixelDifferenceThreshold && 
-        bDiff <= CONFIG.pixelDifferenceThreshold) {
-      matchingPixels++
-    }
+
+    // Inline absolute difference without Math.abs (faster)
+    let d = data1[i] - data2[i]
+    if ((d < 0 ? -d : d) > threshold) continue
+
+    d = data1[i + 1] - data2[i + 1]
+    if ((d < 0 ? -d : d) > threshold) continue
+
+    d = data1[i + 2] - data2[i + 2]
+    if ((d < 0 ? -d : d) <= threshold) matchingPixels++
   }
-  
+
   const matchRatio = matchingPixels / sampledPixels
-  
+
   if (CONFIG.debugLogging) {
     console.log(`[Detection] Match ratio: ${(matchRatio * 100).toFixed(1)}% (need ${CONFIG.matchThreshold * 100}%)`)
   }
-  
+
   return matchRatio >= CONFIG.matchThreshold
 }
 
@@ -259,18 +265,19 @@ function compareFrames(frame1, frame2) {
  */
 export function captureScreenshot(video, canvas) {
   try {
-    const ctx = canvas.getContext('2d')
+    // Use willReadFrequently hint to optimize for getImageData calls
+    const ctx = canvas.getContext('2d', { willReadFrequently: true })
     canvas.width = video.videoWidth || 640
     canvas.height = video.videoHeight || 480
-    
+
     if (canvas.width === 0 || canvas.height === 0) {
       console.error('[Detection] Cannot capture screenshot: invalid video dimensions')
       return null
     }
-    
+
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
-    
+
     console.log(`[Detection] Captured screenshot: ${imageData.width}x${imageData.height}`)
     return imageData
   } catch (err) {

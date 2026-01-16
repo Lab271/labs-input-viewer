@@ -77,7 +77,12 @@ const elements = {
   wizardCaptureBtn: document.getElementById('wizard-capture-btn'),
   wizardSkipBtn: document.getElementById('wizard-skip-btn'),
   wizardPreviewCanvas: document.getElementById('wizard-preview-canvas'),
-  wizardPreviewStatus: document.getElementById('wizard-preview-status')
+  wizardPreviewStatus: document.getElementById('wizard-preview-status'),
+  // Cached label references (avoids DOM queries in hot paths)
+  leftLabel: document.querySelector('#left-feed .input-label'),
+  rightLabel: document.querySelector('#right-feed .input-label'),
+  // Version display
+  appVersion: document.getElementById('app-version')
 }
 
 // =============================================================================
@@ -114,6 +119,13 @@ async function saveSettings() {
   } catch (e) {
     console.error('Error saving settings:', e)
   }
+}
+
+// Debounced save to reduce IPC calls during rapid changes (e.g., slider drags)
+let saveSettingsTimeout = null
+function debouncedSaveSettings() {
+  clearTimeout(saveSettingsTimeout)
+  saveSettingsTimeout = setTimeout(saveSettings, 300)
 }
 
 function getDefaultSettings() {
@@ -345,15 +357,15 @@ async function startVideoStream(deviceId, videoElement, side) {
     }
     
     hideNoSignal(side)
-    
-    // Update input label
+
+    // Update input label using cached reference
     const device = state.devices.find(d => d.deviceId === deviceId)
-    const label = videoElement.parentElement.querySelector('.input-label')
+    const label = side === 'left' ? elements.leftLabel : elements.rightLabel
     if (label && device) {
       const name = getInputName(deviceId, device.label || 'Unknown Input')
       label.textContent = name
     }
-    
+
     return stream
   } catch (error) {
     console.error(`Error starting ${side} stream:`, error)
@@ -422,7 +434,7 @@ function setCenterGap(gap) {
     logo.style.maxHeight = `${logoSize}px`
   }
   elements.centerGapValue.textContent = `${gap}px`
-  saveSettings()
+  debouncedSaveSettings()
 }
 
 function setBorderWidth(width) {
@@ -430,7 +442,7 @@ function setBorderWidth(width) {
   state.settings.borderWidth = width
   document.documentElement.style.setProperty('--border-width', `${width}px`)
   elements.borderWidthValue.textContent = `${width}px`
-  saveSettings()
+  debouncedSaveSettings()
 }
 
 // =============================================================================
@@ -641,16 +653,17 @@ function setupEventListeners() {
     await getVideoDevices()
   })
   
-  // Auto-updater messages
-  if (window.electronAPI) {
-    window.electronAPI.onUpdaterMessage((message) => {
-      console.log('Updater:', message)
-      if (message.includes('Update available') || message.includes('Update downloaded')) {
-        elements.updateMessage.textContent = message
-        elements.updateNotification.classList.remove('hidden')
+  // Auto-updater download progress
+  if (window.electronAPI && window.electronAPI.onUpdaterProgress) {
+    window.electronAPI.onUpdaterProgress((percent) => {
+      console.log('Updater progress:', percent + '%')
+      elements.updateMessage.textContent = `Downloading update... ${percent}%`
+      elements.updateNotification.classList.remove('hidden')
+      // Hide notification when download completes (dialog will show)
+      if (percent >= 100) {
         setTimeout(() => {
           elements.updateNotification.classList.add('hidden')
-        }, 5000)
+        }, 1000)
       }
     })
   }
@@ -690,11 +703,17 @@ function startDetectionLoop() {
     if (!state.detectionRunning) {
       return
     }
-    
+
     state.detectionFrameCount++
-    
+
     // Only run detection every 100 frames (~1.6 seconds at 60fps)
-    if (state.detectionFrameCount % 100 === 0 && !state.frozen) {
+    // Reset counter to avoid potential overflow after long runtime
+    if (state.detectionFrameCount >= 100) {
+      state.detectionFrameCount = 0
+      if (state.frozen) {
+        requestAnimationFrame(detectFrame)
+        return
+      }
       const devicesToCheck = getUniqueActiveDevices()
       
       for (const { deviceId, video, side } of devicesToCheck) {
@@ -814,13 +833,14 @@ function hideSetupWizard() {
  * Update wizard preview canvas with current video feed
  */
 function updateWizardPreview() {
+  // Early exit if wizard is closed (before any work)
   if (elements.setupWizard.classList.contains('hidden')) {
-    return // Stop updating when wizard is closed
+    return
   }
-  
+
   const selectedInput = document.querySelector('input[name="wizard-input"]:checked').value
   const video = selectedInput === 'left' ? elements.leftVideo : elements.rightVideo
-  
+
   if (video && video.srcObject && video.readyState >= 2) {
     const ctx = elements.wizardPreviewCanvas.getContext('2d')
     elements.wizardPreviewCanvas.width = video.videoWidth || 640
@@ -832,9 +852,11 @@ function updateWizardPreview() {
     elements.wizardPreviewStatus.textContent = 'No video feed available'
     elements.wizardPreviewStatus.style.color = '#ff4444'
   }
-  
-  // Continue updating
-  requestAnimationFrame(updateWizardPreview)
+
+  // Only schedule next frame if wizard is still open (avoids race condition)
+  if (!elements.setupWizard.classList.contains('hidden')) {
+    requestAnimationFrame(updateWizardPreview)
+  }
 }
 
 /**
@@ -893,7 +915,19 @@ async function captureNoSignalReference() {
 
 async function init() {
   console.log('Input Viewer initializing...')
-  
+
+  // Display app version from package.json
+  if (window.electronAPI && window.electronAPI.getAppVersion) {
+    try {
+      const version = await window.electronAPI.getAppVersion()
+      if (elements.appVersion) {
+        elements.appVersion.textContent = `Input Viewer v${version}`
+      }
+    } catch (e) {
+      console.error('Error getting app version:', e)
+    }
+  }
+
   // Load settings from file
   state.settings = await loadSettings()
   
