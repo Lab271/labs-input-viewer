@@ -1,12 +1,6 @@
 name: CI
 
 on:
-  push:
-    branches: ['**']
-    paths-ignore:
-      - '*.md'
-      - 'LICENSE'
-      - '.claude/**'
   pull_request:
     branches: [main]
 
@@ -40,7 +34,6 @@ jobs:
     name: Build macOS
     needs: lint-and-build
     runs-on: macos-latest
-    if: github.event_name == 'pull_request'
     defaults:
       run:
         working-directory: input_viewer_electron
@@ -66,7 +59,6 @@ jobs:
     name: Build Windows
     needs: lint-and-build
     runs-on: windows-latest
-    if: github.event_name == 'pull_request'
     defaults:
       run:
         working-directory: input_viewer_electron
@@ -86,22 +78,19 @@ jobs:
       - name: Build and package for Windows
         run: npm run build && npx electron-builder --win --publish never
 
-  version-check:
-    name: Version Sync Check
+  # Auto-merge when all checks pass
+  auto-merge:
+    name: Auto Merge
+    needs: [build-mac, build-windows]
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Check VERSION and package.json are in sync
-        run: |
-          VERSION_FILE=$(cat VERSION)
-          PACKAGE_VERSION=$(node -p "require('./input_viewer_electron/package.json').version")
-
-          echo "VERSION file: $VERSION_FILE"
-          echo "package.json: $PACKAGE_VERSION"
-
-          if [ "$VERSION_FILE" != "$PACKAGE_VERSION" ]; then
-            echo "::warning::VERSION ($VERSION_FILE) and package.json ($PACKAGE_VERSION) are out of sync"
-            echo "This is OK - auto-release will sync them on merge"
-          fi
+      - name: Auto-merge PR
+        uses: pascalgn/automerge-action@v0.16.4
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MERGE_METHOD: squash
+          MERGE_LABELS: ""
+          MERGE_DELETE_BRANCH: true
