@@ -160,6 +160,35 @@ body.cursor-visible .input-label {
 }
 
 /* =============================================================================
+   DVD Screensaver Overlay
+   ============================================================================= */
+
+#dvd-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: #000;
+  z-index: 25;
+  overflow: hidden;
+}
+
+#dvd-overlay.hidden {
+  display: none;
+}
+
+#dvd-logo {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 200px;
+  height: auto;
+  will-change: transform, filter;
+  transition: filter 0.3s ease;
+}
+
+/* =============================================================================
    Center Logo
    ============================================================================= */
 
