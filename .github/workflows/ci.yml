@@ -138,7 +138,8 @@ jobs:
       - name: Auto-merge PR
         uses: pascalgn/automerge-action@v0.16.4
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Use PAT instead of GITHUB_TOKEN so the merge triggers push workflows
+          GITHUB_TOKEN: ${{ secrets.RELEASES_REPO_TOKEN }}
           MERGE_METHOD: squash
           MERGE_LABELS: ""
           MERGE_DELETE_BRANCH: true
