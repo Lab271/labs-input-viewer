@@ -77,6 +77,12 @@ Polish and enhancement features:
 
 ## 🔵 P4 - Future Ideas
 
+- [ ] **Multi-view mode** - Display different inputs on each screen
+  - Dual view shows same input on both sides
+  - Multi-view shows different inputs per panel
+- [ ] **CI testing** - Add automated tests to CI pipeline
+  - Unit tests for core logic
+  - Integration tests for video capture
 - [ ] Test mode flags (`--mock`, `--no-signal`)
 - [ ] Keyboard shortcut customization
 - [ ] Picture-in-picture layout
@@ -84,6 +90,7 @@ Polish and enhancement features:
 - [ ] Streaming output (NDI, virtual camera)
 - [ ] Color correction / brightness controls
 - [ ] Restart to install update button
+- [ ] **Touchscreen controls** - Enhanced touch support for touchscreen displays
 
 ---
 
