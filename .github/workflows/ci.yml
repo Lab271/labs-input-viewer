@@ -124,27 +124,7 @@ jobs:
             input_viewer_electron/dist/latest.yml
 
   # =============================================================================
-  # Step 3: Auto-merge PRs when builds pass
-  # =============================================================================
-  auto-merge:
-    name: Auto Merge
-    if: github.event_name == 'pull_request'
-    needs: [build-mac, build-windows]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
-    steps:
-      - name: Auto-merge PR
-        uses: pascalgn/automerge-action@v0.16.4
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          MERGE_METHOD: squash
-          MERGE_LABELS: ""
-          MERGE_DELETE_BRANCH: true
-
-  # =============================================================================
-  # Step 4: Analyze commits and determine version bump (push to main only)
+  # Step 3: Analyze commits and determine version bump (push to main only)
   # =============================================================================
   analyze:
     name: Analyze Commits
@@ -227,7 +207,7 @@ jobs:
           fi
 
   # =============================================================================
-  # Step 5: Bump version and create tag
+  # Step 4: Bump version and create tag
   # =============================================================================
   version-bump:
     name: Bump Version
@@ -263,7 +243,7 @@ jobs:
           git push origin "v${VERSION}"
 
   # =============================================================================
-  # Step 6: Publish release (reuses build artifacts)
+  # Step 5: Publish release (reuses build artifacts)
   # =============================================================================
   publish:
     name: Publish Release
