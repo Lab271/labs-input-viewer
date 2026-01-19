@@ -4,15 +4,22 @@
  * Handles video capture, UI interactions, and keyboard shortcuts
  */
 
-import { 
-  checkNoSignal, 
-  isReady as isDetectionReady, 
+import {
+  checkNoSignal,
+  isReady as isDetectionReady,
   saveReferenceScreenshot,
   hasReferenceScreenshot,
   captureScreenshot,
   serializeReferences,
   deserializeReferences
 } from './detection-simple.js'
+
+import {
+  initBouncingLogo,
+  startBouncingLogo,
+  stopBouncingLogo,
+  isBouncingLogoRunning
+} from './bouncing-logo.js'
 
 // =============================================================================
 // State Management
@@ -38,7 +45,10 @@ const state = {
   noSignalState: {
     left: false,
     right: false
-  }
+  },
+  // DVD screensaver timer
+  dvdScreensaverTimeout: null,
+  dvdScreensaverDelay: 5 * 60 * 1000 // 5 minutes in milliseconds
 }
 
 // =============================================================================
@@ -82,7 +92,10 @@ const elements = {
   leftLabel: document.querySelector('#left-feed .input-label'),
   rightLabel: document.querySelector('#right-feed .input-label'),
   // Version display
-  appVersion: document.getElementById('app-version')
+  appVersion: document.getElementById('app-version'),
+  // DVD screensaver overlay
+  dvdOverlay: document.getElementById('dvd-overlay'),
+  dvdLogo: document.getElementById('dvd-logo')
 }
 
 // =============================================================================
@@ -415,6 +428,69 @@ function hideNoSignal(side) {
   const overlay = feed.querySelector('.no-signal-overlay')
   overlay.classList.add('hidden')
   state.noSignalState[side] = false
+}
+
+/**
+ * Check if DVD screensaver should be shown and update accordingly
+ * Shows when all active feeds have no signal for 5 minutes
+ */
+function updateDvdScreensaver() {
+  // Determine which feeds are active based on layout mode
+  let allNoSignal = false
+
+  if (state.layoutMode === 'dual') {
+    // In dual mode, show DVD when both feeds have no signal
+    allNoSignal = state.noSignalState.left && state.noSignalState.right
+  } else {
+    // In single mode, show DVD when the left feed (active feed) has no signal
+    allNoSignal = state.noSignalState.left
+  }
+
+  if (allNoSignal) {
+    // Start timer if not already running
+    if (!state.dvdScreensaverTimeout && !isBouncingLogoRunning()) {
+      console.log('[DVD] No signal detected - starting 5 minute timer')
+      state.dvdScreensaverTimeout = setTimeout(() => {
+        // Double-check we still have no signal before starting
+        const stillNoSignal = state.layoutMode === 'dual'
+          ? state.noSignalState.left && state.noSignalState.right
+          : state.noSignalState.left
+
+        if (stillNoSignal) {
+          showDvdScreensaver()
+        }
+        state.dvdScreensaverTimeout = null
+      }, state.dvdScreensaverDelay)
+    }
+  } else {
+    // Signal restored - cancel timer and hide screensaver
+    if (state.dvdScreensaverTimeout) {
+      clearTimeout(state.dvdScreensaverTimeout)
+      state.dvdScreensaverTimeout = null
+      console.log('[DVD] Signal restored - cancelled screensaver timer')
+    }
+    if (isBouncingLogoRunning()) {
+      hideDvdScreensaver()
+    }
+  }
+}
+
+/**
+ * Show the DVD screensaver overlay
+ */
+function showDvdScreensaver() {
+  elements.dvdOverlay.classList.remove('hidden')
+  startBouncingLogo()
+  console.log('[DVD] Screensaver activated')
+}
+
+/**
+ * Hide the DVD screensaver overlay
+ */
+function hideDvdScreensaver() {
+  stopBouncingLogo()
+  elements.dvdOverlay.classList.add('hidden')
+  console.log('[DVD] Screensaver deactivated')
 }
 
 // =============================================================================
@@ -767,8 +843,11 @@ function startDetectionLoop() {
           }
         }
       }
+
+      // Update DVD screensaver based on current no-signal state
+      updateDvdScreensaver()
     }
-    
+
     // Schedule next frame
     requestAnimationFrame(detectFrame)
   }
@@ -992,6 +1071,9 @@ async function init() {
     }
   }
   
+  // Initialize DVD bouncing logo
+  initBouncingLogo(elements.dvdLogo, elements.dvdOverlay)
+
   // Initialize no-signal detection (don't await - let it load in background)
   initNoSignalDetection().catch(err => {
     console.error('[Detection] Initialization error:', err)

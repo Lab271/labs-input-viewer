@@ -1,5 +1,4 @@
 const { app, BrowserWindow, ipcMain, systemPreferences, dialog } = require('electron')
-const { autoUpdater } = require('electron-updater')
 const path = require('path')
 const fs = require('fs')
 
@@ -17,16 +16,29 @@ let mainWindow
 // electron-vite sets ELECTRON_RENDERER_URL only during `dev` command
 const isDev = !!process.env.ELECTRON_RENDERER_URL
 
-// Configure auto-updater to use the public releases repository
-autoUpdater.setFeedURL({
-  provider: 'github',
-  owner: 'LAB271',
-  repo: 'input-viewer-releases'
-})
+// Auto-updater (lazy-loaded to avoid crash in dev mode)
+let autoUpdater = null
 
-// Don't auto-download - prompt user first
-autoUpdater.autoDownload = false
-autoUpdater.autoInstallOnAppQuit = true
+function getAutoUpdater() {
+  if (!autoUpdater && !isDev) {
+    autoUpdater = require('electron-updater').autoUpdater
+
+    // Configure auto-updater to use the public releases repository
+    autoUpdater.setFeedURL({
+      provider: 'github',
+      owner: 'LAB271',
+      repo: 'input-viewer-releases'
+    })
+
+    // Don't auto-download - prompt user first
+    autoUpdater.autoDownload = false
+    autoUpdater.autoInstallOnAppQuit = true
+
+    // Setup auto-updater events
+    setupAutoUpdaterEvents()
+  }
+  return autoUpdater
+}
 
 // Get app version for display in renderer
 function getAppVersion() {
@@ -114,7 +126,10 @@ function createWindow() {
     if (!isDev) {
       setTimeout(() => {
         log('[AutoUpdater] Starting update check...')
-        autoUpdater.checkForUpdates()
+        const updater = getAutoUpdater()
+        if (updater) {
+          updater.checkForUpdates()
+        }
       }, 3000)
     }
   })
@@ -199,91 +214,95 @@ ipcMain.handle('get-app-version', () => {
 // Auto-Updater Events
 // =============================================================================
 
-autoUpdater.on('checking-for-update', () => {
-  log('[AutoUpdater] Checking for update...')
-})
+function setupAutoUpdaterEvents() {
+  if (!autoUpdater) return
 
-autoUpdater.on('update-available', (info) => {
-  log(`[AutoUpdater] Update available: ${info.version}`)
-
-  // Ensure window is visible and focused for the dialog
-  if (mainWindow) {
-    if (mainWindow.isMinimized()) mainWindow.restore()
-    mainWindow.focus()
-  }
-
-  dialog.showMessageBox(mainWindow, {
-    type: 'info',
-    title: 'Update Available',
-    message: `A new version (${info.version}) is available.`,
-    detail: 'Would you like to download it now?',
-    buttons: ['Download', 'Later'],
-    defaultId: 0,
-    cancelId: 1
-  }).then((result) => {
-    if (result.response === 0) {
-      autoUpdater.downloadUpdate()
-    }
-  }).catch((err) => {
-    log(`[AutoUpdater] Dialog error: ${err}`)
+  autoUpdater.on('checking-for-update', () => {
+    log('[AutoUpdater] Checking for update...')
   })
-})
 
-autoUpdater.on('update-not-available', () => {
-  log('[AutoUpdater] App is up to date')
-})
+  autoUpdater.on('update-available', (info) => {
+    log(`[AutoUpdater] Update available: ${info.version}`)
 
-autoUpdater.on('error', (err) => {
-  log(`[AutoUpdater] Error: ${err}`)
+    // Ensure window is visible and focused for the dialog
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.focus()
+    }
 
-  // Show error to user
-  if (mainWindow) {
     dialog.showMessageBox(mainWindow, {
-      type: 'error',
-      title: 'Update Error',
-      message: 'Failed to download update',
-      detail: err.message || String(err),
-      buttons: ['OK']
-    }).catch(() => {})
-  }
-})
-
-autoUpdater.on('download-progress', (progressObj) => {
-  const percent = Math.round(progressObj.percent)
-  log(`[AutoUpdater] Download progress: ${percent}%`)
-  
-  // Send progress to renderer for display
-  if (mainWindow) {
-    mainWindow.webContents.send('updater-progress', percent)
-  }
-})
-
-autoUpdater.on('update-downloaded', (info) => {
-  log(`[AutoUpdater] Update downloaded: ${info.version}`)
-
-  // Ensure window is visible and focused for the dialog
-  if (mainWindow) {
-    if (mainWindow.isMinimized()) mainWindow.restore()
-    mainWindow.focus()
-  }
-
-  dialog.showMessageBox(mainWindow, {
-    type: 'info',
-    title: 'Update Ready',
-    message: 'Update downloaded successfully.',
-    detail: 'The application will restart to install the update.',
-    buttons: ['Restart Now', 'Later'],
-    defaultId: 0,
-    cancelId: 1
-  }).then((result) => {
-    if (result.response === 0) {
-      autoUpdater.quitAndInstall()
-    }
-  }).catch((err) => {
-    log(`[AutoUpdater] Dialog error: ${err}`)
-    // If dialog fails, install on quit anyway
+      type: 'info',
+      title: 'Update Available',
+      message: `A new version (${info.version}) is available.`,
+      detail: 'Would you like to download it now?',
+      buttons: ['Download', 'Later'],
+      defaultId: 0,
+      cancelId: 1
+    }).then((result) => {
+      if (result.response === 0) {
+        autoUpdater.downloadUpdate()
+      }
+    }).catch((err) => {
+      log(`[AutoUpdater] Dialog error: ${err}`)
+    })
   })
-})
+
+  autoUpdater.on('update-not-available', () => {
+    log('[AutoUpdater] App is up to date')
+  })
+
+  autoUpdater.on('error', (err) => {
+    log(`[AutoUpdater] Error: ${err}`)
+
+    // Show error to user
+    if (mainWindow) {
+      dialog.showMessageBox(mainWindow, {
+        type: 'error',
+        title: 'Update Error',
+        message: 'Failed to download update',
+        detail: err.message || String(err),
+        buttons: ['OK']
+      }).catch(() => {})
+    }
+  })
+
+  autoUpdater.on('download-progress', (progressObj) => {
+    const percent = Math.round(progressObj.percent)
+    log(`[AutoUpdater] Download progress: ${percent}%`)
+
+    // Send progress to renderer for display
+    if (mainWindow) {
+      mainWindow.webContents.send('updater-progress', percent)
+    }
+  })
+
+  autoUpdater.on('update-downloaded', (info) => {
+    log(`[AutoUpdater] Update downloaded: ${info.version}`)
+
+    // Ensure window is visible and focused for the dialog
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.focus()
+    }
+
+    dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      title: 'Update Ready',
+      message: 'Update downloaded successfully.',
+      detail: 'The application will restart to install the update.',
+      buttons: ['Restart Now', 'Later'],
+      defaultId: 0,
+      cancelId: 1
+    }).then((result) => {
+      if (result.response === 0) {
+        autoUpdater.quitAndInstall()
+      }
+    }).catch((err) => {
+      log(`[AutoUpdater] Dialog error: ${err}`)
+      // If dialog fails, install on quit anyway
+    })
+  })
+}
 
 function log(text) {
   console.log(text)
