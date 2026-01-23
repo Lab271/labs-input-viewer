@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dropdown + Settings - Design</title>
+  <style>
+    :root {
+      --bg-dark: #0a0a0f;
+      --bg-surface: #14141a;
+      --panel-bg: rgba(20, 20, 26, 0.95);
+      --panel-border: rgba(255, 255, 255, 0.1);
+      --text-color: #ffffff;
+      --text-muted: #888;
+      --accent-color: #0066ff;
+      --hover-color: rgba(255, 255, 255, 0.08);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background-color: var(--bg-dark);
+      color: var(--text-color);
+      padding: 40px;
+      min-height: 100vh;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 10px;
+      font-weight: 300;
+    }
+
+    .subtitle {
+      text-align: center;
+      color: var(--text-muted);
+      margin-bottom: 50px;
+      font-size: 14px;
+    }
+
+    .main-layout {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 60px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .section-title {
+      font-size: 12px;
+      font-weight: 500;
+      margin-bottom: 16px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    /* =============================================================================
+       Dropdown Panel (Simple L/R Selection)
+       ============================================================================= */
+    .dropdown-panel {
+      background: var(--panel-bg);
+      border-radius: 12px;
+      padding: 16px;
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--panel-border);
+    }
+
+    .column-layout {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .column {
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 8px;
+      padding: 12px;
+    }
+
+    .column-header {
+      font-size: 11px;
+      font-weight: 600;
+      margin-bottom: 10px;
+      text-align: center;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .input-option {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-bottom: 4px;
+      transition: all 0.15s;
+    }
+
+    .input-option:last-child {
+      margin-bottom: 0;
+    }
+
+    .input-option:hover {
+      background-color: var(--hover-color);
+    }
+
+    .input-option.selected {
+      background-color: var(--accent-color);
+    }
+
+    .input-option .num {
+      font-size: 11px;
+      font-weight: 600;
+      opacity: 0.6;
+      width: 16px;
+    }
+
+    .input-option.selected .num {
+      opacity: 1;
+    }
+
+    .input-option .name {
+      font-size: 13px;
+    }
+
+    /* Single input list (when Single mode is selected) */
+    .single-input-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .single-input-option {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .single-input-option:hover {
+      background-color: var(--hover-color);
+    }
+
+    .single-input-option.selected {
+      background-color: var(--accent-color);
+    }
+
+    .single-input-option .num {
+      font-size: 12px;
+      font-weight: 600;
+      opacity: 0.6;
+      width: 18px;
+    }
+
+    .single-input-option.selected .num {
+      opacity: 1;
+    }
+
+    .single-input-option .name {
+      font-size: 14px;
+    }
+
+    /* View mode toggle */
+    .view-mode-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 16px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--panel-border);
+    }
+
+    .view-mode-btn {
+      flex: 1;
+      padding: 10px 16px;
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid transparent;
+      border-radius: 6px;
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+      text-align: center;
+    }
+
+    .view-mode-btn:hover {
+      background: var(--hover-color);
+    }
+
+    .view-mode-btn.active {
+      background: var(--accent-color);
+      color: white;
+    }
+
+    /* Settings button in dropdown */
+    .settings-btn {
+      width: 100%;
+      padding: 10px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--panel-border);
+      border-radius: 6px;
+      color: var(--text-muted);
+      font-size: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.15s;
+    }
+
+    .settings-btn:hover {
+      background: var(--hover-color);
+      color: var(--text-color);
+    }
+
+    .settings-btn .icon {
+      font-size: 14px;
+    }
+
+    /* =============================================================================
+       Settings Modal
+       ============================================================================= */
+    .settings-modal {
+      background: var(--panel-bg);
+      border-radius: 12px;
+      padding: 24px;
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--panel-border);
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--panel-border);
+    }
+
+    .modal-header h2 {
+      font-size: 18px;
+      font-weight: 500;
+    }
+
+    .close-btn {
+      width: 32px;
+      height: 32px;
+      background: transparent;
+      border: none;
+      border-radius: 6px;
+      color: var(--text-muted);
+      font-size: 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+    }
+
+    .close-btn:hover {
+      background: var(--hover-color);
+      color: var(--text-color);
+    }
+
+    .settings-section {
+      margin-bottom: 28px;
+    }
+
+    .settings-section:last-child {
+      margin-bottom: 0;
+    }
+
+    .settings-section h3 {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 14px;
+    }
+
+    /* Input naming section */
+    .input-name-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .input-name-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .input-name-row .num {
+      width: 24px;
+      height: 24px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    .input-name-row input {
+      flex: 1;
+      padding: 10px 12px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--panel-border);
+      border-radius: 6px;
+      color: var(--text-color);
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .input-name-row input:focus {
+      border-color: var(--accent-color);
+    }
+
+    .input-name-row .default-btn {
+      padding: 8px 12px;
+      background: transparent;
+      border: 1px solid var(--panel-border);
+      border-radius: 6px;
+      color: var(--text-muted);
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+
+    .input-name-row .default-btn:hover {
+      background: var(--hover-color);
+    }
+
+    .input-name-row .default-btn.active {
+      background: rgba(245, 158, 11, 0.2);
+      border-color: #f59e0b;
+      color: #f59e0b;
+    }
+
+    /* Toggle switch for enable/disable */
+    .toggle-switch {
+      width: 36px;
+      height: 20px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 10px;
+      position: relative;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background-color 0.2s;
+    }
+
+    .toggle-switch.active {
+      background: var(--accent-color);
+    }
+
+    .toggle-switch::after {
+      content: '';
+      position: absolute;
+      width: 16px;
+      height: 16px;
+      background: white;
+      border-radius: 50%;
+      top: 2px;
+      left: 2px;
+      transition: transform 0.2s;
+    }
+
+    .toggle-switch.active::after {
+      transform: translateX(16px);
+    }
+
+    .input-name-row.disabled input {
+      opacity: 0.4;
+    }
+
+    .input-name-row.disabled .default-btn {
+      opacity: 0.4;
+      pointer-events: none;
+    }
+
+    /* Slider settings */
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .slider-row:last-child {
+      margin-bottom: 0;
+    }
+
+    .slider-row label {
+      width: 100px;
+      font-size: 13px;
+      flex-shrink: 0;
+    }
+
+    .slider-row input[type="range"] {
+      flex: 1;
+      accent-color: var(--accent-color);
+    }
+
+    .slider-row .value {
+      width: 50px;
+      text-align: right;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* No-signal setup */
+    .setup-card {
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .setup-card p {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+      line-height: 1.5;
+    }
+
+    .setup-btn-row {
+      display: flex;
+      gap: 10px;
+    }
+
+    .setup-btn-row button {
+      flex: 1;
+      padding: 10px 16px;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .btn-primary {
+      background: var(--accent-color);
+      border: none;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #0052cc;
+    }
+
+    .btn-secondary {
+      background: transparent;
+      border: 1px solid var(--panel-border);
+      color: var(--text-muted);
+    }
+
+    .btn-secondary:hover {
+      background: var(--hover-color);
+      color: var(--text-color);
+    }
+
+    /* Shortcuts table */
+    .shortcuts-table {
+      width: 100%;
+      font-size: 12px;
+    }
+
+    .shortcuts-table td {
+      padding: 8px 0;
+      border-bottom: 1px solid var(--panel-border);
+    }
+
+    .shortcuts-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .shortcuts-table td:first-child {
+      color: var(--text-muted);
+      width: 80px;
+    }
+
+    .shortcuts-table kbd {
+      padding: 3px 6px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 11px;
+    }
+
+    /* Footer */
+    .modal-footer {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid var(--panel-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    /* =============================================================================
+       Notes
+       ============================================================================= */
+    .notes {
+      max-width: 1100px;
+      margin: 60px auto 0;
+      background: var(--bg-surface);
+      border-radius: 12px;
+      padding: 25px;
+    }
+
+    .notes h2 {
+      font-size: 16px;
+      margin-bottom: 16px;
+    }
+
+    .notes ul {
+      list-style: none;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 10px;
+    }
+
+    .notes li {
+      padding: 10px 14px;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 6px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .notes li::before {
+      content: '';
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      background: var(--accent-color);
+      border-radius: 50%;
+      margin-right: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Dropdown + Settings - Final Design</h1>
+  <p class="subtitle">Simple dropdown for input selection, separate settings modal for advanced options</p>
+
+  <div class="main-layout">
+    <!-- Left: Dropdown Panels (Dual and Single) -->
+    <div class="dropdown-section">
+      <div class="section-title">Dual Mode</div>
+      <div class="dropdown-panel">
+        <div class="view-mode-row">
+          <button class="view-mode-btn active">Dual</button>
+          <button class="view-mode-btn">Single</button>
+        </div>
+        <div class="column-layout">
+          <div class="column">
+            <div class="column-header">Left</div>
+            <div class="input-option selected">
+              <span class="num">1</span>
+              <span class="name">Laptop</span>
+            </div>
+            <div class="input-option">
+              <span class="num">2</span>
+              <span class="name">Desktop</span>
+            </div>
+            <div class="input-option">
+              <span class="num">3</span>
+              <span class="name">Camera</span>
+            </div>
+          </div>
+          <div class="column">
+            <div class="column-header">Right</div>
+            <div class="input-option">
+              <span class="num">1</span>
+              <span class="name">Laptop</span>
+            </div>
+            <div class="input-option selected">
+              <span class="num">2</span>
+              <span class="name">Desktop</span>
+            </div>
+            <div class="input-option">
+              <span class="num">3</span>
+              <span class="name">Camera</span>
+            </div>
+          </div>
+        </div>
+        <button class="settings-btn">
+          <span class="icon">&#9881;</span>
+          Settings
+        </button>
+      </div>
+
+      <div class="section-title" style="margin-top: 30px;">Single Mode</div>
+      <div class="dropdown-panel">
+        <div class="view-mode-row">
+          <button class="view-mode-btn">Dual</button>
+          <button class="view-mode-btn active">Single</button>
+        </div>
+        <div class="single-input-list">
+          <div class="single-input-option selected">
+            <span class="num">1</span>
+            <span class="name">Laptop</span>
+          </div>
+          <div class="single-input-option">
+            <span class="num">2</span>
+            <span class="name">Desktop</span>
+          </div>
+          <div class="single-input-option">
+            <span class="num">3</span>
+            <span class="name">Camera</span>
+          </div>
+        </div>
+        <button class="settings-btn" style="margin-top: 16px;">
+          <span class="icon">&#9881;</span>
+          Settings
+        </button>
+      </div>
+    </div>
+
+    <!-- Right: Settings Modal -->
+    <div class="settings-section">
+      <div class="section-title">Settings Modal (opens from button)</div>
+      <div class="settings-modal">
+        <div class="modal-header">
+          <h2>Settings</h2>
+          <button class="close-btn">&times;</button>
+        </div>
+
+        <!-- Input Names & Default -->
+        <div class="settings-section">
+          <h3>Inputs</h3>
+          <div class="input-name-list">
+            <div class="input-name-row">
+              <span class="num">1</span>
+              <div class="toggle-switch active"></div>
+              <input type="text" value="Laptop">
+              <button class="default-btn active">Default</button>
+            </div>
+            <div class="input-name-row">
+              <span class="num">2</span>
+              <div class="toggle-switch active"></div>
+              <input type="text" value="Desktop">
+              <button class="default-btn">Default</button>
+            </div>
+            <div class="input-name-row disabled">
+              <span class="num">3</span>
+              <div class="toggle-switch"></div>
+              <input type="text" value="Camera">
+              <button class="default-btn">Default</button>
+            </div>
+            <div class="input-name-row disabled">
+              <span class="num">4</span>
+              <div class="toggle-switch"></div>
+              <input type="text" value="Input 4">
+              <button class="default-btn">Default</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Layout Settings -->
+        <div class="settings-section">
+          <h3>Layout</h3>
+          <div class="slider-row">
+            <label>Center Gap</label>
+            <input type="range" min="20" max="200" value="60">
+            <span class="value">60px</span>
+          </div>
+          <div class="slider-row">
+            <label>Side Borders</label>
+            <input type="range" min="0" max="200" value="0">
+            <span class="value">0px</span>
+          </div>
+        </div>
+
+        <!-- No-Signal Detection -->
+        <div class="settings-section">
+          <h3>No-Signal Detection</h3>
+          <div class="setup-card">
+            <p>Capture what your capture card shows when there's no input connected, so the app can detect it automatically.</p>
+            <div class="setup-btn-row">
+              <button class="btn-primary">Capture Left Input</button>
+              <button class="btn-secondary">Capture Right Input</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Shortcuts Reference -->
+        <div class="settings-section">
+          <h3>Keyboard Shortcuts</h3>
+          <table class="shortcuts-table">
+            <tr>
+              <td><kbd>1</kbd>-<kbd>4</kbd></td>
+              <td>Select input</td>
+            </tr>
+            <tr>
+              <td><kbd>D</kbd> / <kbd>S</kbd></td>
+              <td>Dual / Single view</td>
+            </tr>
+            <tr>
+              <td><kbd>Space</kbd></td>
+              <td>Freeze frame</td>
+            </tr>
+            <tr>
+              <td><kbd>F</kbd></td>
+              <td>Fullscreen</td>
+            </tr>
+            <tr>
+              <td><kbd>Esc</kbd></td>
+              <td>Exit / Unfreeze</td>
+            </tr>
+          </table>
+        </div>
+
+        <div class="modal-footer">
+          <span>Input Viewer v2.2.1</span>
+          <span>Labs for Space</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <h2>Design Summary</h2>
+    <ul>
+      <li><strong>View mode:</strong> Dual/Single toggle at top of dropdown</li>
+      <li><strong>Dual mode:</strong> Two columns for Left/Right input selection</li>
+      <li><strong>Single mode:</strong> One list to select the single displayed input</li>
+      <li><strong>Settings button:</strong> Opens modal for advanced configuration</li>
+      <li><strong>Enable/Disable:</strong> Toggle switch per input - disabled inputs hidden from dropdown</li>
+      <li><strong>Input names:</strong> Editable in settings, not in dropdown</li>
+      <li><strong>Default input:</strong> Set per-input in settings (shows at startup)</li>
+      <li><strong>Layout sliders:</strong> Center gap and side borders in settings</li>
+      <li><strong>No-signal setup:</strong> Capture reference images in settings</li>
+      <li>Dropdown is minimal - just select L/R, nothing else</li>
+    </ul>
+  </div>
+</body>
+</html>

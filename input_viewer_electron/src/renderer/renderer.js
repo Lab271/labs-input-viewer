@@ -8,7 +8,6 @@ import {
   checkNoSignal,
   isReady as isDetectionReady,
   saveReferenceScreenshot,
-  hasReferenceScreenshot,
   captureScreenshot,
   serializeReferences,
   deserializeReferences
@@ -38,6 +37,7 @@ const state = {
   borderWidth: 0,
   frozen: false,
   settings: null, // Will be loaded from file
+  defaultInputId: null, // Which input loads at startup
   // No-signal detection state
   detectionCanvas: null,
   detectionRunning: false,
@@ -72,27 +72,30 @@ const elements = {
   freezeCanvas: document.getElementById('freeze-canvas'),
   dropdownTrigger: document.getElementById('dropdown-trigger'),
   dropdownPanel: document.getElementById('dropdown-panel'),
-  inputList: document.getElementById('input-list'),
-  layoutDual: document.getElementById('layout-dual'),
-  layoutSingle: document.getElementById('layout-single'),
-  centerGap: document.getElementById('center-gap'),
-  centerGapValue: document.getElementById('center-gap-value'),
-  borderWidth: document.getElementById('border-width'),
-  borderWidthValue: document.getElementById('border-width-value'),
   updateNotification: document.getElementById('update-notification'),
   updateMessage: document.getElementById('update-message'),
-  // Setup wizard elements
-  setupWizard: document.getElementById('setup-wizard'),
-  setupDetectionBtn: document.getElementById('setup-detection-btn'),
-  wizardCaptureBtn: document.getElementById('wizard-capture-btn'),
-  wizardSkipBtn: document.getElementById('wizard-skip-btn'),
-  wizardPreviewCanvas: document.getElementById('wizard-preview-canvas'),
-  wizardPreviewStatus: document.getElementById('wizard-preview-status'),
+  // New dropdown elements
+  viewModeDual: document.getElementById('view-mode-dual'),
+  viewModeSingle: document.getElementById('view-mode-single'),
+  dualColumns: document.getElementById('dual-columns'),
+  leftInputList: document.getElementById('left-input-list'),
+  rightInputList: document.getElementById('right-input-list'),
+  singleInputList: document.getElementById('single-input-list'),
+  openSettingsBtn: document.getElementById('open-settings-btn'),
+  // New settings modal elements
+  settingsModal: document.getElementById('settings-modal'),
+  closeSettingsBtn: document.getElementById('close-settings-btn'),
+  settingsInputList: document.getElementById('settings-input-list'),
+  settingsCenterGap: document.getElementById('settings-center-gap'),
+  settingsCenterGapValue: document.getElementById('settings-center-gap-value'),
+  settingsBorderWidth: document.getElementById('settings-border-width'),
+  settingsBorderWidthValue: document.getElementById('settings-border-width-value'),
+  captureLeftBtn: document.getElementById('capture-left-btn'),
+  captureRightBtn: document.getElementById('capture-right-btn'),
+  settingsAppVersion: document.getElementById('settings-app-version'),
   // Cached label references (avoids DOM queries in hot paths)
   leftLabel: document.querySelector('#left-feed .input-label'),
   rightLabel: document.querySelector('#right-feed .input-label'),
-  // Version display
-  appVersion: document.getElementById('app-version'),
   // DVD screensaver overlay
   dvdOverlay: document.getElementById('dvd-overlay'),
   dvdLogo: document.getElementById('dvd-logo')
@@ -188,7 +191,8 @@ function toggleInputEnabled(deviceId) {
   }
   state.settings.inputs[deviceId].enabled = !state.settings.inputs[deviceId].enabled
   saveSettings()
-  renderInputList()
+  renderDropdownInputLists()
+  renderSettingsInputList()
 }
 
 // =============================================================================
@@ -319,7 +323,7 @@ async function getVideoDevices() {
       }
     }
     
-    renderInputList()
+    renderDropdownInputLists()
     return state.devices
   } catch (error) {
     console.error('Error getting video devices:', error)
@@ -500,11 +504,14 @@ function hideDvdScreensaver() {
 function setLayout(mode) {
   state.layoutMode = mode
   state.settings.layoutMode = mode
-  
-  // Update layout button states
-  elements.layoutDual.classList.toggle('active', mode === 'dual')
-  elements.layoutSingle.classList.toggle('active', mode === 'single')
-  
+
+  // Update view mode button states in dropdown
+  elements.viewModeDual.classList.toggle('active', mode === 'dual')
+  elements.viewModeSingle.classList.toggle('active', mode === 'single')
+
+  // Update dropdown input list visibility
+  updateDropdownVisibility()
+
   switch (mode) {
     case 'dual':
       document.body.classList.remove('single-view')
@@ -523,7 +530,7 @@ function setLayout(mode) {
       elements.bottomLogo.classList.add('hidden')
       break
   }
-  
+
   saveSettings()
 }
 
@@ -531,7 +538,7 @@ function setCenterGap(gap) {
   state.centerGap = gap
   state.settings.centerGap = gap
   elements.centerDivider.style.width = `${gap}px`
-  elements.centerGapValue.textContent = `${gap}px`
+  elements.settingsCenterGapValue.textContent = `${gap}px`
   debouncedSaveSettings()
 }
 
@@ -539,7 +546,7 @@ function setBorderWidth(width) {
   state.borderWidth = width
   state.settings.borderWidth = width
   document.documentElement.style.setProperty('--border-width', `${width}px`)
-  elements.borderWidthValue.textContent = `${width}px`
+  elements.settingsBorderWidthValue.textContent = `${width}px`
   debouncedSaveSettings()
 }
 
@@ -566,7 +573,7 @@ async function selectInput(index, side = 'both') {
   const name = getInputName(device.deviceId, device.label || `Input ${index + 1}`)
   showInputName(name)
   saveSettings()
-  renderInputList()
+  renderDropdownInputLists()
 }
 
 function showInputName(name) {
@@ -583,59 +590,208 @@ function showInputName(name) {
 // UI Rendering
 // =============================================================================
 
-function renderInputList() {
-  elements.inputList.innerHTML = ''
-  
-  state.devices.forEach((device, index) => {
-    const item = document.createElement('div')
-    const isEnabled = isInputEnabled(device.deviceId)
-    item.className = `input-item${isEnabled ? '' : ' disabled'}`
-    
+/**
+ * Update dropdown visibility based on layout mode
+ */
+function updateDropdownVisibility() {
+  if (state.layoutMode === 'dual') {
+    elements.dualColumns.classList.remove('hidden')
+    elements.singleInputList.classList.add('hidden')
+  } else {
+    elements.dualColumns.classList.add('hidden')
+    elements.singleInputList.classList.remove('hidden')
+  }
+}
+
+/**
+ * Render the simplified dropdown input lists (enabled inputs only)
+ */
+function renderDropdownInputLists() {
+  // Clear lists
+  elements.leftInputList.innerHTML = ''
+  elements.rightInputList.innerHTML = ''
+  elements.singleInputList.innerHTML = ''
+
+  // Filter to enabled devices only
+  const enabledDevices = state.devices.filter(d => isInputEnabled(d.deviceId))
+
+  enabledDevices.forEach((device, index) => {
+    const customName = getInputName(device.deviceId, device.label || `Input ${index + 1}`)
     const isLeftActive = device.deviceId === state.leftDeviceId
     const isRightActive = device.deviceId === state.rightDeviceId
+
+    // Left column option
+    const leftOption = document.createElement('div')
+    leftOption.className = `input-option${isLeftActive ? ' selected' : ''}`
+    leftOption.textContent = customName
+    leftOption.addEventListener('click', () => {
+      selectInputForSide(device.deviceId, 'left')
+    })
+    elements.leftInputList.appendChild(leftOption)
+
+    // Right column option
+    const rightOption = document.createElement('div')
+    rightOption.className = `input-option${isRightActive ? ' selected' : ''}`
+    rightOption.textContent = customName
+    rightOption.addEventListener('click', () => {
+      selectInputForSide(device.deviceId, 'right')
+    })
+    elements.rightInputList.appendChild(rightOption)
+
+    // Single mode option
+    const singleOption = document.createElement('div')
+    singleOption.className = `single-input-option${isLeftActive ? ' selected' : ''}`
+    singleOption.textContent = customName
+    singleOption.addEventListener('click', () => {
+      selectInputForSide(device.deviceId, 'left')
+    })
+    elements.singleInputList.appendChild(singleOption)
+  })
+}
+
+/**
+ * Select a specific input for a side
+ */
+async function selectInputForSide(deviceId, side) {
+  const device = state.devices.find(d => d.deviceId === deviceId)
+  if (!device) return
+
+  if (side === 'left') {
+    state.leftDeviceId = deviceId
+    await startVideoStream(deviceId, elements.leftVideo, 'left')
+  } else {
+    state.rightDeviceId = deviceId
+    await startVideoStream(deviceId, elements.rightVideo, 'right')
+  }
+
+  const name = getInputName(deviceId, device.label || 'Input')
+  showInputName(name)
+  saveSettings()
+  renderDropdownInputLists()
+}
+
+/**
+ * Render the settings modal input list
+ */
+function renderSettingsInputList() {
+  elements.settingsInputList.innerHTML = ''
+
+  state.devices.forEach((device, index) => {
+    const isEnabled = isInputEnabled(device.deviceId)
     const customName = getInputName(device.deviceId, device.label || `Input ${index + 1}`)
-    
-    item.innerHTML = `
-      <div class="input-number">${index + 1}</div>
-      <div class="input-name-wrapper">
-        <input type="text" class="input-name-field" value="${customName}" data-device-id="${device.deviceId}" />
-      </div>
-      <div class="input-actions">
-        <div class="toggle-switch ${isEnabled ? 'active' : ''}" data-device-id="${device.deviceId}" title="Enable/Disable"></div>
-        <button class="left-btn ${isLeftActive ? 'active' : ''}" data-index="${index}" ${!isEnabled ? 'disabled' : ''}>L</button>
-        <button class="right-btn ${isRightActive ? 'active' : ''}" data-index="${index}" ${!isEnabled ? 'disabled' : ''}>R</button>
-      </div>
+    const isDefault = state.defaultInputId === device.deviceId
+
+    const row = document.createElement('div')
+    row.className = 'input-name-row'
+
+    row.innerHTML = `
+      <span class="input-number">${index + 1}</span>
+      <div class="toggle-switch ${isEnabled ? 'active' : ''}" data-device-id="${device.deviceId}"></div>
+      <input type="text" class="input-name-field" value="${customName}" data-device-id="${device.deviceId}" />
+      <button class="default-btn${isDefault ? ' active' : ''}" data-device-id="${device.deviceId}">Default</button>
     `
-    
-    // Add event handlers
-    const nameField = item.querySelector('.input-name-field')
+
+    // Toggle switch event
+    const toggleSwitch = row.querySelector('.toggle-switch')
+    toggleSwitch.addEventListener('click', () => {
+      toggleInputEnabled(device.deviceId)
+    })
+
+    // Name field events
+    const nameField = row.querySelector('.input-name-field')
     nameField.addEventListener('change', (e) => {
       setInputName(device.deviceId, e.target.value)
+      renderDropdownInputLists() // Update dropdown with new name
     })
     nameField.addEventListener('keydown', (e) => {
-      e.stopPropagation() // Prevent global keyboard shortcuts
+      e.stopPropagation()
       if (e.key === 'Enter') {
         e.target.blur()
       }
     })
-    
-    const toggleSwitch = item.querySelector('.toggle-switch')
-    toggleSwitch.addEventListener('click', () => {
-      toggleInputEnabled(device.deviceId)
+
+    // Default button event
+    const defaultBtn = row.querySelector('.default-btn')
+    defaultBtn.addEventListener('click', () => {
+      setDefaultInput(device.deviceId)
     })
-    
-    const leftBtn = item.querySelector('.left-btn')
-    leftBtn.addEventListener('click', () => {
-      if (isEnabled) selectInput(index, 'left')
-    })
-    
-    const rightBtn = item.querySelector('.right-btn')
-    rightBtn.addEventListener('click', () => {
-      if (isEnabled) selectInput(index, 'right')
-    })
-    
-    elements.inputList.appendChild(item)
+
+    elements.settingsInputList.appendChild(row)
   })
+}
+
+/**
+ * Set the default input for startup
+ */
+function setDefaultInput(deviceId) {
+  state.defaultInputId = deviceId
+  state.settings.defaultInputId = deviceId
+  saveSettings()
+  renderSettingsInputList() // Re-render to update button states
+}
+
+/**
+ * Show the settings modal
+ */
+function showSettingsModal() {
+  elements.settingsModal.classList.remove('hidden')
+  renderSettingsInputList()
+}
+
+/**
+ * Hide the settings modal
+ */
+function hideSettingsModal() {
+  elements.settingsModal.classList.add('hidden')
+}
+
+/**
+ * Capture no-signal reference for a specific side
+ */
+async function captureNoSignalForSide(side) {
+  const video = side === 'left' ? elements.leftVideo : elements.rightVideo
+  const deviceId = side === 'left' ? state.leftDeviceId : state.rightDeviceId
+
+  if (!deviceId) {
+    console.error(`[Setup] No device selected for ${side}`)
+    return
+  }
+
+  if (!video || !video.srcObject || video.readyState < 2) {
+    console.error(`[Setup] Video feed not ready for ${side}`)
+    return
+  }
+
+  // Capture screenshot
+  const canvas = document.createElement('canvas')
+  const imageData = captureScreenshot(video, canvas)
+
+  if (!imageData) {
+    console.error(`[Setup] Failed to capture screenshot for ${side}`)
+    return
+  }
+
+  // Save reference
+  saveReferenceScreenshot(deviceId, imageData)
+
+  // Mark initial setup as complete
+  state.settings.initialSetupComplete = true
+
+  // Save to settings
+  state.settings.noSignalReferences = serializeReferences()
+  await saveSettings()
+
+  console.log(`[Setup] No-signal reference captured for ${side} (${deviceId})`)
+
+  // Visual feedback - briefly change button text
+  const btn = side === 'left' ? elements.captureLeftBtn : elements.captureRightBtn
+  const originalText = btn.textContent
+  btn.textContent = '✓ Captured!'
+  btn.disabled = true
+  setTimeout(() => {
+    btn.textContent = originalText
+    btn.disabled = false
+  }, 1500)
 }
 
 // =============================================================================
@@ -697,60 +853,70 @@ function handleKeyDown(event) {
 function setupEventListeners() {
   // Mouse movement shows cursor
   document.addEventListener('mousemove', showCursor)
-  
+
   // Keyboard shortcuts
   document.addEventListener('keydown', handleKeyDown)
-  
+
   // Keep cursor visible when hovering dropdown
   elements.dropdownTrigger.addEventListener('mouseenter', () => {
     document.body.classList.add('cursor-visible')
     clearTimeout(state.cursorTimeout)
   })
-  
+
   elements.dropdownPanel.addEventListener('mouseenter', () => {
     document.body.classList.add('cursor-visible')
     clearTimeout(state.cursorTimeout)
   })
-  
+
   elements.dropdownPanel.addEventListener('mouseleave', () => {
     showCursor() // Reset cursor timeout
   })
-  
-  // Layout mode buttons
-  elements.layoutDual.addEventListener('click', () => setLayout('dual'))
-  elements.layoutSingle.addEventListener('click', () => setLayout('single'))
-  
-  // Gap and border sliders
-  elements.centerGap.addEventListener('input', (e) => {
+
+  // View mode buttons in dropdown
+  elements.viewModeDual.addEventListener('click', () => setLayout('dual'))
+  elements.viewModeSingle.addEventListener('click', () => setLayout('single'))
+
+  // Settings button opens modal
+  elements.openSettingsBtn.addEventListener('click', () => {
+    showSettingsModal()
+  })
+
+  // Close settings modal
+  elements.closeSettingsBtn.addEventListener('click', () => {
+    hideSettingsModal()
+  })
+
+  // Close modal on backdrop click
+  elements.settingsModal.addEventListener('click', (e) => {
+    if (e.target === elements.settingsModal) {
+      hideSettingsModal()
+    }
+  })
+
+  // Settings modal sliders
+  elements.settingsCenterGap.addEventListener('input', (e) => {
     setCenterGap(parseInt(e.target.value))
   })
-  
-  elements.borderWidth.addEventListener('input', (e) => {
+
+  elements.settingsBorderWidth.addEventListener('input', (e) => {
     setBorderWidth(parseInt(e.target.value))
   })
-  
-  // Setup wizard buttons
-  elements.setupDetectionBtn.addEventListener('click', () => {
-    console.log('[Setup] Setup button clicked')
-    showSetupWizard()
+
+  // No-signal capture buttons
+  elements.captureLeftBtn.addEventListener('click', () => {
+    captureNoSignalForSide('left')
   })
-  
-  elements.wizardCaptureBtn.addEventListener('click', () => {
-    console.log('[Setup] Capture button clicked')
-    captureNoSignalReference()
+
+  elements.captureRightBtn.addEventListener('click', () => {
+    captureNoSignalForSide('right')
   })
-  
-  elements.wizardSkipBtn.addEventListener('click', () => {
-    console.log('[Setup] Skip button clicked')
-    hideSetupWizard()
-  })
-  
+
   // Device changes (when plugging/unplugging devices)
   navigator.mediaDevices.addEventListener('devicechange', async () => {
     console.log('Device change detected')
     await getVideoDevices()
   })
-  
+
   // Auto-updater download progress
   if (window.electronAPI && window.electronAPI.onUpdaterProgress) {
     window.electronAPI.onUpdaterProgress((percent) => {
@@ -910,107 +1076,6 @@ function stopDetectionLoop() {
 }
 
 // =============================================================================
-// Setup Wizard
-// =============================================================================
-
-/**
- * Show the setup wizard
- */
-function showSetupWizard() {
-  elements.setupWizard.classList.remove('hidden')
-  
-  // Start preview update loop
-  updateWizardPreview()
-}
-
-/**
- * Hide the setup wizard
- */
-function hideSetupWizard() {
-  elements.setupWizard.classList.add('hidden')
-}
-
-/**
- * Update wizard preview canvas with current video feed
- */
-function updateWizardPreview() {
-  // Early exit if wizard is closed (before any work)
-  if (elements.setupWizard.classList.contains('hidden')) {
-    return
-  }
-
-  const selectedInput = document.querySelector('input[name="wizard-input"]:checked').value
-  const video = selectedInput === 'left' ? elements.leftVideo : elements.rightVideo
-
-  if (video && video.srcObject && video.readyState >= 2) {
-    const ctx = elements.wizardPreviewCanvas.getContext('2d')
-    elements.wizardPreviewCanvas.width = video.videoWidth || 640
-    elements.wizardPreviewCanvas.height = video.videoHeight || 480
-    ctx.drawImage(video, 0, 0, elements.wizardPreviewCanvas.width, elements.wizardPreviewCanvas.height)
-    elements.wizardPreviewStatus.textContent = 'Live preview - ready to capture'
-    elements.wizardPreviewStatus.style.color = 'var(--text-muted)'
-  } else {
-    elements.wizardPreviewStatus.textContent = 'No video feed available'
-    elements.wizardPreviewStatus.style.color = '#ff4444'
-  }
-
-  // Only schedule next frame if wizard is still open (avoids race condition)
-  if (!elements.setupWizard.classList.contains('hidden')) {
-    requestAnimationFrame(updateWizardPreview)
-  }
-}
-
-/**
- * Capture no-signal screenshot from wizard
- */
-async function captureNoSignalReference() {
-  const selectedInput = document.querySelector('input[name="wizard-input"]:checked').value
-  const video = selectedInput === 'left' ? elements.leftVideo : elements.rightVideo
-  const deviceId = selectedInput === 'left' ? state.leftDeviceId : state.rightDeviceId
-  
-  if (!deviceId) {
-    elements.wizardPreviewStatus.textContent = 'Error: No device selected'
-    elements.wizardPreviewStatus.style.color = '#ff4444'
-    return
-  }
-  
-  if (!video || !video.srcObject || video.readyState < 2) {
-    elements.wizardPreviewStatus.textContent = 'Error: Video feed not ready'
-    elements.wizardPreviewStatus.style.color = '#ff4444'
-    return
-  }
-  
-  // Capture screenshot
-  const canvas = document.createElement('canvas')
-  const imageData = captureScreenshot(video, canvas)
-  
-  if (!imageData) {
-    elements.wizardPreviewStatus.textContent = 'Error: Failed to capture screenshot'
-    elements.wizardPreviewStatus.style.color = '#ff4444'
-    return
-  }
-  
-  // Save reference
-  saveReferenceScreenshot(deviceId, imageData)
-  
-  // Mark initial setup as complete
-  state.settings.initialSetupComplete = true
-  
-  // Save to settings
-  state.settings.noSignalReferences = serializeReferences()
-  await saveSettings()
-  
-  // Show success
-  elements.wizardPreviewStatus.textContent = '✓ Captured successfully!'
-  elements.wizardPreviewStatus.style.color = '#00ff00'
-  
-  // Close wizard after a delay
-  setTimeout(() => {
-    hideSetupWizard()
-  }, 1500)
-}
-
-// =============================================================================
 // Initialization
 // =============================================================================
 
@@ -1021,8 +1086,8 @@ async function init() {
   if (window.electronAPI && window.electronAPI.getAppVersion) {
     try {
       const version = await window.electronAPI.getAppVersion()
-      if (elements.appVersion) {
-        elements.appVersion.textContent = `Input Viewer v${version}`
+      if (elements.settingsAppVersion) {
+        elements.settingsAppVersion.textContent = `Input Viewer v${version}`
       }
     } catch (e) {
       console.error('Error getting app version:', e)
@@ -1031,10 +1096,13 @@ async function init() {
 
   // Load settings from file
   state.settings = await loadSettings()
-  
+
+  // Load default input from settings
+  state.defaultInputId = state.settings.defaultInputId || null
+
   // Setup event listeners
   setupEventListeners()
-  
+
   // Detect screen aspect ratio and set default layout
   // If aspect ratio >= 3:1 (super wide) → dual view
   // If aspect ratio < 3:1 (normal/square) → single view
@@ -1043,34 +1111,45 @@ async function init() {
   console.log(`Calculated screen aspect ratio: ${screenAspectRatio.toFixed(2)}`)
   const defaultLayout = screenAspectRatio >= 3 ? 'dual' : 'single'
   console.log(`Screen aspect ratio: ${screenAspectRatio.toFixed(2)} → default layout: ${defaultLayout}`)
-  
+
   // Use saved layout mode if available, otherwise use screen-based default
   const layoutMode = state.settings.layoutMode || defaultLayout
   setLayout(layoutMode)
-  
+
   // Initialize center gap and border width from settings
   const centerGap = state.settings.centerGap || 60
   setCenterGap(centerGap)
-  elements.centerGap.value = centerGap
-  
+  elements.settingsCenterGap.value = centerGap
+
   const borderWidth = state.settings.borderWidth || 0
   setBorderWidth(borderWidth)
-  elements.borderWidth.value = borderWidth
-  
+  elements.settingsBorderWidth.value = borderWidth
+
   // Get video devices and start streams
   await getVideoDevices()
-  
+
   // Start video streams
   if (state.devices.length > 0) {
+    // Use default input if set and device exists
+    if (state.defaultInputId) {
+      const defaultDevice = state.devices.find(d => d.deviceId === state.defaultInputId)
+      if (defaultDevice && isInputEnabled(state.defaultInputId)) {
+        state.leftDeviceId = state.defaultInputId
+        if (layoutMode === 'dual') {
+          state.rightDeviceId = state.defaultInputId
+        }
+      }
+    }
+
     // Always start left stream
     await startVideoStream(state.leftDeviceId, elements.leftVideo, 'left')
-    
+
     // Start right stream in dual mode
     if (layoutMode === 'dual' && state.rightDeviceId) {
       await startVideoStream(state.rightDeviceId, elements.rightVideo, 'right')
     }
   }
-  
+
   // Initialize DVD bouncing logo
   initBouncingLogo(elements.dvdLogo, elements.dvdOverlay)
 
@@ -1078,16 +1157,13 @@ async function init() {
   initNoSignalDetection().catch(err => {
     console.error('[Detection] Initialization error:', err)
   })
-  
-  // Auto-start setup wizard if this is first launch
-  if (!state.settings.initialSetupComplete && state.devices.length > 0) {
-    console.log('[Setup] First launch detected, showing setup wizard')
-    setTimeout(() => showSetupWizard(), 1000) // Delay to let video feeds initialize
-  }
-  
+
+  // Render dropdown input lists
+  renderDropdownInputLists()
+
   // Show cursor initially
   showCursor()
-  
+
   console.log('Input Viewer ready')
 }
 
