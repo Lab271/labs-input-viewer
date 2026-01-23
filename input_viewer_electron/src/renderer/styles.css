@@ -551,7 +551,433 @@ kbd {
 }
 
 /* =============================================================================
-   Input List
+   Dropdown - View Mode Toggle
+   ============================================================================= */
+
+.view-mode-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.view-mode-btn {
+  flex: 1;
+  padding: 10px 16px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+}
+
+.view-mode-btn:hover {
+  background: var(--hover-color);
+}
+
+.view-mode-btn.active {
+  background: var(--accent-color);
+  color: white;
+}
+
+/* =============================================================================
+   Dropdown - Column Layout (Dual Mode)
+   ============================================================================= */
+
+.column-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.column {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.column-header {
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 10px;
+  text-align: center;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* =============================================================================
+   Dropdown - Input Options
+   ============================================================================= */
+
+.input-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-bottom: 4px;
+  transition: all 0.15s;
+}
+
+.input-option:last-child {
+  margin-bottom: 0;
+}
+
+.input-option:hover {
+  background-color: var(--hover-color);
+}
+
+.input-option.selected {
+  background-color: var(--accent-color);
+}
+
+.input-option .num {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.6;
+  width: 16px;
+}
+
+.input-option.selected .num {
+  opacity: 1;
+}
+
+.input-option .name {
+  font-size: 13px;
+}
+
+/* =============================================================================
+   Dropdown - Single Input List (Single Mode)
+   ============================================================================= */
+
+.single-input-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.single-input-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.single-input-option:hover {
+  background-color: var(--hover-color);
+}
+
+.single-input-option.selected {
+  background-color: var(--accent-color);
+}
+
+.single-input-option .num {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.6;
+  width: 18px;
+}
+
+.single-input-option.selected .num {
+  opacity: 1;
+}
+
+.single-input-option .name {
+  font-size: 14px;
+}
+
+/* =============================================================================
+   Dropdown - Settings Button
+   ============================================================================= */
+
+.settings-btn {
+  width: 100%;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.15s;
+}
+
+.settings-btn:hover {
+  background: var(--hover-color);
+  color: var(--text-color);
+}
+
+.settings-btn .icon {
+  font-size: 14px;
+}
+
+/* =============================================================================
+   Settings Modal
+   ============================================================================= */
+
+.settings-modal-content {
+  background: var(--panel-bg);
+  border-radius: 12px;
+  padding: 24px;
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--panel-border);
+  max-width: 500px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.modal-header h2 {
+  font-size: 18px;
+  font-weight: 500;
+  margin: 0;
+}
+
+.close-btn {
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.close-btn:hover {
+  background: var(--hover-color);
+  color: var(--text-color);
+}
+
+.settings-section {
+  margin-bottom: 28px;
+}
+
+.settings-section:last-of-type {
+  margin-bottom: 0;
+}
+
+.settings-section h3 {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin: 0 0 14px 0;
+}
+
+/* =============================================================================
+   Settings Modal - Input Name List
+   ============================================================================= */
+
+.input-name-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.input-name-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.input-name-row .num {
+  width: 24px;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.input-name-row input[type="text"] {
+  flex: 1;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  color: var(--text-color);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.input-name-row input[type="text"]:focus {
+  border-color: var(--accent-color);
+}
+
+.input-name-row .default-btn {
+  padding: 8px 12px;
+  background: transparent;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.input-name-row .default-btn:hover {
+  background: var(--hover-color);
+}
+
+.input-name-row .default-btn.active {
+  background: rgba(245, 158, 11, 0.2);
+  border-color: #f59e0b;
+  color: #f59e0b;
+}
+
+.input-name-row.disabled input[type="text"] {
+  opacity: 0.4;
+}
+
+.input-name-row.disabled .default-btn {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* =============================================================================
+   Settings Modal - Slider Rows
+   ============================================================================= */
+
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.slider-row:last-child {
+  margin-bottom: 0;
+}
+
+.slider-row label {
+  width: 100px;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.slider-row input[type="range"] {
+  flex: 1;
+  accent-color: var(--accent-color);
+}
+
+.slider-row .value {
+  width: 50px;
+  text-align: right;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* =============================================================================
+   Settings Modal - No-Signal Setup Card
+   ============================================================================= */
+
+.setup-card {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.setup-card p {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0 0 12px 0;
+  line-height: 1.5;
+}
+
+.setup-btn-row {
+  display: flex;
+  gap: 10px;
+}
+
+.setup-btn-row button {
+  flex: 1;
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+/* =============================================================================
+   Settings Modal - Shortcuts Table
+   ============================================================================= */
+
+.shortcuts-table {
+  width: 100%;
+  font-size: 12px;
+  border-collapse: collapse;
+}
+
+.shortcuts-table td {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.shortcuts-table tr:last-child td {
+  border-bottom: none;
+}
+
+.shortcuts-table td:first-child {
+  color: var(--text-muted);
+  width: 80px;
+}
+
+/* =============================================================================
+   Settings Modal - Footer
+   ============================================================================= */
+
+.modal-footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--panel-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* =============================================================================
+   Input List (legacy - keeping for compatibility)
    ============================================================================= */
 
 #input-list {

@@ -80,56 +80,35 @@
     <span class="dropdown-arrow">▼</span>
   </div>
 
-  <!-- Combined Dropdown Panel -->
+  <!-- Dropdown Panel (simplified) -->
   <div id="dropdown-panel">
     <div class="dropdown-content">
-      <div class="dropdown-section">
-        <h4>Inputs</h4>
-        <div id="input-list"></div>
+      <!-- View Mode Toggle -->
+      <div class="view-mode-row">
+        <button id="view-mode-dual" class="view-mode-btn active">Dual</button>
+        <button id="view-mode-single" class="view-mode-btn">Single</button>
       </div>
-      
-      <div class="dropdown-section">
-        <h4>Layout</h4>
-        <div class="setting-row">
-          <label>View Mode</label>
-          <div class="layout-buttons">
-            <button id="layout-dual" class="layout-btn active" title="Double View">D</button>
-            <button id="layout-single" class="layout-btn" title="Single View">S</button>
-          </div>
+
+      <!-- Dual mode: Two columns -->
+      <div id="dual-columns" class="column-layout">
+        <div class="column">
+          <div class="column-header">Left</div>
+          <div id="left-input-list"></div>
         </div>
-        <div class="setting-row">
-          <label>Center Gap</label>
-          <input type="range" id="center-gap" min="20" max="200" value="60">
-          <span id="center-gap-value">60px</span>
-        </div>
-        <div class="setting-row">
-          <label>Borders</label>
-          <input type="range" id="border-width" min="0" max="200" value="0">
-          <span id="border-width-value">0px</span>
+        <div class="column">
+          <div class="column-header">Right</div>
+          <div id="right-input-list"></div>
         </div>
       </div>
-      
-      <div class="dropdown-section">
-        <h4>Shortcuts</h4>
-        <table>
-          <tr><td><kbd>1</kbd>-<kbd>4</kbd></td><td>Select input</td></tr>
-          <tr><td><kbd>Space</kbd></td><td>Freeze frame</td></tr>
-          <tr><td><kbd>F</kbd></td><td>Fullscreen</td></tr>
-          <tr><td><kbd>Esc</kbd></td><td>Exit/unfreeze</td></tr>
-          <tr><td><kbd>Q</kbd></td><td>Quit</td></tr>
-        </table>
-      </div>
-      
-      <div class="dropdown-section">
-        <button id="setup-detection-btn" class="setup-btn">
-          📷 Setup No-Signal Detection
-        </button>
-      </div>
-      
-      <div class="dropdown-footer">
-        <span id="app-version">Input Viewer</span>
-        <span>© Labs for Space</span>
-      </div>
+
+      <!-- Single mode: One list -->
+      <div id="single-input-list" class="single-input-list hidden"></div>
+
+      <!-- Settings button -->
+      <button id="open-settings-btn" class="settings-btn">
+        <span class="icon">&#9881;</span>
+        Settings
+      </button>
     </div>
   </div>
 
@@ -138,54 +117,62 @@
     <span id="update-message"></span>
   </div>
 
-  <!-- Setup Wizard Modal -->
-  <div id="setup-wizard" class="modal hidden">
-    <div class="modal-content">
-      <h2>No-Signal Detection Setup</h2>
-      <p class="wizard-instructions">
-        To detect when your capture card shows "no signal", we need to capture what that screen looks like.
-      </p>
-      <div class="wizard-steps">
-        <div class="wizard-step">
-          <div class="step-number">1</div>
-          <div class="step-content">
-            <h3>Disconnect your video source</h3>
-            <p>Unplug the HDMI cable or turn off your device so the capture card shows its "no signal" screen.</p>
-          </div>
+  <!-- Settings Modal -->
+  <div id="settings-modal" class="modal hidden">
+    <div class="settings-modal-content">
+      <div class="modal-header">
+        <h2>Settings</h2>
+        <button id="close-settings-btn" class="close-btn">&times;</button>
+      </div>
+
+      <!-- Inputs Section -->
+      <div class="settings-section">
+        <h3>Inputs</h3>
+        <div id="settings-input-list" class="input-name-list"></div>
+      </div>
+
+      <!-- Layout Section -->
+      <div class="settings-section">
+        <h3>Layout</h3>
+        <div class="slider-row">
+          <label>Center Gap</label>
+          <input type="range" id="settings-center-gap" min="20" max="200" value="60">
+          <span id="settings-center-gap-value">60px</span>
         </div>
-        <div class="wizard-step">
-          <div class="step-number">2</div>
-          <div class="step-content">
-            <h3>Select which input to calibrate</h3>
-            <div class="wizard-input-select">
-              <label>
-                <input type="radio" name="wizard-input" value="left" checked>
-                Left Input
-              </label>
-              <label>
-                <input type="radio" name="wizard-input" value="right">
-                Right Input
-              </label>
-            </div>
-          </div>
+        <div class="slider-row">
+          <label>Side Borders</label>
+          <input type="range" id="settings-border-width" min="0" max="200" value="0">
+          <span id="settings-border-width-value">0px</span>
         </div>
-        <div class="wizard-step">
-          <div class="step-number">3</div>
-          <div class="step-content">
-            <h3>Preview and capture</h3>
-            <div class="wizard-preview">
-              <canvas id="wizard-preview-canvas"></canvas>
-              <div id="wizard-preview-status" class="preview-status">Ready to capture</div>
-            </div>
+      </div>
+
+      <!-- No-Signal Detection Section -->
+      <div class="settings-section">
+        <h3>No-Signal Detection</h3>
+        <div class="setup-card">
+          <p>Capture what your capture card shows when there's no input connected, so the app can detect it automatically.</p>
+          <div class="setup-btn-row">
+            <button id="capture-left-btn" class="btn-primary">Capture Left</button>
+            <button id="capture-right-btn" class="btn-secondary">Capture Right</button>
           </div>
         </div>
       </div>
-      <div class="wizard-actions">
-        <button id="wizard-capture-btn" class="btn-primary">Capture No-Signal Screen</button>
-        <button id="wizard-skip-btn" class="btn-secondary">Skip Setup</button>
+
+      <!-- Shortcuts Section -->
+      <div class="settings-section">
+        <h3>Keyboard Shortcuts</h3>
+        <table class="shortcuts-table">
+          <tr><td><kbd>1</kbd>-<kbd>4</kbd></td><td>Select input</td></tr>
+          <tr><td><kbd>D</kbd> / <kbd>S</kbd></td><td>Dual / Single view</td></tr>
+          <tr><td><kbd>Space</kbd></td><td>Freeze frame</td></tr>
+          <tr><td><kbd>F</kbd></td><td>Fullscreen</td></tr>
+          <tr><td><kbd>Esc</kbd></td><td>Exit / Unfreeze</td></tr>
+        </table>
       </div>
-      <div class="wizard-footer">
-        You can recalibrate anytime from the settings panel.
+
+      <div class="modal-footer">
+        <span id="settings-app-version">Input Viewer</span>
+        <span>Labs for Space</span>
       </div>
     </div>
   </div>
