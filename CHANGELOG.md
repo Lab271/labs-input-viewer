@@ -5,24 +5,134 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.5.3] - 2024-12-24
+---
 
-### Added
+## Electron Version (v2.x)
+
+### [2.2.1] - 2026-01-23
+
+#### Fixed
+
+- Build artifacts now have correct version in filenames
+
+### [2.2.0] - 2026-01-19
+
+#### Added
+
+- DVD-style bouncing logo screensaver when feeds lose signal
+  - Bouncing logo animation with color changes on bounce
+  - 5-minute delay before screensaver activates
+  - Activates when all feeds show no-signal
+
+#### Changed
+
+- Consolidated CI/CD into single workflow
+- Improved release automation
+
+### [2.1.13] - 2026-01-16
+
+#### Fixed
+
+- Center divider logo now constrained to fit within gap
+
+### [2.1.12] - 2026-01-16
+
+#### Fixed
+
+- Center divider logo scales to fit height on wide screens
+
+### [2.1.11] - 2026-01-16
+
+#### Fixed
+
+- Video capture retries at device max resolution if initial resolution is low
+
+### [2.1.10] - 2026-01-16
+
+#### Fixed
+
+- Request exact 1920x1200 resolution from capture device
+
+### [2.1.9] - 2026-01-16
+
+#### Fixed
+
+- Use min constraints to force higher video capture resolution
+
+### [2.1.8] - 2026-01-16
+
+#### Fixed
+
+- Enable hardware acceleration for better video quality
+
+### [2.1.7] - 2026-01-16
+
+#### Fixed
+
+- Improved video capture quality with higher resolution constraints
+
+### [2.1.5] - 2026-01-16
+
+#### Fixed
+
+- Prevent video cropping in single view mode
+
+### [2.1.4] - 2026-01-16
+
+#### Changed
+
+- Streamlined CI/CD pipeline
+
+### [2.1.0] - 2026-01-16
+
+#### Added
+
+- Automatic releases triggered by conventional commits
+- Version bumping based on commit types (feat/fix/etc.)
+
+### [2.0.0] - 2026-01-11
+
+#### Added
+
+- Complete rewrite using Electron + electron-vite
+- Native installers for macOS (.dmg) and Windows (.exe)
+- Auto-updater with GitHub releases integration
+- Dual/Single view modes with keyboard shortcuts
+- Freeze frame functionality (Space key)
+- Settings panel with input configuration
+- No-signal detection with reference screenshot capture
+- Center gap and border width sliders
+- Logo overlay in center divider and single view mode
+- Dropdown panel for settings access
+
+#### Changed
+
+- Switched from Python/PyQt6 to JavaScript/Electron
+- Improved performance with WebRTC MediaDevices API
+- Cleaner UI with modern styling
+
+---
+
+## Python Version (v1.x) - Legacy
+
+### [1.5.3] - 2025-12-24
+
+#### Added
 
 - File logging for bundled apps to help debug crashes
 - Global exception handler to catch and log crashes with full stack traces
 - Log file location: `%APPDATA%\Input Viewer\app.log` (Windows)
 
-## [1.5.2] - 2024-12-24
+### [1.5.2] - 2025-12-24
 
-### Fixed
+#### Fixed
 
 - Fixed Windows dual screen not working when both feeds use same input
-- Mirror left feed to right display when using same camera input (avoids Windows camera lock)
+- Mirror left feed to right display when using same camera input
 
-## [1.5.1] - 2024-12-24
+### [1.5.1] - 2025-12-24
 
-### Fixed
+#### Fixed
 
 - Fixed Windows crash when switching cameras (QImage memory issue)
 - Fixed no-signal animation not showing on Windows (missing mp4 in bundle)
@@ -30,9 +140,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added error handling in camera worker thread to prevent freezes
 - Added icon.ico to Windows bundle
 
-## [1.5.0] - 2024-12-24
+### [1.5.0] - 2025-12-24
 
-### Added
+#### Added
 
 - Display Settings panel with configurable options:
   - Screensaver delay (10-300 seconds)
@@ -42,101 +152,90 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reset to Defaults button for display settings
 - Settings are saved to settings.json and applied in real-time
 
-### Changed
+#### Changed
 
 - Reduced default capture resolution from 4K to 1080p for better performance
 
-## [1.4.6] - 2024-12-24
+### [1.4.6] - 2025-12-24
 
-### Fixed
+#### Fixed
 
 - Fixed mouse shake detection to properly reveal cursor when hidden
 - Mouse tracking now enabled on all child widgets for reliable event capture
 - Improved shake detection algorithm with better direction reversal tracking
 
-### Added
+#### Added
 
 - Screensaver now exits on mouse shake (in addition to showing cursor)
 - Screensaver now exits on any keyboard input
 
-## [1.4.5] - 2024-12-24
+### [1.4.0] - 2025-12-24
 
-### Fixed
+#### Added
 
-- Fixed PyInstaller spec file asset paths (assets now bundled from `assets/` folder)
-
-## [1.4.3] - 2024-12-24
-
-### Fixed
-
-- Updated PyInstaller spec file with correct module references
-
-## [1.4.0] - 2024-12-24
-
-### Added
 - Threaded camera capture with `CameraWorker` for non-blocking frame reads
 - `HoverIcon` base class for reusable icon widgets with hover effects
-- Shared stylesheet constants in `widgets/base.py`
 - Architecture documentation (`input_viewer/ARCHITECTURE.md`)
-- Feature testing checklist (`TESTING.md`)
 
-### Changed
+#### Changed
+
 - Camera feeds now run in background threads (~60fps capture)
 - UI timer only handles display, not blocking I/O
-- Refactored `SettingsIcon`, `AudioIcon`, `InfoIcon` to use `HoverIcon` base
-- Simplified `ScreenSaver` into smaller focused methods
-- Reduced code duplication in input switching logic
-- Cleaned up `ToggleSwitch` - removed deprecated callback
 
-### Performance
+#### Performance
+
 - Smoother frame rate due to parallel camera capture
 - Reduced UI blocking during frame reads
 - Better CPU utilization with threaded workers
 
-## [1.3.0] - 2025-12-16
+### [1.3.0] - 2025-12-16
 
-### Changed
+#### Changed
+
 - Updated capture resolution to 4K (3840x2160) at 30Hz
-- Added "By Labs for _Space" attribution in info panel
+- Added attribution in info panel
 
-## [1.2.0] - 2025-12-16
+### [1.2.0] - 2025-12-16
 
-### Changed
+#### Changed
+
 - Replaced no-signal detection with vision model using multi-vector feature extraction
-- No-signal detection now compares against reference image (elgato_no_source.png)
+- No-signal detection now compares against reference image
 - Uses cosine similarity on color histograms, spatial intensity, edge density, and statistical features
-- Only checks every 100 frames (~3.3s at 30Hz) for efficiency
-- Fixes false positives on dark/grey applications and presentations
 
-### Improved
-- Mock no-signal mode now cycles through 3 test screens: elgato_no_source.png, zed.png, and uniform grey
+### [1.0.0] - 2025-12-13
 
-## [1.0.0] - 2025-12-13
+#### Added
 
-### Added
 - Multi-input video feed display
 - Layout modes: Dual view, Single left, Single right
 - Direct input selection with number keys 1-4
 - Settings panel with toggle switches for input configuration
 - Live settings reload without app restart
 - Custom no-signal animation
-- Verbose logging mode with colored output
-- Test modes: mock sources, signal cycling, always no-signal
 - Fullscreen support
 - Input name overlay when switching inputs
 - Keyboard shortcuts info panel
 
-### Configuration
-- `settings.json` for input configuration (name, enabled, default)
-- Customizable side margins and center gap
-- Works with any capture card
-
-### Keyboard Shortcuts
-- `D` - Dual view
-- `L` - Single left view
-- `R` - Single right view
-- `1-4` - Select input directly
-- `F11/F` - Toggle fullscreen
-- `Q` - Quit
-
+[2.2.1]: https://github.com/LAB271/input-viewer/releases/tag/v2.2.1
+[2.2.0]: https://github.com/LAB271/input-viewer/releases/tag/v2.2.0
+[2.1.13]: https://github.com/LAB271/input-viewer/releases/tag/v2.1.13
+[2.1.12]: https://github.com/LAB271/input-viewer/releases/tag/v2.1.12
+[2.1.11]: https://github.com/LAB271/input-viewer/releases/tag/v2.1.11
+[2.1.10]: https://github.com/LAB271/input-viewer/releases/tag/v2.1.10
+[2.1.9]: https://github.com/LAB271/input-viewer/releases/tag/v2.1.9
+[2.1.8]: https://github.com/LAB271/input-viewer/releases/tag/v2.1.8
+[2.1.7]: https://github.com/LAB271/input-viewer/releases/tag/v2.1.7
+[2.1.5]: https://github.com/LAB271/input-viewer/releases/tag/v2.1.5
+[2.1.4]: https://github.com/LAB271/input-viewer/releases/tag/v2.1.4
+[2.1.0]: https://github.com/LAB271/input-viewer/releases/tag/v2.1.0
+[2.0.0]: https://github.com/LAB271/input-viewer/releases/tag/v2.0.0
+[1.5.3]: https://github.com/LAB271/input-viewer/releases/tag/v1.5.3
+[1.5.2]: https://github.com/LAB271/input-viewer/releases/tag/v1.5.2
+[1.5.1]: https://github.com/LAB271/input-viewer/releases/tag/v1.5.1
+[1.5.0]: https://github.com/LAB271/input-viewer/releases/tag/v1.5.0
+[1.4.6]: https://github.com/LAB271/input-viewer/releases/tag/v1.4.6
+[1.4.0]: https://github.com/LAB271/input-viewer/releases/tag/v1.4.0
+[1.3.0]: https://github.com/LAB271/input-viewer/releases/tag/v1.3.0
+[1.2.0]: https://github.com/LAB271/input-viewer/releases/tag/v1.2.0
 [1.0.0]: https://github.com/LAB271/input-viewer/releases/tag/v1.0.0

@@ -1,6 +1,6 @@
 # TODO - Input Viewer Electron
 
-## ✅ Completed
+## Completed
 
 - [x] Dual camera feed display (side by side)
 - [x] Video quality (1920x1080 @ 30fps)
@@ -21,38 +21,30 @@
 - [x] **Edit input names** - Rename inputs in settings
 - [x] **Enable/disable inputs** - Toggle switches in settings
 - [x] Auto-updater with dialog prompts (uses public releases repo)
-- [x] No-signal overlay (basic)
+- [x] No-signal detection with reference screenshot capture
 - [x] Screen aspect ratio detection (auto D/S on startup)
 - [x] Dropdown panel (hover arrow at top)
 - [x] Center gap slider (adjustable divider width)
 - [x] Border width slider (left/right black borders)
 - [x] Logo overlay in single view mode
-
----
-
-## 🔴 P1 - Must Have
-
-Essential features for release:
-
-- [ ] **Update GitHub workflows** - Fix release.yml for electron-vite
-  - Test build on macOS and Windows
-  - Publish to input-viewer-releases repo
-- [ ] **Windows compatibility** - Test and fix Windows-specific issues
-  - Camera permissions handling
-  - Path separators and file system
-  - Code signing for Windows builds
-- [ ] **Elgato no-signal detection** - Detect capture card "no signal" screen
-  - Template matching for Elgato screens
-  - Custom animated overlay when no signal detected
-- [ ] **DVD-style screensaver** - When feeds lose signal
+- [x] **DVD-style screensaver** - When feeds lose signal
   - Bouncing logo animation
   - Color changes on bounce
+  - 5-minute delay before activation
+- [x] **CI/CD Pipeline** - Automated releases
+  - Build on macOS and Windows
+  - Auto version bump from conventional commits
+  - Publish to input-viewer-releases repo
+- [x] **Windows compatibility** - Tested and working
+  - Camera permissions handling
+  - Windows installer (.exe)
+  - Auto-updater works on Windows
 
 ---
 
-## 🟠 P2 - Should Have
+## High Priority
 
-Important features from Python version:
+### User Experience
 
 - [ ] **Thumbnails panel** - T key to open
   - Live preview of all inputs
@@ -63,38 +55,32 @@ Important features from Python version:
 
 ---
 
-## 🟡 P3 - Nice to Have
+## Medium Priority
 
-Polish and enhancement features:
+### Polish
 
-- [ ] **Layout animations** - Smooth transitions
-- [ ] **Cursor shake detection** - Show cursor on shake
-- [ ] **Audio controls** - ♪ panel
-  - Volume sliders
+- [ ] **Layout animations** - Smooth transitions between views
+- [ ] **Cursor shake detection** - Show cursor on shake movement
+- [ ] **Audio controls** - Volume panel
+  - Volume sliders per input
   - Mute buttons
 
 ---
 
-## 🔵 P4 - Future Ideas
+## Low Priority / Future Ideas
 
-- [ ] **Multi-view mode** - Display different inputs on each screen
-  - Dual view shows same input on both sides
-  - Multi-view shows different inputs per panel
-- [ ] **CI testing** - Add automated tests to CI pipeline
+- [ ] **Multi-view mode** - Different inputs on each screen panel
+- [ ] **Picture-in-picture layout** - Small preview in corner
+- [ ] **Keyboard shortcut customization** - User-configurable keys
+- [ ] **Touchscreen controls** - Enhanced touch support
+- [ ] **CI testing** - Automated tests in pipeline
   - Unit tests for core logic
   - Integration tests for video capture
 - [ ] Test mode flags (`--mock`, `--no-signal`)
-- [ ] Keyboard shortcut customization
-- [ ] Picture-in-picture layout
-- [ ] Recording functionality
-- [ ] Streaming output (NDI, virtual camera)
-- [ ] Color correction / brightness controls
-- [ ] Restart to install update button
-- [ ] **Touchscreen controls** - Enhanced touch support for touchscreen displays
 
 ---
 
-## 🔮 Future Exploration: Tauri
+## Future Exploration: Tauri
 
 Consider migrating to [Tauri](https://tauri.app/) for:
 
