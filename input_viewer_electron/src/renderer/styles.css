@@ -135,28 +135,77 @@ body.cursor-visible .input-label {
   left: 0;
   width: 100%;
   height: 100%;
+  background: #000;
+  z-index: 10;
+}
+
+/* Scanlines effect */
+.no-signal-scanlines {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.3) 2px,
+    rgba(0, 0, 0, 0.3) 4px
+  );
+  pointer-events: none;
+  animation: scanline-move 8s linear infinite;
+}
+
+@keyframes scanline-move {
+  0% { background-position: 0 0; }
+  100% { background-position: 0 100px; }
+}
+
+/* Content container */
+.no-signal-content {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background-color: rgba(0, 0, 0, 0.9);
-  z-index: 10;
+  height: 100%;
+  text-align: center;
+  padding: 0 40px;
 }
 
-.no-signal-icon {
-  font-size: 64px;
-  margin-bottom: 16px;
-  animation: pulse 2s infinite;
+/* Glitch text effect */
+.no-signal-glitch {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 8px;
+  color: #fff;
+  text-shadow:
+    2px 0 #ff0040,
+    -2px 0 #00ffff;
+  animation: glitch 2s infinite;
+  margin-bottom: 20px;
 }
 
-.no-signal-text {
-  font-size: 18px;
-  color: var(--text-muted);
+@keyframes glitch {
+  0%, 90%, 100% {
+    text-shadow: 2px 0 #ff0040, -2px 0 #00ffff;
+    transform: translate(0);
+  }
+  92% {
+    text-shadow: -2px 0 #ff0040, 2px 0 #00ffff;
+    transform: translate(-2px, 1px);
+  }
+  94% {
+    text-shadow: 2px 0 #ff0040, -2px 0 #00ffff;
+    transform: translate(2px, -1px);
+  }
 }
 
-@keyframes pulse {
-  0%, 100% { opacity: 0.5; }
-  50% { opacity: 1; }
+/* Instruction text */
+.no-signal-instruction {
+  font-size: 12px;
+  color: #666;
+  letter-spacing: 3px;
+  text-transform: uppercase;
 }
 
 /* =============================================================================
