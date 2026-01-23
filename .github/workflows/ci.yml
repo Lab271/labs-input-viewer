@@ -15,7 +15,7 @@ on:
 
 jobs:
   # =============================================================================
-  # Step 1: Lint
+  # Step 1: Lint (runs on all events)
   # =============================================================================
   lint:
     name: Lint
@@ -43,93 +43,11 @@ jobs:
         run: npm run build
 
   # =============================================================================
-  # Step 2: Build (produces artifacts for release)
-  # =============================================================================
-  build-mac:
-    name: Build macOS
-    needs: lint
-    runs-on: macos-latest
-    defaults:
-      run:
-        working-directory: input_viewer_electron
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: input_viewer_electron/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build and package for macOS
-        run: npm run build && npx electron-builder --mac --config --publish never
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: false
-
-      - name: Fix latest-mac.yml URLs
-        run: |
-          if [ -f dist/latest-mac.yml ]; then
-            sed -i '' 's|LAB271/input-viewer/releases|LAB271/input-viewer-releases/releases|g' dist/latest-mac.yml
-          fi
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-build
-          path: |
-            input_viewer_electron/dist/*.dmg
-            input_viewer_electron/dist/*.zip
-            input_viewer_electron/dist/latest-mac.yml
-
-  build-windows:
-    name: Build Windows
-    needs: lint
-    runs-on: windows-latest
-    defaults:
-      run:
-        working-directory: input_viewer_electron
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: input_viewer_electron/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build and package for Windows
-        run: npm run build && npx electron-builder --win --config --publish never
-
-      - name: Fix latest.yml URLs
-        run: |
-          if (Test-Path dist/latest.yml) {
-            (Get-Content dist/latest.yml) -replace 'LAB271/input-viewer/releases', 'LAB271/input-viewer-releases/releases' | Set-Content dist/latest.yml
-          }
-        shell: pwsh
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-build
-          path: |
-            input_viewer_electron/dist/*.exe
-            input_viewer_electron/dist/latest.yml
-
-  # =============================================================================
-  # Step 3: Analyze commits and determine version bump (push to main only)
+  # Step 2: Analyze commits (push to main only, runs early to determine version)
   # =============================================================================
   analyze:
     name: Analyze Commits
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    needs: [build-mac, build-windows]
     runs-on: ubuntu-latest
     outputs:
       bump: ${{ steps.analyze.outputs.bump }}
@@ -207,11 +125,109 @@ jobs:
           fi
 
   # =============================================================================
+  # Step 3: Build macOS (PR: after lint, Push: after analyze with new version)
+  # =============================================================================
+  build-mac:
+    name: Build macOS
+    needs: [lint, analyze]
+    if: always() && needs.lint.result == 'success' && (github.event_name == 'pull_request' || needs.analyze.result == 'success')
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: input_viewer_electron
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: input_viewer_electron/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Update version for release
+        if: needs.analyze.outputs.should_release == 'true' && needs.analyze.outputs.new_version != ''
+        run: |
+          npm version "${{ needs.analyze.outputs.new_version }}" --no-git-tag-version --allow-same-version
+
+      - name: Build and package for macOS
+        run: npm run build && npx electron-builder --mac --config --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Fix latest-mac.yml URLs
+        run: |
+          if [ -f dist/latest-mac.yml ]; then
+            sed -i '' 's|LAB271/input-viewer/releases|LAB271/input-viewer-releases/releases|g' dist/latest-mac.yml
+          fi
+
+      - name: Upload artifacts
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-build
+          path: |
+            input_viewer_electron/dist/*.dmg
+            input_viewer_electron/dist/*.zip
+            input_viewer_electron/dist/latest-mac.yml
+
+  # =============================================================================
+  # Step 3: Build Windows (PR: after lint, Push: after analyze with new version)
+  # =============================================================================
+  build-windows:
+    name: Build Windows
+    needs: [lint, analyze]
+    if: always() && needs.lint.result == 'success' && (github.event_name == 'pull_request' || needs.analyze.result == 'success')
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: input_viewer_electron
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: input_viewer_electron/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Update version for release
+        if: needs.analyze.outputs.should_release == 'true' && needs.analyze.outputs.new_version != ''
+        run: |
+          npm version "${{ needs.analyze.outputs.new_version }}" --no-git-tag-version --allow-same-version
+
+      - name: Build and package for Windows
+        run: npm run build && npx electron-builder --win --config --publish never
+
+      - name: Fix latest.yml URLs
+        run: |
+          if (Test-Path dist/latest.yml) {
+            (Get-Content dist/latest.yml) -replace 'LAB271/input-viewer/releases', 'LAB271/input-viewer-releases/releases' | Set-Content dist/latest.yml
+          }
+        shell: pwsh
+
+      - name: Upload artifacts
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build
+          path: |
+            input_viewer_electron/dist/*.exe
+            input_viewer_electron/dist/latest.yml
+
+  # =============================================================================
   # Step 4: Bump version and create tag
   # =============================================================================
   version-bump:
     name: Bump Version
-    needs: analyze
+    needs: [analyze, build-mac, build-windows]
     if: needs.analyze.outputs.should_release == 'true' && needs.analyze.outputs.bump != 'none'
     runs-on: ubuntu-latest
     permissions:
@@ -275,11 +291,7 @@ jobs:
       - name: Get tag name
         id: tag
         run: |
-          if [ "${{ needs.analyze.outputs.bump }}" != "none" ]; then
-            echo "tag=v${{ needs.analyze.outputs.new_version }}" >> $GITHUB_OUTPUT
-          else
-            echo "tag=v${{ needs.analyze.outputs.new_version }}" >> $GITHUB_OUTPUT
-          fi
+          echo "tag=v${{ needs.analyze.outputs.new_version }}" >> $GITHUB_OUTPUT
 
       - name: Create Release in source repo
         uses: softprops/action-gh-release@v2
