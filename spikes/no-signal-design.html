@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>No-Signal Screen Design Spike</title>
+  <style>
+    :root {
+      --bg-dark: #0a0a0a;
+      --bg-surface: #1a1a1a;
+      --text-primary: #ffffff;
+      --text-muted: #888888;
+      --accent: #4a9eff;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #2a2a2a;
+      color: var(--text-primary);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+      font-weight: 300;
+    }
+
+    .design-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+      gap: 30px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .design-card {
+      background: var(--bg-surface);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .design-card h3 {
+      padding: 15px 20px;
+      background: #252525;
+      font-weight: 500;
+      font-size: 14px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .preview {
+      aspect-ratio: 16/9;
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* =============================================================================
+       Design 1: Current (Simple)
+       ============================================================================= */
+    .design-current {
+      background: var(--bg-dark);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .design-current .icon {
+      font-size: 64px;
+      margin-bottom: 16px;
+      animation: pulse 2s infinite;
+    }
+
+    .design-current .text {
+      font-size: 18px;
+      color: var(--text-muted);
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    /* =============================================================================
+       Design 2: Static Noise / TV Static
+       ============================================================================= */
+    .design-static {
+      background: var(--bg-dark);
+      position: relative;
+    }
+
+    .static-noise {
+      position: absolute;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+      opacity: 0.15;
+      animation: static-flicker 0.1s infinite;
+    }
+
+    @keyframes static-flicker {
+      0%, 100% { opacity: 0.15; }
+      50% { opacity: 0.12; }
+    }
+
+    .static-content {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+    }
+
+    .static-content .icon {
+      width: 80px;
+      height: 80px;
+      border: 3px solid var(--text-muted);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 20px;
+    }
+
+    .static-content .icon::before {
+      content: '';
+      width: 40px;
+      height: 30px;
+      border: 2px solid var(--text-muted);
+      border-radius: 2px;
+    }
+
+    .static-content .text {
+      font-size: 14px;
+      color: var(--text-muted);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    /* =============================================================================
+       Design 3: Scanlines Retro
+       ============================================================================= */
+    .design-scanlines {
+      background: linear-gradient(180deg, #0a0a12 0%, #12121a 100%);
+      position: relative;
+    }
+
+    .scanlines::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0, 0, 0, 0.3) 2px,
+        rgba(0, 0, 0, 0.3) 4px
+      );
+      pointer-events: none;
+      animation: scanline-move 8s linear infinite;
+    }
+
+    @keyframes scanline-move {
+      0% { background-position: 0 0; }
+      100% { background-position: 0 100px; }
+    }
+
+    .scanlines-content {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+    }
+
+    .scanlines-content .glitch-text {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: 8px;
+      color: #fff;
+      text-shadow:
+        2px 0 #ff0040,
+        -2px 0 #00ffff;
+      animation: glitch 2s infinite;
+    }
+
+    @keyframes glitch {
+      0%, 90%, 100% {
+        text-shadow: 2px 0 #ff0040, -2px 0 #00ffff;
+        transform: translate(0);
+      }
+      92% {
+        text-shadow: -2px 0 #ff0040, 2px 0 #00ffff;
+        transform: translate(-2px, 1px);
+      }
+      94% {
+        text-shadow: 2px 0 #ff0040, -2px 0 #00ffff;
+        transform: translate(2px, -1px);
+      }
+    }
+
+    .scanlines-content .subtext {
+      margin-top: 15px;
+      font-size: 12px;
+      color: #666;
+      letter-spacing: 3px;
+    }
+
+    /* =============================================================================
+       Design 4: Minimal Gradient
+       ============================================================================= */
+    .design-gradient {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f23 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .gradient-icon {
+      width: 100px;
+      height: 70px;
+      border: 2px solid rgba(255,255,255,0.2);
+      border-radius: 8px;
+      position: relative;
+      margin-bottom: 25px;
+    }
+
+    .gradient-icon::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 30px;
+      height: 2px;
+      background: rgba(255,255,255,0.3);
+    }
+
+    .gradient-icon::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) rotate(90deg);
+      width: 30px;
+      height: 2px;
+      background: rgba(255,255,255,0.3);
+    }
+
+    .gradient-text {
+      font-size: 13px;
+      color: rgba(255,255,255,0.4);
+      letter-spacing: 4px;
+      text-transform: uppercase;
+    }
+
+    /* =============================================================================
+       Design 5: Animated Wave
+       ============================================================================= */
+    .design-wave {
+      background: #0d0d0d;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .wave-bg {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 60%;
+      opacity: 0.1;
+    }
+
+    .wave {
+      position: absolute;
+      bottom: 0;
+      left: -100%;
+      width: 300%;
+      height: 100%;
+      background: linear-gradient(90deg,
+        transparent,
+        rgba(74, 158, 255, 0.3),
+        transparent
+      );
+      animation: wave-move 4s ease-in-out infinite;
+    }
+
+    .wave:nth-child(2) {
+      animation-delay: -2s;
+      opacity: 0.5;
+    }
+
+    @keyframes wave-move {
+      0%, 100% { transform: translateX(-10%); }
+      50% { transform: translateX(10%); }
+    }
+
+    .wave-content {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+    }
+
+    .wave-icon {
+      font-size: 48px;
+      margin-bottom: 20px;
+      opacity: 0.8;
+    }
+
+    .wave-text {
+      font-size: 16px;
+      color: rgba(255,255,255,0.5);
+      font-weight: 300;
+    }
+
+    /* =============================================================================
+       Design 6: Breathing Circle
+       ============================================================================= */
+    .design-breathing {
+      background: radial-gradient(ellipse at center, #1a1a1a 0%, #0a0a0a 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .breathing-circle {
+      width: 120px;
+      height: 120px;
+      border: 2px solid rgba(255,255,255,0.1);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: breathe 4s ease-in-out infinite;
+      margin-bottom: 25px;
+    }
+
+    .breathing-circle::before {
+      content: '';
+      width: 80px;
+      height: 80px;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 50%;
+      animation: breathe 4s ease-in-out infinite 0.5s;
+    }
+
+    @keyframes breathe {
+      0%, 100% { transform: scale(1); opacity: 0.5; }
+      50% { transform: scale(1.1); opacity: 0.8; }
+    }
+
+    .breathing-text {
+      font-size: 12px;
+      color: rgba(255,255,255,0.3);
+      letter-spacing: 6px;
+      text-transform: uppercase;
+    }
+
+    /* =============================================================================
+       Design 7: Horizontal Lines
+       ============================================================================= */
+    .design-lines {
+      background: #0a0a0a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    .lines-pattern {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 8px;
+      padding: 0 20%;
+      opacity: 0.15;
+    }
+
+    .line {
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #fff, transparent);
+      animation: line-pulse 3s ease-in-out infinite;
+    }
+
+    .line:nth-child(1) { animation-delay: 0s; }
+    .line:nth-child(2) { animation-delay: 0.2s; }
+    .line:nth-child(3) { animation-delay: 0.4s; }
+    .line:nth-child(4) { animation-delay: 0.6s; }
+    .line:nth-child(5) { animation-delay: 0.8s; }
+
+    @keyframes line-pulse {
+      0%, 100% { opacity: 0.3; transform: scaleX(0.8); }
+      50% { opacity: 1; transform: scaleX(1); }
+    }
+
+    .lines-content {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+    }
+
+    .lines-text {
+      font-size: 20px;
+      font-weight: 200;
+      color: rgba(255,255,255,0.6);
+      letter-spacing: 8px;
+    }
+
+    .lines-subtext {
+      margin-top: 10px;
+      font-size: 11px;
+      color: rgba(255,255,255,0.25);
+    }
+
+    /* =============================================================================
+       Design 8: Logo Centered
+       ============================================================================= */
+    .design-logo {
+      background: linear-gradient(180deg, #0f0f0f 0%, #1a1a1a 100%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .logo-placeholder {
+      width: 150px;
+      height: 60px;
+      border: 1px dashed rgba(255,255,255,0.2);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: rgba(255,255,255,0.3);
+      font-size: 12px;
+      margin-bottom: 30px;
+      opacity: 0.7;
+      animation: logo-fade 3s ease-in-out infinite;
+    }
+
+    @keyframes logo-fade {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 0.8; }
+    }
+
+    .logo-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: rgba(255,255,255,0.3);
+      font-size: 11px;
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      background: #ff6b6b;
+      border-radius: 50%;
+      animation: dot-blink 2s infinite;
+    }
+
+    @keyframes dot-blink {
+      0%, 50%, 100% { opacity: 1; }
+      25%, 75% { opacity: 0.3; }
+    }
+
+    /* =============================================================================
+       Design 9: Presenter Table (based on Design 3)
+       ============================================================================= */
+    .design-presenter {
+      background: linear-gradient(180deg, #0a0a12 0%, #12121a 100%);
+      position: relative;
+    }
+
+    .design-presenter::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0, 0, 0, 0.3) 2px,
+        rgba(0, 0, 0, 0.3) 4px
+      );
+      pointer-events: none;
+      animation: scanline-move 8s linear infinite;
+    }
+
+    .presenter-content {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      text-align: center;
+      padding: 0 40px;
+    }
+
+    .presenter-content .glitch-text {
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: 4px;
+      color: #fff;
+      text-shadow:
+        2px 0 #ff0040,
+        -2px 0 #00ffff;
+      animation: glitch 2s infinite;
+      margin-bottom: 20px;
+    }
+
+    .presenter-content .instruction-text {
+      font-size: 12px;
+      color: #666;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+    }
+
+    /* =============================================================================
+       Notes Section
+       ============================================================================= */
+    .notes {
+      max-width: 1400px;
+      margin: 40px auto 0;
+      background: var(--bg-surface);
+      border-radius: 12px;
+      padding: 25px;
+    }
+
+    .notes h2 {
+      font-size: 16px;
+      margin-bottom: 15px;
+      color: var(--text-muted);
+    }
+
+    .notes ul {
+      list-style: none;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 10px;
+    }
+
+    .notes li {
+      padding: 10px 15px;
+      background: rgba(255,255,255,0.03);
+      border-radius: 6px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .notes li::before {
+      content: '>';
+      margin-right: 10px;
+      color: var(--accent);
+    }
+  </style>
+</head>
+<body>
+  <h1>No-Signal Screen Design Spike</h1>
+
+  <div class="design-grid">
+    <!-- Design 1: Current -->
+    <div class="design-card">
+      <h3>1. Current (Simple)</h3>
+      <div class="preview design-current">
+        <div class="icon">📺</div>
+        <div class="text">No Signal</div>
+      </div>
+    </div>
+
+    <!-- Design 2: Static Noise -->
+    <div class="design-card">
+      <h3>2. TV Static</h3>
+      <div class="preview design-static">
+        <div class="static-noise"></div>
+        <div class="static-content">
+          <div class="icon"></div>
+          <div class="text">No Signal</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Design 3: Scanlines -->
+    <div class="design-card">
+      <h3>3. Retro Scanlines + Glitch</h3>
+      <div class="preview design-scanlines scanlines">
+        <div class="scanlines-content">
+          <div class="glitch-text">NO SIGNAL</div>
+          <div class="subtext">Check video input</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Design 4: Minimal Gradient -->
+    <div class="design-card">
+      <h3>4. Minimal Gradient</h3>
+      <div class="preview design-gradient">
+        <div class="gradient-icon"></div>
+        <div class="gradient-text">No Signal</div>
+      </div>
+    </div>
+
+    <!-- Design 5: Animated Wave -->
+    <div class="design-card">
+      <h3>5. Animated Wave</h3>
+      <div class="preview design-wave">
+        <div class="wave-bg">
+          <div class="wave"></div>
+          <div class="wave"></div>
+        </div>
+        <div class="wave-content">
+          <div class="wave-icon">📡</div>
+          <div class="wave-text">Waiting for signal...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Design 6: Breathing Circle -->
+    <div class="design-card">
+      <h3>6. Breathing Circle</h3>
+      <div class="preview design-breathing">
+        <div class="breathing-circle"></div>
+        <div class="breathing-text">No Signal</div>
+      </div>
+    </div>
+
+    <!-- Design 7: Horizontal Lines -->
+    <div class="design-card">
+      <h3>7. Horizontal Lines</h3>
+      <div class="preview design-lines">
+        <div class="lines-pattern">
+          <div class="line"></div>
+          <div class="line"></div>
+          <div class="line"></div>
+          <div class="line"></div>
+          <div class="line"></div>
+        </div>
+        <div class="lines-content">
+          <div class="lines-text">NO SIGNAL</div>
+          <div class="lines-subtext">Connect video source</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Design 8: Logo Centered -->
+    <div class="design-card">
+      <h3>8. Logo + Status</h3>
+      <div class="preview design-logo">
+        <div class="logo-placeholder">[Your Logo]</div>
+        <div class="logo-status">
+          <span class="status-dot"></span>
+          <span>No signal detected</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Design 9: Presenter Table -->
+    <div class="design-card">
+      <h3>9. Presenter Booth (Custom)</h3>
+      <div class="preview design-presenter">
+        <div class="presenter-content">
+          <div class="glitch-text">NO SIGNAL</div>
+          <div class="instruction-text">Connect your device to the presenter booth</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <h2>Design Considerations</h2>
+    <ul>
+      <li>Should be visible but not distracting</li>
+      <li>Dark background to match app aesthetic</li>
+      <li>Subtle animations (not too busy)</li>
+      <li>Clear status indication</li>
+      <li>Works well in both single and dual view</li>
+      <li>Transitions smoothly to/from DVD screensaver</li>
+      <li>Consider showing input name when no signal</li>
+      <li>Low CPU usage (CSS animations preferred)</li>
+    </ul>
+  </div>
+</body>
+</html>
