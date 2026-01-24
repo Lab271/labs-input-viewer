@@ -48,7 +48,26 @@ const state = {
   },
   // DVD screensaver timer
   dvdScreensaverTimeout: null,
-  dvdScreensaverDelay: 5 * 60 * 1000 // 5 minutes in milliseconds
+  // dvdScreensaverDelay: 10 * 1000, // 10 seconds in milliseconds
+  dvdScreensaverDelay: 5 * 60 * 1000, // 5 minutes in milliseconds
+  // Shake detection state
+  shakeHistory: [],           // Array of {timestamp, direction}
+  shakeWindowMs: 500,         // Time window to detect shakes (500ms)
+  shakeThreshold: 4,          // Number of direction changes needed
+  lastMouseX: null,
+  lastMouseY: null,
+  lastMoveDirection: null,    // 'left' or 'right'
+  // Dropdown state for touch support
+  dropdownOpen: false,
+  // Audio state
+  audioContext: null,
+  leftAudioGain: null,        // GainNode for left feed
+  rightAudioGain: null,       // GainNode for right feed
+  leftAudioSource: null,      // MediaStreamAudioSourceNode
+  rightAudioSource: null,
+  leftVolume: 1.0,            // 0.0 to 1.0
+  rightVolume: 1.0,
+  systemVolume: 50            // 0 to 100
 }
 
 // =============================================================================
@@ -93,6 +112,10 @@ const elements = {
   captureLeftBtn: document.getElementById('capture-left-btn'),
   captureRightBtn: document.getElementById('capture-right-btn'),
   settingsAppVersion: document.getElementById('settings-app-version'),
+  // Dropdown volume control elements
+  dropdownInputVolumes: document.getElementById('dropdown-input-volumes'),
+  dropdownSystemVolume: document.getElementById('dropdown-system-volume'),
+  dropdownSystemVolumeValue: document.getElementById('dropdown-system-volume-value'),
   // Cached label references (avoids DOM queries in hot paths)
   leftLabel: document.querySelector('#left-feed .input-label'),
   rightLabel: document.querySelector('#right-feed .input-label'),
@@ -127,6 +150,9 @@ async function saveSettings() {
         centerGap: state.centerGap,
         borderWidth: state.borderWidth,
         defaultInputId: state.defaultInputId,
+        leftVolume: state.leftVolume,
+        rightVolume: state.rightVolume,
+        systemVolume: state.systemVolume,
         inputs: state.settings.inputs,
         initialSetupComplete: state.settings.initialSetupComplete,
         noSignalReferences: state.settings.noSignalReferences
@@ -153,6 +179,9 @@ function getDefaultSettings() {
     leftDeviceId: null,
     rightDeviceId: null,
     defaultInputId: null,
+    leftVolume: 1.0,
+    rightVolume: 1.0,
+    systemVolume: 50,
     layoutMode: null, // null means use screen-based detection
     initialSetupComplete: false,
     noSignalReferences: null
@@ -356,16 +385,33 @@ async function startVideoStream(deviceId, videoElement, side) {
       return null
     }
     
-    // Request highest resolution the device supports
+    // Request highest resolution the device supports, with audio
     const constraints = {
       video: {
         deviceId: { exact: deviceId },
         width: { ideal: 4096 },
         height: { ideal: 2160 }
+      },
+      audio: {
+        deviceId: { exact: deviceId }
       }
     }
 
-    let stream = await navigator.mediaDevices.getUserMedia(constraints)
+    let stream
+    try {
+      stream = await navigator.mediaDevices.getUserMedia(constraints)
+    } catch (audioError) {
+      // If audio fails (device doesn't support audio), try video only
+      console.log(`[Video] Audio not available for device, falling back to video only`)
+      const videoOnlyConstraints = {
+        video: {
+          deviceId: { exact: deviceId },
+          width: { ideal: 4096 },
+          height: { ideal: 2160 }
+        }
+      }
+      stream = await navigator.mediaDevices.getUserMedia(videoOnlyConstraints)
+    }
     videoElement.srcObject = stream
 
     // Some capture devices start at low resolution and need a restart to get high-res
@@ -383,6 +429,9 @@ async function startVideoStream(deviceId, videoElement, side) {
       // Small delay then request max resolution
       await new Promise(resolve => setTimeout(resolve, 100))
 
+      // Check if original stream had audio
+      const hasAudio = stream.getAudioTracks().length > 0
+
       const retryConstraints = {
         video: {
           deviceId: { exact: deviceId },
@@ -390,20 +439,28 @@ async function startVideoStream(deviceId, videoElement, side) {
           height: { ideal: caps.height.max }
         }
       }
+      if (hasAudio) {
+        retryConstraints.audio = { deviceId: { exact: deviceId } }
+      }
       stream = await navigator.mediaDevices.getUserMedia(retryConstraints)
       videoElement.srcObject = stream
 
       const newSettings = stream.getVideoTracks()[0].getSettings()
       console.log(`[Video] Retry got ${newSettings.width}x${newSettings.height}`)
     }
-    
+
     // Store stream reference
     if (side === 'left') {
       state.leftStream = stream
     } else {
       state.rightStream = stream
     }
-    
+
+    // Set up audio processing if stream has audio tracks
+    if (stream.getAudioTracks().length > 0) {
+      setupAudioForStream(stream, side)
+    }
+
     hideNoSignal(side)
 
     // Update input label using cached reference
@@ -419,6 +476,132 @@ async function startVideoStream(deviceId, videoElement, side) {
     console.error(`Error starting ${side} stream:`, error)
     showNoSignal(side)
     return null
+  }
+}
+
+// =============================================================================
+// Audio Management
+// =============================================================================
+
+/**
+ * Set up Web Audio API for a media stream
+ */
+function setupAudioForStream(stream, side) {
+  // Initialize AudioContext if needed (must be done after user interaction)
+  if (!state.audioContext) {
+    state.audioContext = new (window.AudioContext || window.webkitAudioContext)()
+  }
+
+  // Resume audio context if suspended (browsers require user interaction)
+  if (state.audioContext.state === 'suspended') {
+    state.audioContext.resume()
+  }
+
+  // Disconnect previous source if exists
+  if (side === 'left' && state.leftAudioSource) {
+    try {
+      state.leftAudioSource.disconnect()
+    } catch (e) {
+      // Ignore disconnect errors
+    }
+  } else if (side === 'right' && state.rightAudioSource) {
+    try {
+      state.rightAudioSource.disconnect()
+    } catch (e) {
+      // Ignore disconnect errors
+    }
+  }
+
+  // Create audio source from stream
+  const source = state.audioContext.createMediaStreamSource(stream)
+
+  // Create gain node for volume control
+  const gainNode = state.audioContext.createGain()
+  const volume = side === 'left' ? state.leftVolume : state.rightVolume
+  gainNode.gain.value = volume
+
+  // Connect: source -> gain -> destination (speakers)
+  source.connect(gainNode)
+  gainNode.connect(state.audioContext.destination)
+
+  // Store references
+  if (side === 'left') {
+    state.leftAudioSource = source
+    state.leftAudioGain = gainNode
+  } else {
+    state.rightAudioSource = source
+    state.rightAudioGain = gainNode
+  }
+
+  console.log(`[Audio] Set up audio for ${side} feed, volume: ${Math.round(volume * 100)}%`)
+}
+
+/**
+ * Set left feed volume (0.0 to 1.0)
+ */
+function setLeftVolume(volume) {
+  state.leftVolume = Math.max(0, Math.min(1, volume))
+  if (state.leftAudioGain) {
+    state.leftAudioGain.gain.value = state.leftVolume
+  }
+  state.settings.leftVolume = state.leftVolume
+  debouncedSaveSettings()
+}
+
+/**
+ * Set right feed volume (0.0 to 1.0)
+ */
+function setRightVolume(volume) {
+  state.rightVolume = Math.max(0, Math.min(1, volume))
+  if (state.rightAudioGain) {
+    state.rightAudioGain.gain.value = state.rightVolume
+  }
+  state.settings.rightVolume = state.rightVolume
+  debouncedSaveSettings()
+}
+
+/**
+ * Set system volume (0 to 100) via IPC
+ */
+async function setSystemVolume(volume) {
+  state.systemVolume = Math.max(0, Math.min(100, Math.round(volume)))
+  state.settings.systemVolume = state.systemVolume
+  debouncedSaveSettings()
+
+  if (window.electronAPI && window.electronAPI.setSystemVolume) {
+    try {
+      await window.electronAPI.setSystemVolume(state.systemVolume)
+    } catch (e) {
+      console.error('[Audio] Error setting system volume:', e)
+    }
+  }
+}
+
+/**
+ * Get current system volume via IPC
+ */
+async function getSystemVolume() {
+  if (window.electronAPI && window.electronAPI.getSystemVolume) {
+    try {
+      const volume = await window.electronAPI.getSystemVolume()
+      state.systemVolume = volume
+      return volume
+    } catch (e) {
+      console.error('[Audio] Error getting system volume:', e)
+    }
+  }
+  return state.systemVolume
+}
+
+/**
+ * Sync system volume from OS to UI (for when user changes volume externally)
+ */
+async function syncSystemVolume() {
+  const volume = await getSystemVolume()
+  // Update UI if it differs from current slider value
+  if (elements.dropdownSystemVolume && parseInt(elements.dropdownSystemVolume.value) !== volume) {
+    elements.dropdownSystemVolume.value = volume
+    elements.dropdownSystemVolumeValue.textContent = `${volume}%`
   }
 }
 
@@ -513,6 +696,9 @@ function setLayout(mode) {
 
   // Update dropdown input list visibility
   updateDropdownVisibility()
+
+  // Update volume controls to show correct inputs
+  renderDropdownVolumeControls()
 
   switch (mode) {
     case 'dual':
@@ -652,6 +838,64 @@ function renderDropdownInputLists() {
 }
 
 /**
+ * Render the dropdown volume controls for active inputs
+ */
+function renderDropdownVolumeControls() {
+  elements.dropdownInputVolumes.innerHTML = ''
+
+  // Determine which inputs to show based on layout mode
+  const inputsToShow = []
+
+  if (state.layoutMode === 'dual') {
+    // In dual mode, show both inputs (or one if same)
+    if (state.leftDeviceId) {
+      inputsToShow.push({ side: 'left', deviceId: state.leftDeviceId })
+    }
+    if (state.rightDeviceId && state.rightDeviceId !== state.leftDeviceId) {
+      inputsToShow.push({ side: 'right', deviceId: state.rightDeviceId })
+    }
+  } else {
+    // In single mode, show only the active input
+    if (state.leftDeviceId) {
+      inputsToShow.push({ side: 'left', deviceId: state.leftDeviceId })
+    }
+  }
+
+  // Create volume row for each input
+  inputsToShow.forEach(({ side, deviceId }) => {
+    const device = state.devices.find(d => d.deviceId === deviceId)
+    if (!device) return
+
+    const name = getInputName(deviceId, device.label || 'Input')
+    const volume = side === 'left' ? state.leftVolume : state.rightVolume
+    const volumePercent = Math.round(volume * 100)
+
+    const row = document.createElement('div')
+    row.className = 'volume-row'
+    row.innerHTML = `
+      <span class="volume-label" title="${name}">${name}</span>
+      <input type="range" min="0" max="100" value="${volumePercent}" data-side="${side}">
+      <span class="volume-value">${volumePercent}%</span>
+    `
+
+    // Volume slider event
+    const slider = row.querySelector('input[type="range"]')
+    const valueSpan = row.querySelector('.volume-value')
+    slider.addEventListener('input', (e) => {
+      const vol = parseInt(e.target.value) / 100
+      if (side === 'left') {
+        setLeftVolume(vol)
+      } else {
+        setRightVolume(vol)
+      }
+      valueSpan.textContent = `${e.target.value}%`
+    })
+
+    elements.dropdownInputVolumes.appendChild(row)
+  })
+}
+
+/**
  * Select a specific input for a side
  */
 async function selectInputForSide(deviceId, side) {
@@ -670,6 +914,7 @@ async function selectInputForSide(deviceId, side) {
   showInputName(name)
   saveSettings()
   renderDropdownInputLists()
+  renderDropdownVolumeControls()
 }
 
 /**
@@ -748,6 +993,38 @@ function hideSettingsModal() {
 }
 
 /**
+ * Close all panels (dropdown and settings modal)
+ */
+function closeAllPanels() {
+  closeDropdown()
+  hideSettingsModal()
+}
+
+/**
+ * Toggle dropdown open/close state
+ */
+function toggleDropdown() {
+  state.dropdownOpen = !state.dropdownOpen
+  updateDropdownState()
+}
+
+/**
+ * Close the dropdown
+ */
+function closeDropdown() {
+  state.dropdownOpen = false
+  updateDropdownState()
+}
+
+/**
+ * Update dropdown CSS classes based on state
+ */
+function updateDropdownState() {
+  elements.dropdownPanel.classList.toggle('touch-open', state.dropdownOpen)
+  elements.dropdownTrigger.classList.toggle('touch-open', state.dropdownOpen)
+}
+
+/**
  * Capture no-signal reference for a specific side
  */
 async function captureNoSignalForSide(side) {
@@ -797,16 +1074,86 @@ async function captureNoSignalForSide(side) {
 }
 
 // =============================================================================
-// Cursor Management
+// Cursor Management & Shake Detection
 // =============================================================================
 
 function showCursor() {
   document.body.classList.add('cursor-visible')
-  
+
   clearTimeout(state.cursorTimeout)
   state.cursorTimeout = setTimeout(() => {
     document.body.classList.remove('cursor-visible')
   }, state.cursorHideDelay)
+}
+
+/**
+ * Detect mouse shake pattern (rapid left-right movement)
+ * Returns true if shake detected
+ */
+function detectShake(currentX, currentY) {
+  const now = Date.now()
+
+  // Calculate movement direction
+  if (state.lastMouseX !== null) {
+    const dx = currentX - state.lastMouseX
+
+    // Determine horizontal direction (only track significant movements)
+    let direction = null
+    if (Math.abs(dx) > 10) {
+      direction = dx > 0 ? 'right' : 'left'
+    }
+
+    // Check for direction reversal
+    if (direction && state.lastMoveDirection && direction !== state.lastMoveDirection) {
+      state.shakeHistory.push({ timestamp: now, direction })
+    }
+
+    if (direction) {
+      state.lastMoveDirection = direction
+    }
+  }
+
+  state.lastMouseX = currentX
+  state.lastMouseY = currentY
+
+  // Clean old entries outside the time window
+  state.shakeHistory = state.shakeHistory.filter(
+    entry => now - entry.timestamp < state.shakeWindowMs
+  )
+
+  // Check if shake detected (enough direction reversals in time window)
+  if (state.shakeHistory.length >= state.shakeThreshold) {
+    state.shakeHistory = [] // Reset after detection
+    return true
+  }
+
+  return false
+}
+
+/**
+ * Reset shake detection state
+ */
+function resetShakeDetection() {
+  state.shakeHistory = []
+  state.lastMouseX = null
+  state.lastMouseY = null
+  state.lastMoveDirection = null
+}
+
+/**
+ * Handle mouse movement - shows cursor and checks for shake to exit screensaver
+ */
+function handleMouseMove(event) {
+  showCursor()
+
+  // Only check for shake when screensaver is active
+  if (isBouncingLogoRunning()) {
+    if (detectShake(event.clientX, event.clientY)) {
+      hideDvdScreensaver()
+      resetShakeDetection()
+      console.log('[Shake] Screensaver dismissed by mouse shake')
+    }
+  }
 }
 
 // =============================================================================
@@ -853,8 +1200,8 @@ function handleKeyDown(event) {
 // =============================================================================
 
 function setupEventListeners() {
-  // Mouse movement shows cursor
-  document.addEventListener('mousemove', showCursor)
+  // Mouse movement shows cursor and checks for shake to exit screensaver
+  document.addEventListener('mousemove', handleMouseMove)
 
   // Keyboard shortcuts
   document.addEventListener('keydown', handleKeyDown)
@@ -912,6 +1259,31 @@ function setupEventListeners() {
   elements.captureRightBtn.addEventListener('click', () => {
     captureNoSignalForSide('right')
   })
+
+  // System volume slider in dropdown
+  elements.dropdownSystemVolume.addEventListener('input', async (e) => {
+    const volume = parseInt(e.target.value)
+    elements.dropdownSystemVolumeValue.textContent = `${volume}%`
+    await setSystemVolume(volume)
+  })
+
+  // Touch support for dropdown
+  elements.dropdownTrigger.addEventListener('touchstart', (e) => {
+    e.preventDefault() // Prevent mouse events from firing
+    toggleDropdown()
+    showCursor()
+  }, { passive: false })
+
+  // Close dropdown when tapping outside
+  document.addEventListener('touchstart', (e) => {
+    if (state.dropdownOpen) {
+      const isInsideDropdown = elements.dropdownPanel.contains(e.target) ||
+                               elements.dropdownTrigger.contains(e.target)
+      if (!isInsideDropdown) {
+        closeDropdown()
+      }
+    }
+  }, { passive: true })
 
   // Device changes (when plugging/unplugging devices)
   navigator.mediaDevices.addEventListener('devicechange', async () => {
@@ -1127,6 +1499,17 @@ async function init() {
   setBorderWidth(borderWidth)
   elements.settingsBorderWidth.value = borderWidth
 
+  // Initialize audio volumes from settings
+  state.leftVolume = state.settings.leftVolume ?? 1.0
+  state.rightVolume = state.settings.rightVolume ?? 1.0
+  state.systemVolume = state.settings.systemVolume ?? 50
+
+  // Initialize system volume from actual system (async)
+  syncSystemVolume()
+
+  // Start system volume sync polling (every 2 seconds)
+  setInterval(syncSystemVolume, 2000)
+
   // Get video devices and start streams
   await getVideoDevices()
 
@@ -1160,8 +1543,9 @@ async function init() {
     console.error('[Detection] Initialization error:', err)
   })
 
-  // Render dropdown input lists
+  // Render dropdown input lists and volume controls
   renderDropdownInputLists()
+  renderDropdownVolumeControls()
 
   // Show cursor initially
   showCursor()

@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, systemPreferences, dialog } = require('electron')
 const path = require('path')
 const fs = require('fs')
+const { exec } = require('child_process')
 
 // Enable hardware acceleration for video capture
 app.commandLine.appendSwitch('enable-accelerated-mjpeg-decode')
@@ -208,6 +209,121 @@ ipcMain.handle('get-settings-path', () => {
 // Get app version for display in UI
 ipcMain.handle('get-app-version', () => {
   return getAppVersion()
+})
+
+// Get system volume (0-100)
+ipcMain.handle('get-system-volume', async () => {
+  return new Promise((resolve) => {
+    if (process.platform === 'darwin') {
+      // macOS: Use AppleScript to get volume
+      exec('osascript -e "output volume of (get volume settings)"', (error, stdout) => {
+        if (error) {
+          console.error('[Volume] Error getting system volume:', error)
+          resolve(50) // Default fallback
+        } else {
+          resolve(parseInt(stdout.trim(), 10) || 50)
+        }
+      })
+    } else if (process.platform === 'win32') {
+      // Windows: Use PowerShell with Windows Audio API
+      const psScript = `
+        Add-Type -TypeDefinition @"
+using System.Runtime.InteropServices;
+[Guid("5CDF2C82-841E-4546-9722-0CF74078229A"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+interface IAudioEndpointVolume {
+  int _0(); int _1(); int _2(); int _3();
+  int SetMasterVolumeLevelScalar(float fLevel, System.Guid pguidEventContext);
+  int _5();
+  int GetMasterVolumeLevelScalar(out float pfLevel);
+  int SetMute([MarshalAs(UnmanagedType.Bool)] bool bMute, System.Guid pguidEventContext);
+  int GetMute(out bool pbMute);
+}
+[Guid("D666063F-1587-4E43-81F1-B948E807363F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+interface IMMDevice { int Activate(ref System.Guid id, int clsCtx, int activationParams, out IAudioEndpointVolume aev); }
+[Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+interface IMMDeviceEnumerator { int GetDefaultAudioEndpoint(int dataFlow, int role, out IMMDevice endpoint); }
+[ComImport, Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")] class MMDeviceEnumeratorComObject { }
+public class Audio {
+  static IAudioEndpointVolume Vol() {
+    var enumerator = new MMDeviceEnumeratorComObject() as IMMDeviceEnumerator;
+    IMMDevice dev; enumerator.GetDefaultAudioEndpoint(0, 1, out dev);
+    IAudioEndpointVolume epv; var epvid = typeof(IAudioEndpointVolume).GUID;
+    dev.Activate(ref epvid, 23, 0, out epv); return epv;
+  }
+  public static float Volume { get { float v; Vol().GetMasterVolumeLevelScalar(out v); return v; } set { Vol().SetMasterVolumeLevelScalar(value, System.Guid.Empty); } }
+  public static bool Mute { get { bool m; Vol().GetMute(out m); return m; } set { Vol().SetMute(value, System.Guid.Empty); } }
+}
+"@
+[Math]::Round([Audio]::Volume * 100)
+      `.replace(/\n/g, ' ')
+      exec(`powershell -command "${psScript}"`, { timeout: 5000 }, (error, stdout) => {
+        if (error) {
+          resolve(50)
+        } else {
+          const vol = parseInt(stdout.trim(), 10)
+          resolve(isNaN(vol) ? 50 : vol)
+        }
+      })
+    } else {
+      resolve(50) // Default for unsupported platforms
+    }
+  })
+})
+
+// Set system volume (0-100)
+ipcMain.handle('set-system-volume', async (event, volume) => {
+  const clampedVolume = Math.max(0, Math.min(100, Math.round(volume)))
+
+  return new Promise((resolve) => {
+    if (process.platform === 'darwin') {
+      // macOS: Use AppleScript to set volume
+      exec(`osascript -e "set volume output volume ${clampedVolume}"`, (error) => {
+        if (error) {
+          console.error('[Volume] Error setting system volume:', error)
+          resolve(false)
+        } else {
+          resolve(true)
+        }
+      })
+    } else if (process.platform === 'win32') {
+      // Windows: Use PowerShell with Windows Audio API
+      const volumeFloat = clampedVolume / 100
+      const psScript = `
+        Add-Type -TypeDefinition @"
+using System.Runtime.InteropServices;
+[Guid("5CDF2C82-841E-4546-9722-0CF74078229A"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+interface IAudioEndpointVolume {
+  int _0(); int _1(); int _2(); int _3();
+  int SetMasterVolumeLevelScalar(float fLevel, System.Guid pguidEventContext);
+  int _5();
+  int GetMasterVolumeLevelScalar(out float pfLevel);
+  int SetMute([MarshalAs(UnmanagedType.Bool)] bool bMute, System.Guid pguidEventContext);
+  int GetMute(out bool pbMute);
+}
+[Guid("D666063F-1587-4E43-81F1-B948E807363F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+interface IMMDevice { int Activate(ref System.Guid id, int clsCtx, int activationParams, out IAudioEndpointVolume aev); }
+[Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+interface IMMDeviceEnumerator { int GetDefaultAudioEndpoint(int dataFlow, int role, out IMMDevice endpoint); }
+[ComImport, Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")] class MMDeviceEnumeratorComObject { }
+public class Audio {
+  static IAudioEndpointVolume Vol() {
+    var enumerator = new MMDeviceEnumeratorComObject() as IMMDeviceEnumerator;
+    IMMDevice dev; enumerator.GetDefaultAudioEndpoint(0, 1, out dev);
+    IAudioEndpointVolume epv; var epvid = typeof(IAudioEndpointVolume).GUID;
+    dev.Activate(ref epvid, 23, 0, out epv); return epv;
+  }
+  public static float Volume { get { float v; Vol().GetMasterVolumeLevelScalar(out v); return v; } set { Vol().SetMasterVolumeLevelScalar(value, System.Guid.Empty); } }
+}
+"@
+[Audio]::Volume = ${volumeFloat}
+      `.replace(/\n/g, ' ')
+      exec(`powershell -command "${psScript}"`, { timeout: 5000 }, (error) => {
+        resolve(!error)
+      })
+    } else {
+      resolve(false)
+    }
+  })
 })
 
 // =============================================================================
