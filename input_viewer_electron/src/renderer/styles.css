@@ -466,8 +466,80 @@ body:has(#dropdown-panel:hover) * {
   cursor: default;
 }
 
+/* Touch-friendly dropdown (state-based instead of hover) */
+@media (pointer: coarse) {
+  #dropdown-trigger {
+    width: 80px;
+    height: 44px;
+  }
+}
+
+/* State-based dropdown visibility for touch and programmatic control */
+#dropdown-trigger.touch-open + #dropdown-panel,
+#dropdown-panel.touch-open {
+  transform: translateX(-50%) translateY(0);
+}
+
+#dropdown-trigger.touch-open .dropdown-arrow {
+  transform: rotate(180deg);
+}
+
 .dropdown-content {
   padding: 20px;
+}
+
+.dropdown-divider {
+  height: 1px;
+  background: var(--panel-border);
+  margin: 16px 0;
+}
+
+/* =============================================================================
+   Dropdown - Volume Controls
+   ============================================================================= */
+
+.dropdown-volume-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.volume-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.volume-row .volume-label {
+  font-size: 12px;
+  width: 80px;
+  flex-shrink: 0;
+  color: var(--text-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.volume-row input[type="range"] {
+  flex: 1;
+  height: 4px;
+  accent-color: var(--accent-color);
+}
+
+.volume-row .volume-value {
+  font-size: 11px;
+  color: var(--text-muted);
+  width: 36px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.volume-row.system-volume {
+  margin-top: 4px;
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .dropdown-section {
@@ -904,6 +976,28 @@ kbd {
   text-align: right;
   font-size: 12px;
   color: var(--text-muted);
+}
+
+/* =============================================================================
+   Settings Modal - Audio Controls
+   ============================================================================= */
+
+.audio-group {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+.audio-group:last-child {
+  margin-bottom: 0;
+}
+
+.audio-label {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+  font-weight: 500;
 }
 
 /* =============================================================================

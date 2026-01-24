@@ -104,6 +104,20 @@
       <!-- Single mode: One list -->
       <div id="single-input-list" class="single-input-list hidden"></div>
 
+      <!-- Volume Controls -->
+      <div class="dropdown-divider"></div>
+      <div id="dropdown-volume-section" class="dropdown-volume-section">
+        <!-- Dynamic input volume sliders rendered by JS -->
+        <div id="dropdown-input-volumes"></div>
+        <!-- System volume -->
+        <div class="volume-row system-volume">
+          <span class="volume-label">Output</span>
+          <input type="range" id="dropdown-system-volume" min="0" max="100" value="50">
+          <span id="dropdown-system-volume-value" class="volume-value">50%</span>
+        </div>
+      </div>
+      <div class="dropdown-divider"></div>
+
       <!-- Settings button -->
       <button id="open-settings-btn" class="settings-btn">
         <span class="icon">&#9881;</span>

@@ -15,6 +15,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // App info
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
 
+  // System volume control
+  getSystemVolume: () => ipcRenderer.invoke('get-system-volume'),
+  setSystemVolume: (volume) => ipcRenderer.invoke('set-system-volume', volume),
+
   // Updater events
   onUpdaterProgress: (callback) => {
     ipcRenderer.on('updater-progress', (event, percent) => callback(percent))
