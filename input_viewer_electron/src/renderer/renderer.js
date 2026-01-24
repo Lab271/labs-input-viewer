@@ -126,6 +126,7 @@ async function saveSettings() {
         layoutMode: state.layoutMode,
         centerGap: state.centerGap,
         borderWidth: state.borderWidth,
+        defaultInputId: state.defaultInputId,
         inputs: state.settings.inputs,
         initialSetupComplete: state.settings.initialSetupComplete,
         noSignalReferences: state.settings.noSignalReferences
@@ -151,6 +152,7 @@ function getDefaultSettings() {
     borderWidth: 0,
     leftDeviceId: null,
     rightDeviceId: null,
+    defaultInputId: null,
     layoutMode: null, // null means use screen-based detection
     initialSetupComplete: false,
     noSignalReferences: null
