@@ -1294,10 +1294,10 @@ function handleKeyDown(event) {
     case 'q':
       window.electronAPI.quitApp()
       break
-    case 'arrowleft':
+    case 'pageup':
       sendRemoteKeypress('left')
       break
-    case 'arrowright':
+    case 'pagedown':
       sendRemoteKeypress('right')
       break
   }
