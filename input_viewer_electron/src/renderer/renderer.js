@@ -1266,6 +1266,8 @@ function handleKeyDown(event) {
   // Don't handle if typing in an input
   if (event.target.tagName === 'INPUT') return
 
+  console.log(`[Key] pressed: "${event.key}" (code: ${event.code})`)
+
   switch (event.key.toLowerCase()) {
     case ' ': // Space bar - Freeze frame
       event.preventDefault()
@@ -1295,9 +1297,11 @@ function handleKeyDown(event) {
       window.electronAPI.quitApp()
       break
     case 'pageup':
+    case 'arrowleft':
       sendRemoteKeypress('left')
       break
     case 'pagedown':
+    case 'arrowright':
       sendRemoteKeypress('right')
       break
   }
