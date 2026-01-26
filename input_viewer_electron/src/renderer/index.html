@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; media-src blob: mediastream:; img-src 'self' data: blob:; connect-src 'self' data: blob:">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; media-src blob: mediastream:; img-src 'self' data: blob:; connect-src 'self' data: blob: http://* https://*">
   <title>Input Viewer</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
@@ -172,6 +172,26 @@
         </div>
       </div>
 
+      <!-- Remote Keyboard Section -->
+      <div class="settings-section">
+        <h3>Remote Keyboard</h3>
+        <p class="settings-description">Forward arrow key presses to a remote presenter PC via network.</p>
+        <div class="toggle-row">
+          <label for="remote-keyboard-toggle">Enable Remote Keyboard</label>
+          <div id="remote-keyboard-toggle" class="toggle-switch"></div>
+        </div>
+        <div id="remote-keyboard-fields" class="remote-keyboard-fields hidden">
+          <div class="input-row">
+            <label for="remote-keyboard-host">Hostname</label>
+            <input type="text" id="remote-keyboard-host" placeholder="space_keyboard.local">
+          </div>
+          <div class="input-row">
+            <label for="remote-keyboard-api-key">API Key</label>
+            <input type="password" id="remote-keyboard-api-key" placeholder="Enter API key">
+          </div>
+        </div>
+      </div>
+
       <!-- Shortcuts Section -->
       <div class="settings-section">
         <h3>Keyboard Shortcuts</h3>
@@ -181,6 +201,7 @@
           <tr><td><kbd>Space</kbd></td><td>Freeze frame</td></tr>
           <tr><td><kbd>F</kbd></td><td>Fullscreen</td></tr>
           <tr><td><kbd>Esc</kbd></td><td>Exit / Unfreeze</td></tr>
+          <tr><td><kbd>←</kbd> / <kbd>→</kbd></td><td>Remote keyboard (if enabled)</td></tr>
         </table>
       </div>
 

@@ -1265,6 +1265,82 @@ kbd {
 }
 
 /* =============================================================================
+   Settings Form Elements
+   ============================================================================= */
+
+.settings-description {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0 0 16px;
+  line-height: 1.5;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.toggle-row label {
+  font-size: 14px;
+  color: var(--text-color);
+}
+
+.remote-keyboard-fields {
+  margin-top: 16px;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 8px;
+}
+
+.remote-keyboard-fields.hidden {
+  display: none;
+}
+
+.input-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.input-row:last-child {
+  margin-bottom: 0;
+}
+
+.input-row label {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.input-row input[type="text"],
+.input-row input[type="password"] {
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  color: var(--text-color);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.input-row input[type="text"]:focus,
+.input-row input[type="password"]:focus {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 3px rgba(130, 180, 255, 0.2);
+}
+
+.input-row input[type="text"]::placeholder,
+.input-row input[type="password"]::placeholder {
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+/* =============================================================================
    Update Notification
    ============================================================================= */
 
