@@ -67,7 +67,11 @@ const state = {
   rightAudioSource: null,
   leftVolume: 1.0,            // 0.0 to 1.0
   rightVolume: 1.0,
-  systemVolume: 50            // 0 to 100
+  systemVolume: 50,           // 0 to 100
+  // Remote keyboard state
+  remoteKeyboardEnabled: false,
+  remoteKeyboardHost: '',
+  remoteKeyboardApiKey: ''
 }
 
 // =============================================================================
@@ -121,7 +125,12 @@ const elements = {
   rightLabel: document.querySelector('#right-feed .input-label'),
   // DVD screensaver overlay
   dvdOverlay: document.getElementById('dvd-overlay'),
-  dvdLogo: document.getElementById('dvd-logo')
+  dvdLogo: document.getElementById('dvd-logo'),
+  // Remote keyboard settings elements
+  remoteKeyboardToggle: document.getElementById('remote-keyboard-toggle'),
+  remoteKeyboardFields: document.getElementById('remote-keyboard-fields'),
+  remoteKeyboardHost: document.getElementById('remote-keyboard-host'),
+  remoteKeyboardApiKey: document.getElementById('remote-keyboard-api-key')
 }
 
 // =============================================================================
@@ -153,6 +162,9 @@ async function saveSettings() {
         leftVolume: state.leftVolume,
         rightVolume: state.rightVolume,
         systemVolume: state.systemVolume,
+        remoteKeyboardEnabled: state.remoteKeyboardEnabled,
+        remoteKeyboardHost: state.remoteKeyboardHost,
+        remoteKeyboardApiKey: state.remoteKeyboardApiKey,
         inputs: state.settings.inputs,
         initialSetupComplete: state.settings.initialSetupComplete,
         noSignalReferences: state.settings.noSignalReferences
@@ -184,7 +196,10 @@ function getDefaultSettings() {
     systemVolume: 50,
     layoutMode: null, // null means use screen-based detection
     initialSetupComplete: false,
-    noSignalReferences: null
+    noSignalReferences: null,
+    remoteKeyboardEnabled: false,
+    remoteKeyboardHost: '',
+    remoteKeyboardApiKey: ''
   }
 }
 
@@ -983,6 +998,52 @@ function setDefaultInput(deviceId) {
 function showSettingsModal() {
   elements.settingsModal.classList.remove('hidden')
   renderSettingsInputList()
+  updateRemoteKeyboardUI()
+}
+
+/**
+ * Update the remote keyboard settings UI to reflect current state
+ */
+function updateRemoteKeyboardUI() {
+  // Update toggle
+  if (state.remoteKeyboardEnabled) {
+    elements.remoteKeyboardToggle.classList.add('active')
+    elements.remoteKeyboardFields.classList.remove('hidden')
+  } else {
+    elements.remoteKeyboardToggle.classList.remove('active')
+    elements.remoteKeyboardFields.classList.add('hidden')
+  }
+  // Update input fields
+  elements.remoteKeyboardHost.value = state.remoteKeyboardHost || ''
+  elements.remoteKeyboardApiKey.value = state.remoteKeyboardApiKey || ''
+}
+
+/**
+ * Toggle remote keyboard enabled state
+ */
+function toggleRemoteKeyboard() {
+  state.remoteKeyboardEnabled = !state.remoteKeyboardEnabled
+  state.settings.remoteKeyboardEnabled = state.remoteKeyboardEnabled
+  updateRemoteKeyboardUI()
+  saveSettings()
+}
+
+/**
+ * Set the remote keyboard hostname
+ */
+function setRemoteKeyboardHost(host) {
+  state.remoteKeyboardHost = host
+  state.settings.remoteKeyboardHost = host
+  debouncedSaveSettings()
+}
+
+/**
+ * Set the remote keyboard API key
+ */
+function setRemoteKeyboardApiKey(apiKey) {
+  state.remoteKeyboardApiKey = apiKey
+  state.settings.remoteKeyboardApiKey = apiKey
+  debouncedSaveSettings()
 }
 
 /**
@@ -1157,13 +1218,54 @@ function handleMouseMove(event) {
 }
 
 // =============================================================================
+// Remote Keyboard
+// =============================================================================
+
+/**
+ * Send a keypress to the remote keyboard device
+ * @param {string} direction - 'left' or 'right'
+ */
+async function sendRemoteKeypress(direction) {
+  if (!state.remoteKeyboardEnabled) return
+  if (!state.remoteKeyboardHost || !state.remoteKeyboardApiKey) return
+
+  const host = state.remoteKeyboardHost.trim()
+  // Add http:// prefix and .local suffix if needed
+  let url = host
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    url = `http://${url}`
+  }
+  if (!url.includes('.') && !url.includes(':')) {
+    url = `${url}.local`
+  }
+  url = `${url}/${direction}`
+
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'X-API-Key': state.remoteKeyboardApiKey
+      }
+    })
+
+    if (!response.ok) {
+      console.warn(`[Remote Keyboard] Request failed: ${response.status}`)
+    } else {
+      console.log(`[Remote Keyboard] Sent: ${direction}`)
+    }
+  } catch (error) {
+    console.warn(`[Remote Keyboard] Error: ${error.message}`)
+  }
+}
+
+// =============================================================================
 // Keyboard Shortcuts
 // =============================================================================
 
 function handleKeyDown(event) {
   // Don't handle if typing in an input
   if (event.target.tagName === 'INPUT') return
-  
+
   switch (event.key.toLowerCase()) {
     case ' ': // Space bar - Freeze frame
       event.preventDefault()
@@ -1191,6 +1293,12 @@ function handleKeyDown(event) {
       break
     case 'q':
       window.electronAPI.quitApp()
+      break
+    case 'arrowleft':
+      sendRemoteKeypress('left')
+      break
+    case 'arrowright':
+      sendRemoteKeypress('right')
       break
   }
 }
@@ -1258,6 +1366,25 @@ function setupEventListeners() {
 
   elements.captureRightBtn.addEventListener('click', () => {
     captureNoSignalForSide('right')
+  })
+
+  // Remote keyboard settings
+  elements.remoteKeyboardToggle.addEventListener('click', toggleRemoteKeyboard)
+
+  elements.remoteKeyboardHost.addEventListener('input', (e) => {
+    setRemoteKeyboardHost(e.target.value)
+  })
+
+  elements.remoteKeyboardHost.addEventListener('keydown', (e) => {
+    e.stopPropagation() // Prevent keyboard shortcuts while typing
+  })
+
+  elements.remoteKeyboardApiKey.addEventListener('input', (e) => {
+    setRemoteKeyboardApiKey(e.target.value)
+  })
+
+  elements.remoteKeyboardApiKey.addEventListener('keydown', (e) => {
+    e.stopPropagation() // Prevent keyboard shortcuts while typing
   })
 
   // System volume slider in dropdown
@@ -1503,6 +1630,11 @@ async function init() {
   state.leftVolume = state.settings.leftVolume ?? 1.0
   state.rightVolume = state.settings.rightVolume ?? 1.0
   state.systemVolume = state.settings.systemVolume ?? 50
+
+  // Initialize remote keyboard settings
+  state.remoteKeyboardEnabled = state.settings.remoteKeyboardEnabled ?? false
+  state.remoteKeyboardHost = state.settings.remoteKeyboardHost ?? ''
+  state.remoteKeyboardApiKey = state.settings.remoteKeyboardApiKey ?? ''
 
   // Initialize system volume from actual system (async)
   syncSystemVolume()
