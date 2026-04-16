@@ -319,9 +319,10 @@ function captureFrame() {
 
 async function getVideoDevices() {
   try {
-    // Request permission first
-    await navigator.mediaDevices.getUserMedia({ video: true })
-    
+    // Request permission first, then immediately release the stream
+    const permissionStream = await navigator.mediaDevices.getUserMedia({ video: true })
+    permissionStream.getTracks().forEach(track => track.stop())
+
     const devices = await navigator.mediaDevices.enumerateDevices()
     state.devices = devices.filter(device => device.kind === 'videoinput')
     
@@ -405,7 +406,8 @@ async function startVideoStream(deviceId, videoElement, side) {
       video: {
         deviceId: { exact: deviceId },
         width: { ideal: 4096 },
-        height: { ideal: 2160 }
+        height: { ideal: 2160 },
+        frameRate: { ideal: 60 }
       },
       audio: {
         deviceId: { exact: deviceId }
@@ -422,46 +424,57 @@ async function startVideoStream(deviceId, videoElement, side) {
         video: {
           deviceId: { exact: deviceId },
           width: { ideal: 4096 },
-          height: { ideal: 2160 }
+          height: { ideal: 2160 },
+          frameRate: { ideal: 60 }
         }
       }
       stream = await navigator.mediaDevices.getUserMedia(videoOnlyConstraints)
     }
     videoElement.srcObject = stream
 
-    // Some capture devices start at low resolution and need a restart to get high-res
-    // Check resolution after stream starts and retry if too low
+    // Log stream info for diagnostics
     const track = stream.getVideoTracks()[0]
     const settings = track.getSettings()
     const caps = track.getCapabilities()
+    console.log(`[Video] ${side} stream: ${settings.width}x${settings.height} @ ${settings.frameRate}fps`)
+    console.log(`[Video] ${side} capabilities: ${caps.width?.max}x${caps.height?.max} @ ${caps.frameRate?.max}fps`)
 
-    if (caps.width && settings.width < caps.width.max) {
-      console.log(`[Video] Got ${settings.width}x${settings.height}, device supports up to ${caps.width.max}x${caps.height.max}. Restarting for higher res...`)
+    // Some capture cards start at low default resolution and need a retry.
+    // Cap target at 1920x1080 to prefer uncompressed formats over MJPEG.
+    if (settings.width <= 640 && caps.width?.max > 640) {
+      const targetWidth = Math.min(caps.width.max, 1920)
+      const targetHeight = Math.min(caps.height.max, 1080)
+      console.log(`[Video] ${side} resolution too low, retrying for ${targetWidth}x${targetHeight}...`)
 
-      // Stop current stream
-      stream.getTracks().forEach(t => t.stop())
-
-      // Small delay then request max resolution
-      await new Promise(resolve => setTimeout(resolve, 100))
-
-      // Check if original stream had audio
       const hasAudio = stream.getAudioTracks().length > 0
+      stream.getTracks().forEach(t => t.stop())
+      await new Promise(resolve => setTimeout(resolve, 300))
 
       const retryConstraints = {
         video: {
           deviceId: { exact: deviceId },
-          width: { ideal: caps.width.max },
-          height: { ideal: caps.height.max }
+          width: { ideal: targetWidth },
+          height: { ideal: targetHeight },
+          frameRate: { ideal: 60 }
         }
       }
       if (hasAudio) {
         retryConstraints.audio = { deviceId: { exact: deviceId } }
       }
-      stream = await navigator.mediaDevices.getUserMedia(retryConstraints)
-      videoElement.srcObject = stream
 
-      const newSettings = stream.getVideoTracks()[0].getSettings()
-      console.log(`[Video] Retry got ${newSettings.width}x${newSettings.height}`)
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(retryConstraints)
+        videoElement.srcObject = stream
+        const retrySettings = stream.getVideoTracks()[0].getSettings()
+        console.log(`[Video] ${side} retry: ${retrySettings.width}x${retrySettings.height} @ ${retrySettings.frameRate}fps`)
+      } catch (e) {
+        console.warn(`[Video] ${side} retry failed: ${e.message}`)
+        // Re-acquire at default resolution
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { deviceId: { exact: deviceId } }
+        })
+        videoElement.srcObject = stream
+      }
     }
 
     // Store stream reference
