@@ -3,11 +3,8 @@ const path = require('path')
 const fs = require('fs')
 const { exec } = require('child_process')
 
-// Enable hardware acceleration for video capture
-app.commandLine.appendSwitch('enable-accelerated-mjpeg-decode')
-app.commandLine.appendSwitch('enable-accelerated-video-decode')
+// Hardware acceleration for video decode/rendering
 app.commandLine.appendSwitch('ignore-gpu-blocklist')
-app.commandLine.appendSwitch('enable-native-gpu-memory-buffers')
 app.commandLine.appendSwitch('enable-gpu-rasterization')
 
 // Keep a global reference of the window object

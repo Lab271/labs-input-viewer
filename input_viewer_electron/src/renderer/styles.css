@@ -98,10 +98,13 @@ body.single-view #video-wrapper {
   height: 100%;
   object-fit: contain;
   background-color: #000;
-  /* GPU acceleration and crisp rendering */
+  /* GPU-composited rendering with high-quality upscaling.
+     filter: contrast(1) is a no-op that forces Chromium to render through
+     its GPU filter pipeline, which uses better interpolation for scaling. */
   transform: translateZ(0);
   will-change: contents;
-  image-rendering: -webkit-optimize-contrast;
+  image-rendering: high-quality;
+  filter: contrast(1);
 }
 
 /* Single view: video shows full content without cropping */
