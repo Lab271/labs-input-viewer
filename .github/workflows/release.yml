@@ -286,7 +286,7 @@ jobs:
         run: |
           echo "tag=v${{ needs.analyze.outputs.new_version }}" >> $GITHUB_OUTPUT
 
-      - name: Create Release in source repo
+      - name: Create Release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
@@ -297,22 +297,6 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create Release in public releases repo
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
-        with:
-          repository: LAB271/input-viewer-releases
-          tag_name: ${{ steps.tag.outputs.tag }}
-          name: Input Viewer ${{ steps.tag.outputs.tag }}
-          files: |
-            ./artifacts/mac/*.dmg
-            ./artifacts/mac/*.zip
-            ./artifacts/mac/*.yml
-            ./artifacts/win/*.exe
-            ./artifacts/win/*.yml
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.RELEASES_REPO_TOKEN }}
 
       - name: Summary
         run: |
