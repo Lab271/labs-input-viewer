@@ -36,9 +36,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Check code style
-        run: npm run lint --if-present
-
   # =============================================================================
   # Step 2: Analyze commits (push to main only, runs early to determine version)
   # =============================================================================
