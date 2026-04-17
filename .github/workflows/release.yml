@@ -92,6 +92,34 @@ jobs:
           fi
 
   # =============================================================================
+  # Lint and test (required for status check before pushing version bump)
+  # =============================================================================
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: input_viewer_electron
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: input_viewer_electron/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check code style
+        run: npm run lint --if-present
+
+      - name: Build app
+        run: npm run build
+
+  # =============================================================================
   # Build macOS
   # =============================================================================
   build-mac:
@@ -192,7 +220,7 @@ jobs:
   # =============================================================================
   version-bump:
     name: Bump Version
-    needs: [analyze, build-mac, build-windows]
+    needs: [analyze, lint, build-mac, build-windows]
     if: needs.analyze.outputs.should_release == 'true' && needs.analyze.outputs.bump != 'none'
     runs-on: ubuntu-latest
     permissions:
