@@ -21,11 +21,11 @@ function getAutoUpdater() {
   if (!autoUpdater && !isDev) {
     autoUpdater = require('electron-updater').autoUpdater
 
-    // Configure auto-updater to use the public releases repository
+    // Configure auto-updater to use this repository
     autoUpdater.setFeedURL({
       provider: 'github',
       owner: 'LAB271',
-      repo: 'input-viewer-releases'
+      repo: 'input-viewer'
     })
 
     // Don't auto-download - prompt user first
