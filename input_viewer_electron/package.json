@@ -1,6 +1,6 @@
 {
   "name": "input-viewer",
-  "version": "2.5.3",
+  "version": "2.5.4",
   "description": "A lightweight video input viewer - OBS without the complexity",
   "main": "./out/main/index.js",
   "author": {
@@ -26,8 +26,8 @@
     "electron-updater": "^6.3.9"
   },
   "devDependencies": {
-    "electron": "^35.7.5",
-    "electron-builder": "^25.1.8",
+    "electron": "^41.2.1",
+    "electron-builder": "^26.8.1",
     "electron-vite": "^5.0.0",
     "vite": "^7.3.1"
   },
