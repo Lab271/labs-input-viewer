@@ -11,7 +11,7 @@ jobs:
   # Lint and test (runs on all events)
   # =============================================================================
   lint:
-    name: Lint & Test
+    name: Lint
     runs-on: ubuntu-latest
     defaults:
       run:
