@@ -4,7 +4,7 @@
   "description": "A lightweight video input viewer - OBS without the complexity",
   "main": "./out/main/index.js",
   "author": {
-    "name": "Labs for Space",
+    "name": "Lab271@SchubergPhilis",
     "email": "info@lab271.com"
   },
   "license": "MIT",
