@@ -230,14 +230,13 @@ body.cursor-visible .input-label {
   display: none;
 }
 
-#dvd-logo {
+#screensaver-canvas {
   position: absolute;
   top: 0;
   left: 0;
-  width: 200px;
-  height: auto;
-  will-change: transform, filter;
-  transition: filter 0.3s ease;
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 /* =============================================================================
