@@ -1364,6 +1364,51 @@ kbd {
 }
 
 /* =============================================================================
+   Presenter Tool Debug Overlay
+   ============================================================================= */
+
+#presenter-debug-overlay {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  max-width: 380px;
+  padding: 10px 14px;
+  background-color: rgba(0, 0, 0, 0.8);
+  border: 1px solid var(--accent-color);
+  border-radius: 8px;
+  font-family: monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  z-index: 200;
+  pointer-events: none;
+}
+
+#presenter-debug-overlay.hidden {
+  display: none;
+}
+
+.presenter-debug-title {
+  color: var(--accent-color);
+  font-weight: bold;
+  letter-spacing: 1px;
+  margin-bottom: 6px;
+}
+
+#presenter-debug-log .debug-line {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#presenter-debug-log .debug-line.error {
+  color: #ff6b6b;
+}
+
+#presenter-debug-log .debug-line.ok {
+  color: #6bff95;
+}
+
+/* =============================================================================
    Setup Wizard Modal
    ============================================================================= */
 

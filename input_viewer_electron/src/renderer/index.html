@@ -131,6 +131,12 @@
     <span id="update-message"></span>
   </div>
 
+  <!-- Presenter Tool Debug Overlay -->
+  <div id="presenter-debug-overlay" class="hidden">
+    <div class="presenter-debug-title">PRESENTER DEBUG</div>
+    <div id="presenter-debug-log"></div>
+  </div>
+
   <!-- Settings Modal -->
   <div id="settings-modal" class="modal hidden">
     <div class="settings-modal-content">
@@ -188,6 +194,10 @@
           <div class="input-row">
             <label for="remote-keyboard-api-key">API Key</label>
             <input type="password" id="remote-keyboard-api-key" placeholder="Enter API key">
+          </div>
+          <div class="toggle-row">
+            <label for="presenter-debug-toggle">Show debug overlay</label>
+            <div id="presenter-debug-toggle" class="toggle-switch"></div>
           </div>
         </div>
       </div>

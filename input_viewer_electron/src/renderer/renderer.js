@@ -71,7 +71,9 @@ const state = {
   // Remote keyboard state
   remoteKeyboardEnabled: false,
   remoteKeyboardHost: '',
-  remoteKeyboardApiKey: ''
+  remoteKeyboardApiKey: '',
+  // Presenter tool debug overlay
+  presenterDebugEnabled: false
 }
 
 // =============================================================================
@@ -130,7 +132,11 @@ const elements = {
   remoteKeyboardToggle: document.getElementById('remote-keyboard-toggle'),
   remoteKeyboardFields: document.getElementById('remote-keyboard-fields'),
   remoteKeyboardHost: document.getElementById('remote-keyboard-host'),
-  remoteKeyboardApiKey: document.getElementById('remote-keyboard-api-key')
+  remoteKeyboardApiKey: document.getElementById('remote-keyboard-api-key'),
+  // Presenter tool debug overlay
+  presenterDebugToggle: document.getElementById('presenter-debug-toggle'),
+  presenterDebugOverlay: document.getElementById('presenter-debug-overlay'),
+  presenterDebugLog: document.getElementById('presenter-debug-log')
 }
 
 // =============================================================================
@@ -165,6 +171,7 @@ async function saveSettings() {
         remoteKeyboardEnabled: state.remoteKeyboardEnabled,
         remoteKeyboardHost: state.remoteKeyboardHost,
         remoteKeyboardApiKey: state.remoteKeyboardApiKey,
+        presenterDebugEnabled: state.presenterDebugEnabled,
         inputs: state.settings.inputs,
         initialSetupComplete: state.settings.initialSetupComplete,
         noSignalReferences: state.settings.noSignalReferences
@@ -199,7 +206,8 @@ function getDefaultSettings() {
     noSignalReferences: null,
     remoteKeyboardEnabled: false,
     remoteKeyboardHost: '',
-    remoteKeyboardApiKey: ''
+    remoteKeyboardApiKey: '',
+    presenterDebugEnabled: false
   }
 }
 
@@ -1012,6 +1020,7 @@ function showSettingsModal() {
   elements.settingsModal.classList.remove('hidden')
   renderSettingsInputList()
   updateRemoteKeyboardUI()
+  updatePresenterDebugUI()
 }
 
 /**
@@ -1057,6 +1066,49 @@ function setRemoteKeyboardApiKey(apiKey) {
   state.remoteKeyboardApiKey = apiKey
   state.settings.remoteKeyboardApiKey = apiKey
   debouncedSaveSettings()
+}
+
+/**
+ * Update the presenter debug overlay visibility to reflect current state
+ */
+function updatePresenterDebugUI() {
+  if (state.presenterDebugEnabled) {
+    elements.presenterDebugToggle.classList.add('active')
+    elements.presenterDebugOverlay.classList.remove('hidden')
+  } else {
+    elements.presenterDebugToggle.classList.remove('active')
+    elements.presenterDebugOverlay.classList.add('hidden')
+  }
+}
+
+/**
+ * Toggle the presenter debug overlay
+ */
+function togglePresenterDebug() {
+  state.presenterDebugEnabled = !state.presenterDebugEnabled
+  state.settings.presenterDebugEnabled = state.presenterDebugEnabled
+  updatePresenterDebugUI()
+  saveSettings()
+}
+
+/**
+ * Append a line to the presenter debug overlay (most recent at top, max 8 lines)
+ * @param {string} message
+ * @param {'ok'|'error'|''} status
+ */
+function logPresenterDebug(message, status = '') {
+  console.log(`[Presenter Debug] ${message}`)
+  if (!state.presenterDebugEnabled || !elements.presenterDebugLog) return
+
+  const line = document.createElement('div')
+  line.className = `debug-line${status ? ' ' + status : ''}`
+  const time = new Date().toLocaleTimeString()
+  line.textContent = `${time}  ${message}`
+
+  elements.presenterDebugLog.prepend(line)
+  while (elements.presenterDebugLog.childElementCount > 8) {
+    elements.presenterDebugLog.lastElementChild.remove()
+  }
 }
 
 /**
@@ -1240,7 +1292,10 @@ function handleMouseMove(event) {
  */
 async function sendRemoteKeypress(direction) {
   if (!state.remoteKeyboardEnabled) return
-  if (!state.remoteKeyboardHost || !state.remoteKeyboardApiKey) return
+  if (!state.remoteKeyboardHost || !state.remoteKeyboardApiKey) {
+    logPresenterDebug(`${direction}: skipped (host/API key not set)`, 'error')
+    return
+  }
 
   const host = state.remoteKeyboardHost.trim()
   // Add http:// prefix and .local suffix if needed
@@ -1253,6 +1308,8 @@ async function sendRemoteKeypress(direction) {
   }
   url = `${url}/${direction}`
 
+  logPresenterDebug(`${direction} → ${url}`)
+
   try {
     const response = await fetch(url, {
       method: 'GET',
@@ -1263,11 +1320,14 @@ async function sendRemoteKeypress(direction) {
 
     if (!response.ok) {
       console.warn(`[Remote Keyboard] Request failed: ${response.status}`)
+      logPresenterDebug(`${direction}: failed (HTTP ${response.status})`, 'error')
     } else {
       console.log(`[Remote Keyboard] Sent: ${direction}`)
+      logPresenterDebug(`${direction}: sent (HTTP ${response.status})`, 'ok')
     }
   } catch (error) {
     console.warn(`[Remote Keyboard] Error: ${error.message}`)
+    logPresenterDebug(`${direction}: error (${error.message})`, 'error')
   }
 }
 
@@ -1403,6 +1463,9 @@ function setupEventListeners() {
   elements.remoteKeyboardApiKey.addEventListener('keydown', (e) => {
     e.stopPropagation() // Prevent keyboard shortcuts while typing
   })
+
+  // Presenter tool debug overlay toggle
+  elements.presenterDebugToggle.addEventListener('click', togglePresenterDebug)
 
   // System volume slider in dropdown
   elements.dropdownSystemVolume.addEventListener('input', async (e) => {
@@ -1652,6 +1715,10 @@ async function init() {
   state.remoteKeyboardEnabled = state.settings.remoteKeyboardEnabled ?? false
   state.remoteKeyboardHost = state.settings.remoteKeyboardHost ?? ''
   state.remoteKeyboardApiKey = state.settings.remoteKeyboardApiKey ?? ''
+
+  // Initialize presenter debug overlay
+  state.presenterDebugEnabled = state.settings.presenterDebugEnabled ?? false
+  updatePresenterDebugUI()
 
   // Initialize system volume from actual system (async)
   syncSystemVolume()
