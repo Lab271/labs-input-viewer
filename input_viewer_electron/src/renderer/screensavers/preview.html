@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Screensaver Preview</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; background: #000; overflow: hidden; }
+    #stage { position: fixed; inset: 0; }
+    #screensaver-canvas { width: 100%; height: 100%; display: block; }
+    #hud {
+      position: fixed; top: 16px; left: 16px; z-index: 10;
+      font-family: monospace; color: #fff; background: rgba(0,0,0,0.55);
+      border: 1px solid #0066ff; border-radius: 8px; padding: 10px 14px;
+      font-size: 13px; line-height: 1.6; user-select: none;
+    }
+    #hud h1 { font-size: 13px; color: #4d9bff; margin-bottom: 6px; letter-spacing: 1px; }
+    #hud .list button {
+      display: block; width: 100%; text-align: left; background: none; border: none;
+      color: #ccc; font: inherit; cursor: pointer; padding: 2px 4px; border-radius: 4px;
+    }
+    #hud .list button.active { background: #0066ff; color: #fff; }
+    #hud .list button:hover { color: #fff; }
+    #hud .keys { margin-top: 8px; color: #888; font-size: 11px; }
+    #hud.hidden { display: none; }
+    #fps { position: fixed; top: 16px; right: 16px; z-index: 10;
+      font-family: monospace; color: #6bff95; background: rgba(0,0,0,0.55);
+      padding: 6px 10px; border-radius: 6px; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div id="stage">
+    <canvas id="screensaver-canvas"></canvas>
+  </div>
+  <div id="hud">
+    <h1>SCREENSAVER PREVIEW</h1>
+    <div class="list" id="list"></div>
+    <div class="keys">←/→ cycle · R restart · H hide HUD · F fullscreen</div>
+  </div>
+  <div id="fps">– fps</div>
+  <script type="module" src="./preview.js"></script>
+</body>
+</html>

@@ -14,11 +14,11 @@ import {
 } from './detection-simple.js'
 
 import {
-  initBouncingLogo,
-  startBouncingLogo,
-  stopBouncingLogo,
-  isBouncingLogoRunning
-} from './bouncing-logo.js'
+  initScreensavers,
+  startScreensaver,
+  stopScreensaver,
+  isScreensaverRunning
+} from './screensavers/registry.js'
 
 // =============================================================================
 // State Management
@@ -127,7 +127,7 @@ const elements = {
   rightLabel: document.querySelector('#right-feed .input-label'),
   // DVD screensaver overlay
   dvdOverlay: document.getElementById('dvd-overlay'),
-  dvdLogo: document.getElementById('dvd-logo'),
+  screensaverCanvas: document.getElementById('screensaver-canvas'),
   // Remote keyboard settings elements
   remoteKeyboardToggle: document.getElementById('remote-keyboard-toggle'),
   remoteKeyboardFields: document.getElementById('remote-keyboard-fields'),
@@ -673,7 +673,7 @@ function updateDvdScreensaver() {
 
   if (allNoSignal) {
     // Start timer if not already running
-    if (!state.dvdScreensaverTimeout && !isBouncingLogoRunning()) {
+    if (!state.dvdScreensaverTimeout && !isScreensaverRunning()) {
       console.log('[DVD] No signal detected - starting 5 minute timer')
       state.dvdScreensaverTimeout = setTimeout(() => {
         // Double-check we still have no signal before starting
@@ -694,7 +694,7 @@ function updateDvdScreensaver() {
       state.dvdScreensaverTimeout = null
       console.log('[DVD] Signal restored - cancelled screensaver timer')
     }
-    if (isBouncingLogoRunning()) {
+    if (isScreensaverRunning()) {
       hideDvdScreensaver()
     }
   }
@@ -704,18 +704,19 @@ function updateDvdScreensaver() {
  * Show the DVD screensaver overlay
  */
 function showDvdScreensaver() {
+  // Overlay must be visible before starting so the canvas has layout size.
   elements.dvdOverlay.classList.remove('hidden')
-  startBouncingLogo()
-  console.log('[DVD] Screensaver activated')
+  const name = startScreensaver() // random pick each activation
+  console.log(`[Screensaver] Activated: ${name}`)
 }
 
 /**
  * Hide the DVD screensaver overlay
  */
 function hideDvdScreensaver() {
-  stopBouncingLogo()
+  stopScreensaver()
   elements.dvdOverlay.classList.add('hidden')
-  console.log('[DVD] Screensaver deactivated')
+  console.log('[Screensaver] Deactivated')
 }
 
 // =============================================================================
@@ -1273,7 +1274,7 @@ function handleMouseMove(event) {
   showCursor()
 
   // Only check for shake when screensaver is active
-  if (isBouncingLogoRunning()) {
+  if (isScreensaverRunning()) {
     if (detectShake(event.clientX, event.clientY)) {
       hideDvdScreensaver()
       resetShakeDetection()
@@ -1751,8 +1752,8 @@ async function init() {
     }
   }
 
-  // Initialize DVD bouncing logo
-  initBouncingLogo(elements.dvdLogo, elements.dvdOverlay)
+  // Initialize screensaver registry (random screensaver chosen on activation)
+  initScreensavers(elements.screensaverCanvas)
 
   // Initialize no-signal detection (don't await - let it load in background)
   initNoSignalDetection().catch(err => {

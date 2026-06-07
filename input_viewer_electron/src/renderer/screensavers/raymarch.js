@@ -1,0 +1,83 @@
+/**
+ * Raymarched fractal — a slowly morphing Mandelbulb-ish distance field,
+ * lit and orbited by the camera. Heavy GPU; looks great on discrete cards.
+ */
+import { createShaderScreensaver } from './gl-base.js'
+
+const SHADER = /* glsl */ `
+// Mandelbulb distance estimator.
+float de(vec3 pos, float power) {
+  vec3 z = pos;
+  float dr = 1.0;
+  float r = 0.0;
+  for (int i = 0; i < 8; i++) {
+    r = length(z);
+    if (r > 2.0) break;
+    float theta = acos(z.z / r);
+    float phi = atan(z.y, z.x);
+    dr = pow(r, power - 1.0) * power * dr + 1.0;
+    float zr = pow(r, power);
+    theta *= power;
+    phi *= power;
+    z = zr * vec3(sin(theta) * cos(phi), sin(phi) * sin(theta), cos(theta));
+    z += pos;
+  }
+  return 0.5 * log(r) * r / dr;
+}
+
+vec3 calcNormal(vec3 p, float power) {
+  vec2 e = vec2(0.001, 0.0);
+  return normalize(vec3(
+    de(p + e.xyy, power) - de(p - e.xyy, power),
+    de(p + e.yxy, power) - de(p - e.yxy, power),
+    de(p + e.yyx, power) - de(p - e.yyx, power)
+  ));
+}
+
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+  vec2 res = iResolution.xy;
+  vec2 uv = (fragCoord - 0.5 * res) / res.y;
+
+  float power = 6.0 + 2.0 * sin(iTime * 0.2);
+
+  // Orbiting camera.
+  float a = iTime * 0.15;
+  vec3 ro = vec3(2.4 * cos(a), 0.6 * sin(iTime * 0.1), 2.4 * sin(a));
+  vec3 target = vec3(0.0);
+  vec3 fwd = normalize(target - ro);
+  vec3 right = normalize(cross(vec3(0.0, 1.0, 0.0), fwd));
+  vec3 up = cross(fwd, right);
+  vec3 rd = normalize(uv.x * right + uv.y * up + 1.6 * fwd);
+
+  float t = 0.0;
+  float glow = 0.0;
+  bool hit = false;
+  vec3 p = ro;
+  for (int i = 0; i < 90; i++) {
+    p = ro + rd * t;
+    float d = de(p, power);
+    glow += 0.012 * (1.0 / (1.0 + d * 40.0));
+    if (d < 0.0006) { hit = true; break; }
+    if (t > 8.0) break;
+    t += d * 0.85;
+  }
+
+  vec3 col = vec3(0.0);
+  if (hit) {
+    vec3 n = calcNormal(p, power);
+    vec3 lightDir = normalize(vec3(0.8, 0.9, -0.4));
+    float diff = max(dot(n, lightDir), 0.0);
+    float fres = pow(1.0 - max(dot(n, -rd), 0.0), 3.0);
+    vec3 base = 0.5 + 0.5 * cos(6.2831 * (length(p) * 0.6 + vec3(0.0, 0.33, 0.67) + 0.05 * iTime));
+    col = base * (0.2 + diff) + fres * vec3(0.4, 0.6, 1.0);
+  }
+  // Volumetric-ish glow toward the fractal surface.
+  col += glow * vec3(0.5, 0.7, 1.0);
+  // Tone map + gamma.
+  col = col / (1.0 + col);
+  col = pow(col, vec3(0.4545));
+  fragColor = vec4(col, 1.0);
+}
+`
+
+export default createShaderScreensaver('Raymarch Fractal', SHADER)
