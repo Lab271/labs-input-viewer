@@ -126,28 +126,39 @@ function animate() {
   animationState.x += animationState.vx
   animationState.y += animationState.vy
 
-  // Bounce off edges
+  // Bounce off edges.
+  // Only count a bounce when the logo is actually moving *into* the wall.
+  // This prevents repeated bounces (and rapid multi-color changes) when the
+  // logo is pinned at or past an edge for several frames — e.g. when the
+  // container is re-measured smaller mid-flight, which leaves x/y >= max.
   let bounced = false
 
-  if (animationState.x <= 0) {
+  if (animationState.x <= 0 && animationState.vx < 0) {
     animationState.x = 0
     animationState.vx = Math.abs(animationState.vx)
     bounced = true
-  } else if (animationState.x >= maxX) {
+  } else if (animationState.x >= maxX && animationState.vx > 0) {
     animationState.x = maxX
     animationState.vx = -Math.abs(animationState.vx)
     bounced = true
   }
 
-  if (animationState.y <= 0) {
+  if (animationState.y <= 0 && animationState.vy < 0) {
     animationState.y = 0
     animationState.vy = Math.abs(animationState.vy)
     bounced = true
-  } else if (animationState.y >= maxY) {
+  } else if (animationState.y >= maxY && animationState.vy > 0) {
     animationState.y = maxY
     animationState.vy = -Math.abs(animationState.vy)
     bounced = true
   }
+
+  // Keep the logo within bounds even when no bounce was registered
+  // (e.g. it was already past a shrunken edge while moving away from it).
+  if (animationState.x < 0) animationState.x = 0
+  else if (animationState.x > maxX) animationState.x = maxX
+  if (animationState.y < 0) animationState.y = 0
+  else if (animationState.y > maxY) animationState.y = maxY
 
   // Change color on bounce
   if (bounced) {
