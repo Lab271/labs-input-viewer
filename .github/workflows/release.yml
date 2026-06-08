@@ -153,12 +153,6 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
 
-      - name: Fix latest-mac.yml URLs
-        run: |
-          if [ -f dist/latest-mac.yml ]; then
-            sed -i '' 's|LAB271/input-viewer/releases|LAB271/input-viewer-releases/releases|g' dist/latest-mac.yml
-          fi
-
       - name: Upload artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -199,13 +193,6 @@ jobs:
 
       - name: Build and package for Windows
         run: npm run build && npx electron-builder --win --config --publish never
-
-      - name: Fix latest.yml URLs
-        run: |
-          if (Test-Path dist/latest.yml) {
-            (Get-Content dist/latest.yml) -replace 'LAB271/input-viewer/releases', 'LAB271/input-viewer-releases/releases' | Set-Content dist/latest.yml
-          }
-        shell: pwsh
 
       - name: Upload artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -293,7 +280,9 @@ jobs:
           files: |
             ./artifacts/mac/*.dmg
             ./artifacts/mac/*.zip
+            ./artifacts/mac/latest-mac.yml
             ./artifacts/win/*.exe
+            ./artifacts/win/latest.yml
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
