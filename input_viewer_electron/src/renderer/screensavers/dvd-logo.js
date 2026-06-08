@@ -58,7 +58,7 @@ export default {
     const st = {
       x: 0.4, y: 0.4,
       vx: 0.12, vy: 0.12, // per second
-      logoW: 0.18, logoH: 0.1,
+      logoW: 0.12, logoH: 0.07,
       hueIndex: 0,
       lastTime: 0
     }
