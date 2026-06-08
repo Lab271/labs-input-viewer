@@ -51,6 +51,12 @@
           "arch": [
             "universal"
           ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "universal"
+          ]
         }
       ],
       "hardenedRuntime": true,
