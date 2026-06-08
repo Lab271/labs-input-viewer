@@ -75,21 +75,39 @@ Use [Conventional Commits](https://www.conventionalcommits.org/):
 
 ## Auto-Update Configuration
 
-The app fetches updates from `LAB271/input-viewer-releases` (public repo).
-Builds are published to both source repo and releases repo.
+The app fetches updates from the public `LAB271/input-viewer` repo (the
+source repo itself). The runtime feed (`setFeedURL` in the main process)
+and the electron-builder `publish` config both point there. There is no
+longer a separate `input-viewer-releases` repo.
+
+Each release publishes the installers **plus** the electron-updater
+metadata required for updates to work:
+
+- macOS: `Input.Viewer-<version>-universal.dmg`, the universal
+  `...-mac.zip` (the zip is what electron-updater actually applies), and
+  `latest-mac.yml`
+- Windows: `Input-Viewer-Setup-<version>.exe` and `latest.yml`
 
 ## CI/CD Flow
 
+CI runs on every PR/branch. Releasing is a **manual** step (the Release
+workflow is `workflow_dispatch`, not triggered automatically on merge):
+
 ```
-Feature Branch → PR → CI Tests → Merge to Main → Auto-Release → Build & Publish
+Feature Branch → PR → CI Tests → Merge to Main
+                                      │
+        (manually) Run "Release" workflow ──┐
                                       ↓
-                              Analyzes commits
-                              Bumps VERSION
-                              Creates tag v*.*.*
-                                      ↓
+                              Analyzes commits since last tag
+                              Computes version bump (semver)
                               Builds macOS + Windows
-                              Publishes to GitHub Releases
+                              Bumps VERSION + package.json, tags v*.*.*
+                              Publishes installers + update metadata
+                              to GitHub Releases on LAB271/input-viewer
 ```
+
+Trigger a release with `gh workflow run release.yml` (or via the Actions
+tab). The `release` skill also covers this.
 
 ## Important Files
 
@@ -97,8 +115,7 @@ Feature Branch → PR → CI Tests → Merge to Main → Auto-Release → Build 
 |------|---------|
 | `VERSION` | Current version (source of truth) |
 | `.github/workflows/ci.yml` | PR and branch testing |
-| `.github/workflows/auto-release.yml` | Version bumping and tagging |
-| `.github/workflows/release.yml` | Building and publishing |
+| `.github/workflows/release.yml` | Version bump, tag, build, and publish (manual dispatch) |
 
 ## Performance Considerations
 
