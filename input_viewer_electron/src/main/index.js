@@ -25,7 +25,7 @@ function getAutoUpdater() {
     autoUpdater.setFeedURL({
       provider: 'github',
       owner: 'LAB271',
-      repo: 'input-viewer'
+      repo: 'labs-input-viewer'
     })
 
     // Don't auto-download - prompt user first

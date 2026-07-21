@@ -1,7 +1,7 @@
 # Input Viewer
 
-[![CI/CD](https://github.com/LAB271/input-viewer/actions/workflows/ci.yml/badge.svg)](https://github.com/LAB271/input-viewer/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/LAB271/input-viewer)](https://github.com/LAB271/input-viewer/releases/latest)
+[![CI/CD](https://github.com/LAB271/labs-input-viewer/actions/workflows/ci.yml/badge.svg)](https://github.com/LAB271/labs-input-viewer/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/LAB271/labs-input-viewer)](https://github.com/LAB271/labs-input-viewer/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A lightweight video input viewer — **OBS without the complexity**. View and manage capture card feeds with a clean, simple interface designed for users who need to display video inputs without the overhead of full streaming software.

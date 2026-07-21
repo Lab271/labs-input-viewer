@@ -10,7 +10,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/LAB271/input-viewer.git"
+    "url": "https://github.com/LAB271/labs-input-viewer.git"
   },
   "scripts": {
     "dev": "electron-vite dev",
@@ -99,7 +99,7 @@
     "publish": {
       "provider": "github",
       "owner": "LAB271",
-      "repo": "input-viewer"
+      "repo": "labs-input-viewer"
     }
   }
 }

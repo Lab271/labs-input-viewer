@@ -75,7 +75,7 @@ Use [Conventional Commits](https://www.conventionalcommits.org/):
 
 ## Auto-Update Configuration
 
-The app fetches updates from the public `LAB271/input-viewer` repo (the
+The app fetches updates from the public `LAB271/labs-input-viewer` repo (the
 source repo itself). The runtime feed (`setFeedURL` in the main process)
 and the electron-builder `publish` config both point there. There is no
 longer a separate `input-viewer-releases` repo.
@@ -103,7 +103,7 @@ Feature Branch → PR → CI Tests → Merge to Main
                               Builds macOS + Windows
                               Bumps VERSION + package.json, tags v*.*.*
                               Publishes installers + update metadata
-                              to GitHub Releases on LAB271/input-viewer
+                              to GitHub Releases on LAB271/labs-input-viewer
 ```
 
 Trigger a release with `gh workflow run release.yml` (or via the Actions

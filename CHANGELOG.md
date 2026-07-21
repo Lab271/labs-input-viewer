@@ -217,25 +217,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Input name overlay when switching inputs
 - Keyboard shortcuts info panel
 
-[2.2.1]: https://github.com/LAB271/input-viewer/releases/tag/v2.2.1
-[2.2.0]: https://github.com/LAB271/input-viewer/releases/tag/v2.2.0
-[2.1.13]: https://github.com/LAB271/input-viewer/releases/tag/v2.1.13
-[2.1.12]: https://github.com/LAB271/input-viewer/releases/tag/v2.1.12
-[2.1.11]: https://github.com/LAB271/input-viewer/releases/tag/v2.1.11
-[2.1.10]: https://github.com/LAB271/input-viewer/releases/tag/v2.1.10
-[2.1.9]: https://github.com/LAB271/input-viewer/releases/tag/v2.1.9
-[2.1.8]: https://github.com/LAB271/input-viewer/releases/tag/v2.1.8
-[2.1.7]: https://github.com/LAB271/input-viewer/releases/tag/v2.1.7
-[2.1.5]: https://github.com/LAB271/input-viewer/releases/tag/v2.1.5
-[2.1.4]: https://github.com/LAB271/input-viewer/releases/tag/v2.1.4
-[2.1.0]: https://github.com/LAB271/input-viewer/releases/tag/v2.1.0
-[2.0.0]: https://github.com/LAB271/input-viewer/releases/tag/v2.0.0
-[1.5.3]: https://github.com/LAB271/input-viewer/releases/tag/v1.5.3
-[1.5.2]: https://github.com/LAB271/input-viewer/releases/tag/v1.5.2
-[1.5.1]: https://github.com/LAB271/input-viewer/releases/tag/v1.5.1
-[1.5.0]: https://github.com/LAB271/input-viewer/releases/tag/v1.5.0
-[1.4.6]: https://github.com/LAB271/input-viewer/releases/tag/v1.4.6
-[1.4.0]: https://github.com/LAB271/input-viewer/releases/tag/v1.4.0
-[1.3.0]: https://github.com/LAB271/input-viewer/releases/tag/v1.3.0
-[1.2.0]: https://github.com/LAB271/input-viewer/releases/tag/v1.2.0
-[1.0.0]: https://github.com/LAB271/input-viewer/releases/tag/v1.0.0
+[2.2.1]: https://github.com/LAB271/labs-input-viewer/releases/tag/v2.2.1
+[2.2.0]: https://github.com/LAB271/labs-input-viewer/releases/tag/v2.2.0
+[2.1.13]: https://github.com/LAB271/labs-input-viewer/releases/tag/v2.1.13
+[2.1.12]: https://github.com/LAB271/labs-input-viewer/releases/tag/v2.1.12
+[2.1.11]: https://github.com/LAB271/labs-input-viewer/releases/tag/v2.1.11
+[2.1.10]: https://github.com/LAB271/labs-input-viewer/releases/tag/v2.1.10
+[2.1.9]: https://github.com/LAB271/labs-input-viewer/releases/tag/v2.1.9
+[2.1.8]: https://github.com/LAB271/labs-input-viewer/releases/tag/v2.1.8
+[2.1.7]: https://github.com/LAB271/labs-input-viewer/releases/tag/v2.1.7
+[2.1.5]: https://github.com/LAB271/labs-input-viewer/releases/tag/v2.1.5
+[2.1.4]: https://github.com/LAB271/labs-input-viewer/releases/tag/v2.1.4
+[2.1.0]: https://github.com/LAB271/labs-input-viewer/releases/tag/v2.1.0
+[2.0.0]: https://github.com/LAB271/labs-input-viewer/releases/tag/v2.0.0
+[1.5.3]: https://github.com/LAB271/labs-input-viewer/releases/tag/v1.5.3
+[1.5.2]: https://github.com/LAB271/labs-input-viewer/releases/tag/v1.5.2
+[1.5.1]: https://github.com/LAB271/labs-input-viewer/releases/tag/v1.5.1
+[1.5.0]: https://github.com/LAB271/labs-input-viewer/releases/tag/v1.5.0
+[1.4.6]: https://github.com/LAB271/labs-input-viewer/releases/tag/v1.4.6
+[1.4.0]: https://github.com/LAB271/labs-input-viewer/releases/tag/v1.4.0
+[1.3.0]: https://github.com/LAB271/labs-input-viewer/releases/tag/v1.3.0
+[1.2.0]: https://github.com/LAB271/labs-input-viewer/releases/tag/v1.2.0
+[1.0.0]: https://github.com/LAB271/labs-input-viewer/releases/tag/v1.0.0
