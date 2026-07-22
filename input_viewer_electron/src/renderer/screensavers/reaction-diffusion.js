@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2025-2026 Schuberg Philis / Lab271
 /**
  * Reaction-Diffusion (Gray-Scott) — organic patterns that grow, divide and
  * crawl. Two chemicals A/B simulated on a ping-pong float texture; the B

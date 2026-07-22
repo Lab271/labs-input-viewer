@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2025-2026 Schuberg Philis / Lab271
 /**
  * GPU Particle Swarm — tens of thousands of particles orbiting moving
  * attractors. Particle position+velocity live in float textures, updated by a

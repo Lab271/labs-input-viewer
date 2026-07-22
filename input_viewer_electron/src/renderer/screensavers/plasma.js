@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2025-2026 Schuberg Philis / Lab271
 /**
  * Plasma — flowing colorful domain-warped fractal noise.
  * Smooth, hypnotic, cheap-to-mid GPU cost.

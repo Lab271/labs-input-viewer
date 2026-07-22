@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2025-2026 Schuberg Philis / Lab271
 import { defineConfig } from 'vite'
 import path from 'path'
 import { fileURLToPath } from 'url'

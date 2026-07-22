@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2025-2026 Schuberg Philis / Lab271
 /**
  * Boids — emergent flocking. Each boid applies separation, alignment and
  * cohesion against a sampled subset of the flock (read from the state

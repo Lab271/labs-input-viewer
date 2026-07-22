@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2025-2026 Schuberg Philis / Lab271
 const { app, BrowserWindow, ipcMain, systemPreferences, dialog } = require('electron')
 const path = require('path')
 const fs = require('fs')

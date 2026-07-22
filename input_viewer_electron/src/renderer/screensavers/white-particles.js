@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// SPDX-FileCopyrightText: 2025-2026 Schuberg Philis / Lab271
 /**
  * White Particles — a clean monochrome drifting particle field. Tens of
  * thousands of white points flow through a gently rotating noise field and
