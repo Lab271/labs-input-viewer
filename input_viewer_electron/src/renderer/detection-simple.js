@@ -3,7 +3,7 @@
 // Screenshot-based detection without OpenCV
 // =============================================================================
 
-const CONFIG = {
+export const CONFIG = {
   // Pixel comparison threshold (0-255 per channel)
   pixelDifferenceThreshold: 30,
 
@@ -215,7 +215,7 @@ export function checkNoSignal(deviceId, video, canvas) {
  * @param {ImageData} frame2 - Reference frame
  * @returns {boolean} - True if frames match
  */
-function compareFrames(frame1, frame2) {
+export function compareFrames(frame1, frame2) {
   // If dimensions don't match, resize comparison
   if (frame1.width !== frame2.width || frame1.height !== frame2.height) {
     if (CONFIG.debugLogging) {

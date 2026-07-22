@@ -11,7 +11,7 @@ jobs:
   # Lint and test (runs on all events)
   # =============================================================================
   lint:
-    name: Lint
+    name: Lint, test & build
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -28,6 +28,14 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      # vitest is installed transiently so the committed package-lock.json
+      # stays in sync for `npm ci` (used by the release workflow).
+      - name: Add test runner
+        run: npm install --no-save vitest@^4
+
+      - name: Unit tests
+        run: npm test
 
       - name: Check code style
         run: npm run lint --if-present
