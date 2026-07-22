@@ -2,7 +2,7 @@
 
 [![CI/CD](https://github.com/LAB271/labs-input-viewer/actions/workflows/ci.yml/badge.svg)](https://github.com/LAB271/labs-input-viewer/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/LAB271/labs-input-viewer)](https://github.com/LAB271/labs-input-viewer/releases/latest)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 A lightweight video input viewer — **OBS without the complexity**. View and manage capture card feeds with a clean, simple interface designed for users who need to display video inputs without the overhead of full streaming software.
 
@@ -109,4 +109,4 @@ The original Python implementation is available in [`input_viewer_python/`](inpu
 
 ## License
 
-[MIT License](LICENSE) © 2025 LAB271
+Licensed under the [Apache License 2.0](LICENSE). Copyright © 2025-2026 Schuberg Philis / Lab271. See [NOTICE](NOTICE).
