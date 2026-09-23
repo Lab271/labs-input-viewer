@@ -197,6 +197,42 @@ to be fixed:
   list with a chip. A ~173px column has no room to both truncate and stay
   readable, so dual-column names wrap as they did before the chips existed.
 
+### Capture-card health and the log file
+
+The wall is Windows 11 with two PCIe **Elgato 4K60 Pro MK.2** cards. Its startup
+script (Mosaic, then Warp, then the cards, then the app) lives in
+`LAB271/labs-videowall-config`, not here: this repo is the application only.
+A card sometimes comes up showing black with a live source plugged in. The
+**split-flap never shows for this**: the wall has no no-signal references on
+purpose, and the stream opened fine.
+
+`src/renderer/stream-health.js` is the policy (pure, unit tested) and
+`renderer.js` samples it every 2s:
+
+| Status | Evidence | Reopen schedule |
+|---|---|---|
+| `open-failed` / `ended` / `no-frames` / `stalled` | getUserMedia, track state, frame counter | 2s, 5s, 15s, 30s, then every 60s |
+| `dark` | 32x18 luma thumbnail is one flat colour for 6s | 5s ... then every 10 min |
+
+Three things worth not re-learning:
+
+- **It counts frames and never measures motion.** A held slide still arrives at
+  60fps, so this does not reopen the #159 question. A stop only counts as a stall
+  if the feed was *flowing* first, which keeps a static virtual camera (which
+  really does send only one frame) from being reopened in a loop.
+- **A reopen releases every side on the device first.** Chromium shares one
+  capture session per device, so reopening one side while the other still holds a
+  track never closes the device. On the wall both panels usually show the same card.
+- **The driver exposes no signal-lock state** (registry and services checked).
+  The picture is the only evidence. Reopening a flat feed is safe because its
+  blank moment cannot be seen.
+
+Everything either process prints goes to
+`<userData>/logs/input-viewer-YYYY-MM-DD.log` (`src/main/file-log.js`): 7 days
+kept, 20 MB/day cap, 600 lines/min. Renderer lines arrive through
+`console-message`, so an object argument logs as `[object Object]`. Log a flat
+string when the line matters. `__health()` in DevTools prints the current state.
+
 ### The test-mode launch flags (#248)
 
 | Flag | Effect |

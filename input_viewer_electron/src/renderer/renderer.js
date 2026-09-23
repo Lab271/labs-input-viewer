@@ -76,6 +76,10 @@ import {
   isMockDeviceId
 } from './mock-capture.js'
 
+// Capture-card health: notices a card that opened but is not delivering, and
+// reopens it.
+import { createStreamHealth, lumaStats } from './stream-health.js'
+
 // =============================================================================
 // State Management
 // =============================================================================
@@ -114,6 +118,11 @@ const state = {
   testFlags: { ...DEFAULT_TEST_FLAGS },
   // Live mock streams, so they can be stopped on input switch. Keyed by side.
   mockStreams: { left: null, right: null },
+  // Capture-card health, per side. See stream-health.js.
+  health: { left: createStreamHealth(), right: createStreamHealth() },
+  // Bumped on every startVideoStream call for a side, so a reopen that was
+  // scheduled before an operator switched inputs can tell it has been overtaken.
+  streamGen: { left: 0, right: 0 },
   // DVD screensaver timer
   dvdScreensaverTimeout: null,
   // dvdScreensaverDelay: 10 * 1000, // 10 seconds in milliseconds
@@ -545,6 +554,10 @@ async function getVideoDevices() {
     state.devices = devices.filter(device => device.kind === 'videoinput')
     
     console.log('Available video devices:', state.devices)
+    // One flat line as well: the object above reaches the log file as
+    // "[object Object]", and this is the line that says which cards were seen.
+    console.log(`[Video] ${state.devices.length} video input(s): ` +
+      state.devices.map(d => `"${d.label}" ${d.deviceId.slice(0, 8)}`).join(', '))
     
     // Initialize settings for new devices
     state.devices.forEach((device) => {
@@ -591,7 +604,7 @@ async function getVideoDevices() {
     renderDropdownInputLists()
     return state.devices
   } catch (error) {
-    console.error('Error getting video devices:', error)
+    console.error(`[Video] device enumeration failed: ${error?.name}: ${error?.message}`)
     showNoSignal('left')
     showNoSignal('right')
     return []
@@ -599,6 +612,7 @@ async function getVideoDevices() {
 }
 
 async function startVideoStream(deviceId, videoElement, side) {
+  state.streamGen[side] += 1
   try {
     // Stop existing stream
     if (side === 'left' && state.leftStream) {
@@ -615,12 +629,14 @@ async function startVideoStream(deviceId, videoElement, side) {
     }
     
     if (!deviceId) {
+      state.health[side].clear()
       showNoSignal(side)
       return null
     }
     
     // Check if device is enabled
     if (!isInputEnabled(deviceId)) {
+      state.health[side].clear()
       showNoSignal(side)
       return null
     }
@@ -656,6 +672,7 @@ async function startVideoStream(deviceId, videoElement, side) {
       if (label && device) {
         label.textContent = getInputName(deviceId, device.label || 'Mock Input')
       }
+      state.health[side].opened(performance.now())
       return mock.stream
     }
     
@@ -791,12 +808,245 @@ async function startVideoStream(deviceId, videoElement, side) {
       label.textContent = name
     }
 
+    attachStreamHealth(side, deviceId, stream)
     return stream
   } catch (error) {
-    console.error(`Error starting ${side} stream:`, error)
+    // name + message explicitly: a DOMException logs as "{}" once it has been
+    // through the console-message bridge into the log file, and the name
+    // (NotReadableError, NotFoundError, AbortError...) is the useful part.
+    console.error(`[Video] ${side} stream failed to open: ${error?.name}: ${error?.message}`)
+    state.health[side].openFailed(performance.now(), error)
     showNoSignal(side)
     return null
   }
+}
+
+// =============================================================================
+// Capture-card health
+// =============================================================================
+//
+// The policy lives in stream-health.js and is unit tested there. This part owns
+// the sampling (frame counter + a 32x18 luma thumbnail every HEALTH_SAMPLE_MS)
+// and the reopen itself.
+
+const HEALTH_SAMPLE_MS = 2000
+// One summary line per side at this interval, whatever the status. A baseline
+// of what a healthy card looks like is what makes the bad line readable.
+const HEALTH_SUMMARY_MS = 10 * 60 * 1000
+// Delay between releasing a card and opening it again. Short, but long enough
+// that the driver sees the device closed rather than a handover.
+const REOPEN_RELEASE_MS = 500
+
+let healthTimer = null
+let healthCanvas = null
+let lastHealthSummary = 0
+const healthLastStatus = { left: null, right: null }
+const reopenInFlight = new Set()
+
+function sideVideo(side) {
+  return side === 'left' ? elements.leftVideo : elements.rightVideo
+}
+
+function sideDeviceId(side) {
+  return side === 'left' ? state.leftDeviceId : state.rightDeviceId
+}
+
+function sideStream(side) {
+  return side === 'left' ? state.leftStream : state.rightStream
+}
+
+function sideLabel(side) {
+  const id = sideDeviceId(side)
+  const device = state.devices.find(d => d.deviceId === id)
+  return getInputName(id, device?.label || 'unknown')
+}
+
+/** Record a freshly opened stream and log what the card agreed to. */
+function attachStreamHealth(side, deviceId, stream) {
+  state.health[side].opened(performance.now())
+  const track = stream.getVideoTracks()[0]
+  if (!track) return
+  const s = track.getSettings()
+  console.log(`[Health] ${side} opened "${track.label}" ` +
+    `${s.width}x${s.height}@${s.frameRate}fps id=${deviceId.slice(0, 8)}`)
+  // Logged the moment it happens rather than at the next sample: an ended track
+  // is the one event with an exact timestamp, and the log is where it is read.
+  track.addEventListener('ended', () => console.warn(`[Health] ${side} track ended`))
+  track.addEventListener('mute', () => console.warn(`[Health] ${side} track muted`))
+  track.addEventListener('unmute', () => console.log(`[Health] ${side} track unmuted`))
+}
+
+/**
+ * Frames the source has delivered so far, or null if the platform cannot say.
+ *
+ * track.stats counts at the source, so it keeps counting for a hidden feed (the
+ * right panel in single view is display:none). The video element's playback
+ * counter is the fallback.
+ */
+function readFrameCount(track, video) {
+  const stats = track?.stats
+  if (stats && typeof stats.totalFrames === 'number') return stats.totalFrames
+  const q = video?.getVideoPlaybackQuality?.()
+  if (q && typeof q.totalVideoFrames === 'number') return q.totalVideoFrames
+  return null
+}
+
+function sampleLuma(video) {
+  if (!video || video.readyState < 2 || !video.videoWidth) return null
+  try {
+    if (!healthCanvas) {
+      healthCanvas = document.createElement('canvas')
+      healthCanvas.width = 32
+      healthCanvas.height = 18
+    }
+    const ctx = healthCanvas.getContext('2d', { willReadFrequently: true })
+    if (!ctx) return null
+    ctx.drawImage(video, 0, 0, 32, 18)
+    return lumaStats(ctx.getImageData(0, 0, 32, 18).data)
+  } catch {
+    return null
+  }
+}
+
+function describeHealth(side) {
+  const i = state.health[side].info()
+  const video = sideVideo(side)
+  const size = video?.videoWidth ? `${video.videoWidth}x${video.videoHeight}` : '-'
+  return `${i.status} ${i.fps}fps luma=${i.luma ?? '-'}±${i.lumaStd ?? '-'} ` +
+    `${size} reopens=${i.attempts}${i.error ? ` error=${i.error}` : ''}`
+}
+
+// Retry schedule for "no capture devices at all", which the per-side
+// trackers cannot see. Last step repeats.
+const NO_DEVICES_RETRY_MS = [5000, 10_000, 30_000]
+let noDevicesAttempts = 0
+let noDevicesLastTry = 0
+let noDevicesRetrying = false
+
+async function retryDeviceEnumeration(now) {
+  const wait = NO_DEVICES_RETRY_MS[Math.min(noDevicesAttempts, NO_DEVICES_RETRY_MS.length - 1)]
+  if (noDevicesRetrying || now - noDevicesLastTry < wait) return
+  noDevicesRetrying = true
+  noDevicesLastTry = now
+  noDevicesAttempts += 1
+  try {
+    console.warn(`[Health] no capture devices, re-enumerating (attempt ${noDevicesAttempts})`)
+    if (await openInitialStreams(state.layoutMode)) {
+      console.log('[Health] capture devices found on retry')
+      noDevicesAttempts = 0
+    }
+  } finally {
+    noDevicesRetrying = false
+  }
+}
+
+function checkStreamHealth() {
+  const now = performance.now()
+
+  if (state.devices.length === 0 && !state.testFlags.mock) {
+    retryDeviceEnumeration(now)
+    return
+  }
+  const summary = now - lastHealthSummary >= HEALTH_SUMMARY_MS
+
+  for (const side of ['left', 'right']) {
+    const health = state.health[side]
+    const stream = sideStream(side)
+    const track = stream?.getVideoTracks?.()[0] ?? null
+    const video = sideVideo(side)
+
+    if (track) {
+      health.sample({
+        frames: readFrameCount(track, video),
+        ended: track.readyState === 'ended',
+        stats: sampleLuma(video),
+      }, now)
+    }
+
+    const { status } = health.info()
+    if (status !== healthLastStatus[side]) {
+      const log = status === 'ok' || status === 'opening' || status === 'idle'
+        ? console.log : console.warn
+      log(`[Health] ${side} (${sideLabel(side)}): ${healthLastStatus[side] ?? 'start'} -> ` +
+        describeHealth(side))
+      healthLastStatus[side] = status
+    } else if (summary && status !== 'idle') {
+      console.log(`[Health] ${side} (${sideLabel(side)}): ${describeHealth(side)}`)
+    }
+
+    const decision = health.decide(now)
+    const deviceId = sideDeviceId(side)
+    if (decision.reopen && deviceId) {
+      reopenDevice(deviceId, `${side} ${decision.reason}`)
+    }
+  }
+
+  if (summary) lastHealthSummary = now
+}
+
+/**
+ * Close every stream on a device, then open them again.
+ *
+ * Every side showing this device is released FIRST. Chromium shares one
+ * capture session between tracks on the same device, so reopening one side
+ * while the other still holds a track never actually closes the device -- the
+ * driver would see nothing happen. On the wall both panels usually show the
+ * same card, so this is the normal case, not an edge case.
+ */
+async function reopenDevice(deviceId, reason) {
+  if (reopenInFlight.has(deviceId)) return
+  reopenInFlight.add(deviceId)
+  try {
+    const sides = ['left', 'right'].filter(side => sideDeviceId(side) === deviceId &&
+      (sideStream(side) || state.health[side].info().status === 'open-failed'))
+    if (sides.length === 0) return
+
+    const now = performance.now()
+    const gens = {}
+    for (const side of sides) {
+      gens[side] = state.streamGen[side]
+      state.health[side].reopening(now)
+    }
+    console.warn(`[Health] reopening ${deviceId.slice(0, 8)} (${sideLabel(sides[0])}) ` +
+      `for ${sides.join('+')}: ${reason}, attempt ${state.health[sides[0]].info().attempts}`)
+
+    for (const side of sides) sideStream(side)?.getTracks().forEach(t => t.stop())
+    closeAllFrameSources()
+    await new Promise(resolve => setTimeout(resolve, REOPEN_RELEASE_MS))
+
+    for (const side of sides) {
+      // An operator switch while we waited owns this side now.
+      if (state.streamGen[side] !== gens[side] || sideDeviceId(side) !== deviceId) continue
+      await startVideoStream(deviceId, sideVideo(side), side)
+    }
+  } catch (err) {
+    console.error(`[Health] reopen of ${deviceId.slice(0, 8)} failed: ${err?.message ?? err}`)
+  } finally {
+    reopenInFlight.delete(deviceId)
+  }
+}
+
+function startStreamHealthMonitor() {
+  if (healthTimer !== null) return
+  // --no-signal pins every side dark on purpose, and a still mock card
+  // delivers no frames; the monitor would "fix" the state the flag exists to hold.
+  if (state.testFlags.noSignal) {
+    console.log('[Health] Not started: --no-signal pins the state')
+    return
+  }
+  lastHealthSummary = performance.now()
+  healthTimer = setInterval(checkStreamHealth, HEALTH_SAMPLE_MS)
+  console.log(`[Health] monitoring every ${HEALTH_SAMPLE_MS}ms`)
+}
+
+// Console helper, same spirit as __detectState().
+globalThis.__health = () => {
+  const out = {}
+  for (const side of ['left', 'right']) {
+    out[side] = { device: sideLabel(side), ...state.health[side].info() }
+  }
+  console.log('[Health]', JSON.stringify(out))
+  return out
 }
 
 // =============================================================================
@@ -3309,6 +3559,15 @@ function setupEventListeners() {
     // and the old ones would otherwise be read until the loop noticed.
     closeAllFrameSources()
     await getVideoDevices()
+    // A card coming back is the best moment to retry a side that failed; do not
+    // make it wait out the backoff.
+    for (const side of ['left', 'right']) {
+      const { status } = state.health[side].info()
+      const id = sideDeviceId(side)
+      if (id && (status === 'open-failed' || status === 'ended' || status === 'no-frames')) {
+        reopenDevice(id, `${side} ${status}, device change`)
+      }
+    }
   })
 
   // Auto-updater download progress
@@ -3914,6 +4173,39 @@ function getUniqueActiveDevices() {
 // Initialization
 // =============================================================================
 
+/**
+ * Enumerate the capture devices and open the startup inputs.
+ *
+ * A function rather than inline in init() so the health monitor can run it
+ * again: if enumeration fails at boot -- the card driver not up yet, or the
+ * device briefly held -- there are no device ids at all, so there is nothing
+ * for a per-side reopen to retry.
+ */
+async function openInitialStreams(layoutMode) {
+  await getVideoDevices()
+  if (state.devices.length === 0) return false
+
+  // Use default input if set and device exists
+  if (state.defaultInputId) {
+    const defaultDevice = state.devices.find(d => d.deviceId === state.defaultInputId)
+    if (defaultDevice && isInputEnabled(state.defaultInputId)) {
+      state.leftDeviceId = state.defaultInputId
+      if (layoutMode === 'dual') {
+        state.rightDeviceId = state.defaultInputId
+      }
+    }
+  }
+
+  // Always start left stream
+  await startVideoStream(state.leftDeviceId, elements.leftVideo, 'left')
+
+  // Start right stream in dual mode
+  if (layoutMode === 'dual' && state.rightDeviceId) {
+    await startVideoStream(state.rightDeviceId, elements.rightVideo, 'right')
+  }
+  return true
+}
+
 async function init() {
   console.log('Input Viewer initializing...')
 
@@ -3990,32 +4282,13 @@ async function init() {
   // first time the dropdown is opened; after that it polls only while open.
 
   // Get video devices and start streams
-  await getVideoDevices()
-
-  // Start video streams
-  if (state.devices.length > 0) {
-    // Use default input if set and device exists
-    if (state.defaultInputId) {
-      const defaultDevice = state.devices.find(d => d.deviceId === state.defaultInputId)
-      if (defaultDevice && isInputEnabled(state.defaultInputId)) {
-        state.leftDeviceId = state.defaultInputId
-        if (layoutMode === 'dual') {
-          state.rightDeviceId = state.defaultInputId
-        }
-      }
-    }
-
-    // Always start left stream
-    await startVideoStream(state.leftDeviceId, elements.leftVideo, 'left')
-
-    // Start right stream in dual mode
-    if (layoutMode === 'dual' && state.rightDeviceId) {
-      await startVideoStream(state.rightDeviceId, elements.rightVideo, 'right')
-    }
-  }
+  await openInitialStreams(layoutMode)
 
   // --no-signal (#248): override whatever the streams above did to the overlays.
   applyForcedNoSignal()
+
+  // After the first open, so a card that failed it is retried from here on.
+  startStreamHealthMonitor()
 
   // Initialize screensaver registry (random screensaver chosen on activation)
   initScreensavers(elements.screensaverCanvas)
