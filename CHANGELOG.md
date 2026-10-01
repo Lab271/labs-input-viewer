@@ -9,6 +9,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Electron Version (v3.x)
 
+### [3.3.0] - 2026-10-01
+
+A laptop at 3840x768, the wall's own 5:1, now fills the whole wall.
+
+#### Added
+
+- **The capture card's black bars are cropped away.** The wall's Elgato cards
+  always deliver 3840x2160, whatever the source sends, and fit any other shape
+  inside with pure black around it. A laptop at 3840x768 therefore arrived as a
+  band a third of the frame tall, and single view showed it small in the middle
+  of the wall with black all round. The bars are found in the thumbnail the
+  health check already takes, snapped to a known shape (5:1, 16:10, 21:9...) and
+  cropped with `object-view-box`, so the picture is fitted as it really is. A
+  shape only takes effect after three identical readings. `cropLetterbox: false`
+  in `settings.json` turns it off
+- **A tip to fill the wall.** In single view, when a laptop sends something
+  narrower than 16:9 (1920x1200, say), a 15-second tip suggests setting it to
+  3840 x 768. The Apple TV is native 16:9 and never triggers it
+
+#### Fixed
+
+- **Freeze stretched the picture.** The frozen frame was drawn over the whole
+  area regardless of shape, so a 16:9 picture became almost three times too wide
+  on the 5:1 wall. It is now fitted, and cropped, exactly as the live feed is
+- The health log printed `±` as two garbage characters in Windows tools; it now
+  prints `+/-`
+
+#### Known issue
+
+- The crop is re-measured from the picture, so pure-black, symmetric content (a
+  black slide, a screensaver) can make it resize. Saved per-input boxes that only
+  change on a real resolution change are tracked in #316
+
 ### [3.2.1] - 2026-10-01
 
 A capture card that opens but delivers nothing is now noticed and reopened, and
