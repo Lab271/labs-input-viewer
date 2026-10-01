@@ -322,7 +322,8 @@ async function saveSettings() {
         artnetMaxBrightness: state.settings.artnetMaxBrightness,
         artnetSpotDepth: state.settings.artnetSpotDepth,
         artnetSceneBySaver: state.settings.artnetSceneBySaver,
-        cropLetterbox: state.settings.cropLetterbox
+        cropLetterbox: state.settings.cropLetterbox,
+        aspectHint: state.settings.aspectHint
       }
       // Mirror into the in-memory copy, which getVideoDevices() restores from.
       state.settings.leftDeviceId = settingsToSave.leftDeviceId
@@ -1025,10 +1026,23 @@ function hideAspectHint() {
   aspectHintEl?.classList.add('hidden')
 }
 
+/**
+ * Off unless settings.json has `aspectHint: true`.
+ *
+ * The tip asks presenters to change their laptop's resolution, and on the wall
+ * that is exactly what breaks the picture: the HDBaseT link between the laptop
+ * and the capture card loses it on a resolution change and only gets it back
+ * when the HDMI at the card is replugged (found on 2026-10-01). Laptops now
+ * start at 3840x768 from the EDID, so nobody needs to switch.
+ */
+function aspectHintEnabled() {
+  return state.settings?.aspectHint === true
+}
+
 /** Show or hide the hint for what the visible single-view feed is showing now. */
 function updateAspectHint() {
   const crop = state.crop.left.current()
-  const narrow = cropEnabled() && crop !== 'none' && crop.ratio < 16 / 9
+  const narrow = aspectHintEnabled() && cropEnabled() && crop !== 'none' && crop.ratio < 16 / 9
   if (state.layoutMode === 'single' && narrow) showAspectHint()
   else hideAspectHint()
 }

@@ -163,7 +163,11 @@ const defaultSettings = {
   // Crop the black bars the capture card puts around a source that is not 16:9
   // (the cards always deliver 3840x2160). See src/renderer/content-box.js. On by
   // default; false shows the card's full frame, bars and all.
-  cropLetterbox: true
+  cropLetterbox: true,
+
+  // The single-view "set your laptop to 3840x768" tip. OFF by default: changing
+  // resolution breaks the wall's HDBaseT link (see updateAspectHint).
+  aspectHint: false
 }
 
 // Load settings from file
