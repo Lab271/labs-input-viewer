@@ -224,7 +224,11 @@ Four things worth not re-learning:
   stretch the frame over the whole area.
 - **The hint triggers on "narrower than 16:9"**, which in practice means a laptop
   (the driver pillarboxes it). The Apple TV is native 16:9 and never triggers it.
-  It shows for 15s in single view only.
+  It shows for 15s in single view only, and is **off by default**
+  (`aspectHint: true` enables it). It asks presenters to change resolution, and
+  on the wall a resolution change breaks the HDBaseT link until the HDMI at the
+  capture card is replugged (found 2026-10-01). Laptops get 3840x768 from the
+  EDID instead.
 - **Not applied on the opt-in WebGPU compositing path** (`gpuCompositing`), which
   draws the frame itself. `cropLetterbox: false` in settings.json turns cropping
   off entirely.

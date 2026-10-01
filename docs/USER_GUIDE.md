@@ -47,10 +47,16 @@ The app automatically selects the default mode based on your screen aspect ratio
 
 ### Filling the whole wall from a laptop
 
-The wall is 5:1 (6000x1200). To fill it in single view, set the laptop's display to
-**3840 x 768**. Any other shape is shown in full with black at the sides, never
-stretched. When a laptop sends a narrower picture (for example 1920 x 1200), single
-view shows a short tip saying so.
+The wall is 5:1 (6000x1200). A laptop fills it in single view at **3840 x 768**,
+which is what it gets by default when plugged in. Any other shape is shown in full
+with black at the sides, never stretched.
+
+**Don't change the laptop's resolution while it is connected.** On this wall the
+picture is lost on a resolution change and does not come back by itself. If it
+happens, replug the HDMI cable at the capture card.
+
+A tip suggesting 3840 x 768 for narrower pictures exists, but is off by default for
+that reason. `"aspectHint": true` in `settings.json` turns it on.
 
 The capture cards add black bars around anything that is not 16:9. Input Viewer
 crops those away automatically, so a 3840 x 768 picture fills the wall rather than
