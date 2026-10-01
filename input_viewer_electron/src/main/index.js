@@ -3,7 +3,9 @@
 const { app, BrowserWindow, ipcMain, systemPreferences, dialog, shell, screen } = require('electron')
 const path = require('path')
 const fs = require('fs')
+const os = require('os')
 const { exec } = require('child_process')
+const { createFileLog } = require('./file-log.js')
 
 // Hardware acceleration for video decode/rendering
 app.commandLine.appendSwitch('ignore-gpu-blocklist')
@@ -76,6 +78,40 @@ function getAppVersion() {
 
 // Settings file path
 const settingsPath = path.join(app.getPath('userData'), 'settings.json')
+
+// Persistent log (see file-log.js): <userData>/logs/input-viewer-YYYY-MM-DD.log,
+// seven days kept. Main's own console is teed into it here; the renderer's
+// console arrives through 'console-message' in createWindow().
+const fileLog = createFileLog({ dir: path.join(app.getPath('userData'), 'logs') })
+
+for (const [method, level] of [['log', 'info'], ['info', 'info'], ['warn', 'warn'], ['error', 'error']]) {
+  const original = console[method].bind(console)
+  console[method] = (...args) => {
+    original(...args)
+    fileLog.write(level, 'main', args.map(formatLogArg).join(' '))
+  }
+}
+
+function formatLogArg(arg) {
+  if (typeof arg === 'string') return arg
+  if (arg instanceof Error) return arg.stack || `${arg.name}: ${arg.message}`
+  try {
+    return JSON.stringify(arg)
+  } catch {
+    return String(arg)
+  }
+}
+
+// Renderer console levels: Electron 43 passes a string on the event object;
+// older versions passed a number as the second argument.
+const RENDERER_LEVELS = { 0: 'debug', 1: 'info', 2: 'warn', 3: 'error',
+  verbose: 'debug', info: 'info', warning: 'warn', error: 'error', debug: 'debug' }
+
+// Startup banner. OS uptime is here because the question after a bad boot is
+// usually "how long after the machine came up did the app open the cards".
+console.log(`[App] Input Viewer ${app.getVersion()} starting; ` +
+  `${process.platform} ${os.release()} ${process.arch}, electron ${process.versions.electron}, ` +
+  `OS up ${Math.round(os.uptime())}s, pid ${process.pid}, log ${fileLog.dir}`)
 
 // Default settings
 const defaultSettings = {
@@ -226,6 +262,22 @@ function createWindow() {
     callback(allowed)
   })
 
+  // Everything the renderer prints goes to the log file too. Debug level is left
+  // out: it is DevTools-only chatter and would only eat the rate limit.
+  mainWindow.webContents.on('console-message', (event, legacyLevel, legacyMessage) => {
+    const level = RENDERER_LEVELS[event?.level ?? legacyLevel] ?? 'info'
+    if (level === 'debug') return
+    fileLog.write(level, 'renderer', event?.message ?? legacyMessage ?? '')
+  })
+
+  // The failures that leave a black wall with nothing in the renderer's own log,
+  // because the renderer is the thing that died.
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    console.error(`[App] renderer process gone: ${details.reason} (exit ${details.exitCode})`)
+  })
+  mainWindow.on('unresponsive', () => console.warn('[App] window unresponsive'))
+  mainWindow.on('responsive', () => console.log('[App] window responsive again'))
+
   // Handle window closed
   mainWindow.on('closed', () => {
     mainWindow = null
@@ -270,6 +322,14 @@ app.whenReady().then(async () => {
     }
   })
 })
+
+// GPU and utility processes: the video decode and capture paths run in these.
+app.on('child-process-gone', (_event, details) => {
+  console.error(`[App] ${details.type} process gone: ${details.reason} ` +
+    `(exit ${details.exitCode}${details.name ? `, ${details.name}` : ''})`)
+})
+
+app.on('before-quit', () => console.log('[App] quitting'))
 
 // Quit when all windows are closed (except on macOS)
 app.on('window-all-closed', () => {
