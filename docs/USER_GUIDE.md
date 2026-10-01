@@ -45,6 +45,18 @@ The app auto-updates when new versions are available.
 
 The app automatically selects the default mode based on your screen aspect ratio.
 
+### Filling the whole wall from a laptop
+
+The wall is 5:1 (6000x1200). To fill it in single view, set the laptop's display to
+**3840 x 768**. Any other shape is shown in full with black at the sides, never
+stretched. When a laptop sends a narrower picture (for example 1920 x 1200), single
+view shows a short tip saying so.
+
+The capture cards add black bars around anything that is not 16:9. Input Viewer
+crops those away automatically, so a 3840 x 768 picture fills the wall rather than
+sitting in a small band in the middle. To turn that off, set
+`"cropLetterbox": false` in `settings.json`.
+
 ## Keyboard Shortcuts
 
 Hover the **bottom** edge of the screen to bring up a legend of every shortcut, the same way

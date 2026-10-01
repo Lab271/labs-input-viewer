@@ -158,7 +158,12 @@ const defaultSettings = {
   // artnetSceneBySaver: { '<Saver Display Name>': 'reactive'|'off'|'scene:x'|'effect:x' }
   //   Per-screensaver lighting. Absent or 'reactive' keeps the default
   //   drive-from-the-picture behaviour, so an empty map changes nothing.
-  artnetSceneBySaver: {}
+  artnetSceneBySaver: {},
+
+  // Crop the black bars the capture card puts around a source that is not 16:9
+  // (the cards always deliver 3840x2160). See src/renderer/content-box.js. On by
+  // default; false shows the card's full frame, bars and all.
+  cropLetterbox: true
 }
 
 // Load settings from file

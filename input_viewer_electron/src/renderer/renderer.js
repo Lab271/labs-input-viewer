@@ -80,6 +80,10 @@ import {
 // reopens it.
 import { createStreamHealth, lumaStats } from './stream-health.js'
 
+// Letterbox/pillarbox cropping: the cards deliver 3840x2160 whatever the source
+// sends, with the picture fitted inside and pure black around it.
+import { CROP, lumaGrid, detectContentBox, viewBoxCss, createCropTracker } from './content-box.js'
+
 // =============================================================================
 // State Management
 // =============================================================================
@@ -120,6 +124,8 @@ const state = {
   mockStreams: { left: null, right: null },
   // Capture-card health, per side. See stream-health.js.
   health: { left: createStreamHealth(), right: createStreamHealth() },
+  // Black-bar crop, per side. See content-box.js.
+  crop: { left: createCropTracker(), right: createCropTracker() },
   // Bumped on every startVideoStream call for a side, so a reopen that was
   // scheduled before an operator switched inputs can tell it has been overtaken.
   streamGen: { left: 0, right: 0 },
@@ -310,7 +316,8 @@ async function saveSettings() {
         artnetReleaseScene: state.settings.artnetReleaseScene,
         artnetMaxBrightness: state.settings.artnetMaxBrightness,
         artnetSpotDepth: state.settings.artnetSpotDepth,
-        artnetSceneBySaver: state.settings.artnetSceneBySaver
+        artnetSceneBySaver: state.settings.artnetSceneBySaver,
+        cropLetterbox: state.settings.cropLetterbox
       }
       await window.electronAPI.saveSettings(settingsToSave)
     }
@@ -435,6 +442,16 @@ function toggleFreeze() {
   }
 }
 
+/** drawImage with object-fit: contain semantics and this side's crop. */
+function drawFitted(ctx, side, video, dx, dy, dw, dh) {
+  if (!video?.srcObject || !video.videoWidth) return
+  const { sx, sy, sw, sh } = cropSourceRect(side, video)
+  const scale = Math.min(dw / sw, dh / sh)
+  const w = sw * scale
+  const h = sh * scale
+  ctx.drawImage(video, sx, sy, sw, sh, dx + (dw - w) / 2, dy + (dh - h) / 2, w, h)
+}
+
 function captureFrame() {
   const canvas = elements.freezeCanvas
   const ctx = canvas.getContext('2d')
@@ -448,27 +465,18 @@ function captureFrame() {
   ctx.fillStyle = '#000000'
   ctx.fillRect(0, 0, canvas.width, canvas.height)
   
-  // Draw based on layout mode
+  // Draw based on layout mode. Fitted exactly as the live feed is (contain, and
+  // the same black-bar crop), so freezing does not change the picture: this
+  // used to stretch each frame over its whole area.
   if (state.layoutMode === 'dual') {
-    // Draw both videos side by side
     const gap = state.layoutGap
     const halfWidth = (canvas.width - gap) / 2
-    
-    // Draw left video
-    if (elements.leftVideo.srcObject) {
-      ctx.drawImage(elements.leftVideo, 0, 0, halfWidth, canvas.height)
-    }
-    
-    // Draw right video
-    if (elements.rightVideo.srcObject) {
-      ctx.drawImage(elements.rightVideo, halfWidth + gap, 0, halfWidth, canvas.height)
-    }
+    drawFitted(ctx, 'left', elements.leftVideo, 0, 0, halfWidth, canvas.height)
+    drawFitted(ctx, 'right', elements.rightVideo, halfWidth + gap, 0, halfWidth, canvas.height)
   } else {
     // Single view - draw the active video
-    const video = state.layoutMode === 'right' ? elements.rightVideo : elements.leftVideo
-    if (video.srcObject) {
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-    }
+    const side = state.layoutMode === 'right' ? 'right' : 'left'
+    drawFitted(ctx, side, sideVideo(side), 0, 0, canvas.width, canvas.height)
   }
 }
 
@@ -630,6 +638,7 @@ async function startVideoStream(deviceId, videoElement, side) {
     
     if (!deviceId) {
       state.health[side].clear()
+      resetCrop(side)
       showNoSignal(side)
       return null
     }
@@ -637,6 +646,7 @@ async function startVideoStream(deviceId, videoElement, side) {
     // Check if device is enabled
     if (!isInputEnabled(deviceId)) {
       state.health[side].clear()
+      resetCrop(side)
       showNoSignal(side)
       return null
     }
@@ -673,6 +683,7 @@ async function startVideoStream(deviceId, videoElement, side) {
         label.textContent = getInputName(deviceId, device.label || 'Mock Input')
       }
       state.health[side].opened(performance.now())
+      resetCrop(side)
       return mock.stream
     }
     
@@ -864,6 +875,8 @@ function sideLabel(side) {
 /** Record a freshly opened stream and log what the card agreed to. */
 function attachStreamHealth(side, deviceId, stream) {
   state.health[side].opened(performance.now())
+  // A new stream may be a different source in a different shape.
+  resetCrop(side)
   const track = stream.getVideoTracks()[0]
   if (!track) return
   const s = track.getSettings()
@@ -891,28 +904,117 @@ function readFrameCount(track, video) {
   return null
 }
 
-function sampleLuma(video) {
+/**
+ * One small thumbnail of the frame, for both the health check (is it one flat
+ * colour?) and the bar detector (where is the picture?).
+ *
+ * drawImage reads the full decoded frame, whatever object-view-box is cropping
+ * on screen, so the bars stay visible to the detector after they are cropped.
+ */
+function sampleFrame(video) {
   if (!video || video.readyState < 2 || !video.videoWidth) return null
   try {
     if (!healthCanvas) {
       healthCanvas = document.createElement('canvas')
-      healthCanvas.width = 32
-      healthCanvas.height = 18
+      healthCanvas.width = CROP.SAMPLE_W
+      healthCanvas.height = CROP.SAMPLE_H
     }
     const ctx = healthCanvas.getContext('2d', { willReadFrequently: true })
     if (!ctx) return null
-    ctx.drawImage(video, 0, 0, 32, 18)
-    return lumaStats(ctx.getImageData(0, 0, 32, 18).data)
+    ctx.drawImage(video, 0, 0, CROP.SAMPLE_W, CROP.SAMPLE_H)
+    const data = ctx.getImageData(0, 0, CROP.SAMPLE_W, CROP.SAMPLE_H).data
+    return {
+      stats: lumaStats(data),
+      content: detectContentBox(lumaGrid(data), CROP.SAMPLE_W, CROP.SAMPLE_H,
+        video.videoWidth, video.videoHeight),
+    }
   } catch {
     return null
   }
+}
+
+// =============================================================================
+// Black-bar crop
+// =============================================================================
+
+/** settings.json `cropLetterbox: false` turns cropping off. On by default. */
+function cropEnabled() {
+  return state.settings?.cropLetterbox !== false
+}
+
+function applyCrop(side) {
+  const video = sideVideo(side)
+  if (!video) return
+  video.style.objectViewBox = cropEnabled() ? viewBoxCss(state.crop[side].current()) : ''
+}
+
+function resetCrop(side) {
+  state.crop[side].reset()
+  applyCrop(side)
+}
+
+function describeCrop(crop, video) {
+  if (crop === 'none') return 'none'
+  return `${crop.shape} ${viewBoxCss(crop)} of ${video?.videoWidth}x${video?.videoHeight}`
+}
+
+/** Source rectangle of the visible picture, in the video's own pixels. */
+function cropSourceRect(side, video) {
+  const w = video.videoWidth
+  const h = video.videoHeight
+  const crop = cropEnabled() ? state.crop[side].current() : 'none'
+  if (crop === 'none') return { sx: 0, sy: 0, sw: w, sh: h }
+  const { top, right, bottom, left } = crop.inset
+  return {
+    sx: w * left / 100,
+    sy: h * top / 100,
+    sw: w * (1 - (left + right) / 100),
+    sh: h * (1 - (top + bottom) / 100),
+  }
+}
+
+// --- "Set your laptop to 3840x768" hint --------------------------------------
+//
+// In single view the wall is 5:1. A source narrower than 16:9 (the driver
+// pillarboxes it) is almost always a laptop, which can send 3840x768 and fill
+// the wall; a 16:9 source such as the Apple TV cannot, and never triggers this.
+
+const ASPECT_HINT_MS = 15_000
+let aspectHintEl = null
+let aspectHintTimer = null
+
+function showAspectHint() {
+  if (!aspectHintEl) {
+    aspectHintEl = document.createElement('div')
+    aspectHintEl.className = 'aspect-hint hidden'
+    aspectHintEl.textContent = 'Tip: set your laptop\'s display to 3840 \u00d7 768 to fill the whole wall'
+    elements.leftFeed.appendChild(aspectHintEl)
+  }
+  aspectHintEl.classList.remove('hidden')
+  clearTimeout(aspectHintTimer)
+  aspectHintTimer = setTimeout(() => aspectHintEl.classList.add('hidden'), ASPECT_HINT_MS)
+}
+
+function hideAspectHint() {
+  clearTimeout(aspectHintTimer)
+  aspectHintEl?.classList.add('hidden')
+}
+
+/** Show or hide the hint for what the visible single-view feed is showing now. */
+function updateAspectHint() {
+  const crop = state.crop.left.current()
+  const narrow = cropEnabled() && crop !== 'none' && crop.ratio < 16 / 9
+  if (state.layoutMode === 'single' && narrow) showAspectHint()
+  else hideAspectHint()
 }
 
 function describeHealth(side) {
   const i = state.health[side].info()
   const video = sideVideo(side)
   const size = video?.videoWidth ? `${video.videoWidth}x${video.videoHeight}` : '-'
-  return `${i.status} ${i.fps}fps luma=${i.luma ?? '-'}±${i.lumaStd ?? '-'} ` +
+  // '+/-', not the plus-minus sign: the log is read with Windows tools that
+  // assume the ANSI code page and print it as two garbage characters.
+  return `${i.status} ${i.fps}fps luma=${i.luma ?? '-'}+/-${i.lumaStd ?? '-'} ` +
     `${size} reopens=${i.attempts}${i.error ? ` error=${i.error}` : ''}`
 }
 
@@ -955,12 +1057,20 @@ function checkStreamHealth() {
     const track = stream?.getVideoTracks?.()[0] ?? null
     const video = sideVideo(side)
 
+    const sample = track ? sampleFrame(video) : null
     if (track) {
       health.sample({
         frames: readFrameCount(track, video),
         ended: track.readyState === 'ended',
-        stats: sampleLuma(video),
+        stats: sample?.stats ?? null,
       }, now)
+
+      if (sample && state.crop[side].update(sample.content)) {
+        console.log(`[Crop] ${side} (${sideLabel(side)}): ` +
+          describeCrop(state.crop[side].current(), video))
+        applyCrop(side)
+        if (side === 'left') updateAspectHint()
+      }
     }
 
     const { status } = health.info()
@@ -1868,6 +1978,8 @@ function setLayout(mode) {
       break
   }
 
+  // The 3840x768 hint is about filling the 5:1 single view; dual view hides it.
+  updateAspectHint()
   saveSettings()
 }
 
