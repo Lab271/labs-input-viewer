@@ -9,6 +9,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Electron Version (v3.x)
 
+### [3.2.1] - 2026-10-01
+
+A capture card that opens but delivers nothing is now noticed and reopened, and
+the app keeps a record of what it saw.
+
+#### Fixed
+
+- **A card that came up dark stayed dark until someone restarted the app.** The
+  wall would boot with a capture input showing black while its source was live.
+  The stream had opened, so nothing downstream knew it was bad, and nothing ever
+  retried. Each input is now checked every 2 s: a failed open, a track that ends,
+  a card that delivers no frames, frames that stop after flowing, and a picture
+  that stays one flat colour are all reopened with a backoff
+  - It counts frames rather than measuring motion, so a held slide, which still
+    arrives at 60 fps, is healthy (#159)
+  - A reopen releases every side showing that card before opening it again.
+    Chromium shares one capture session per device, so reopening one panel while
+    the other still held a track never actually closed the card
+  - If no capture devices were found at startup, they are now looked for again
+    rather than never
+
+#### Added
+
+- **A persistent log**, `<userData>/logs/input-viewer-YYYY-MM-DD.log`: everything
+  both processes print, plus renderer and GPU process crashes and how long the OS
+  had been up at launch. Seven days are kept, with a 20 MB/day cap and a per-minute
+  line limit, so a log loop cannot fill the disk. Before this nothing survived the
+  app, so a bad morning left no trace of what the renderer had seen
+- Each input's health is logged when it changes, with a baseline line every 10
+  minutes: frame rate, picture brightness, the resolution the card agreed to, and
+  how many reopens it took. `__health()` in DevTools prints the same
+
 ### [3.2.0] - 2026-08-26
 
 The Art-Net lighting now follows *where* things are on the wall, not just their
