@@ -537,6 +537,37 @@ body.gpu-compositing #right-video {
   100% { opacity: 0; transform: translateX(-50%) translateY(-20px); }
 }
 
+/* "Set your laptop to 3840x768" hint, inside the single-view feed (renderer.js,
+   updateAspectHint). At the top, because the input-name overlay owns the bottom.
+   Sized for the wall, not a laptop: 6000x1200 in a lit room. Under the no-signal
+   overlay (z-index 10), which makes the hint moot anyway. */
+.aspect-hint {
+  position: absolute;
+  top: 6%;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 14px 28px;
+  background-color: rgba(0, 0, 0, 0.8);
+  border-radius: 12px;
+  font-size: 28px;
+  font-weight: 500;
+  white-space: nowrap;
+  z-index: 5;
+  pointer-events: none;
+  animation: aspectHintIn 400ms ease-out;
+}
+
+@keyframes aspectHintIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(-12px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aspect-hint {
+    animation: none;
+  }
+}
+
 /* =============================================================================
    Dropdown Panel
    ============================================================================= */

@@ -197,6 +197,38 @@ to be fixed:
   list with a chip. A ~173px column has no room to both truncate and stay
   readable, so dual-column names wrap as they did before the chips existed.
 
+### Black-bar cropping and the 3840x768 hint
+
+The wall's Elgato cards **always deliver 3840x2160**, whatever the source sends
+(measured 2026-10-01: `left stream: 3840x2160`). A source in another shape is
+fitted inside that frame with its shape kept and **pure black** around it. A
+laptop at 3840x768 (5:1, the wall's own shape) arrives as a band a third of the
+frame tall. Uncropped, single view shows that 16:9 frame in the middle of the 5:1
+wall, black all round.
+
+`src/renderer/content-box.js` (pure, unit tested) finds the bars in the 96x54
+thumbnail the health check already takes every 2s. `renderer.js` applies the
+result as `object-view-box` on the `<video>`, so `object-fit: contain` then fits
+the real picture. That costs no extra decode and no canvas.
+
+Four things worth not re-learning:
+
+- **Snapped to known shapes, never cropped to what was measured.** The result must
+  land on one of `SHAPES` (5:1, 16:10, 21:9...) and repeat three times (~6s). A
+  bar must also be pure black across its whole width, and the bars must be
+  symmetric. That is what keeps a dark slide from being cropped. An all-black or
+  unmatched frame changes nothing.
+- **`drawImage` reads the full decoded frame**, whatever `object-view-box` crops on
+  screen. That is why detection keeps seeing the bars after they are cropped.
+  Freeze (`drawFitted`) applies the same crop and `contain` by hand. It used to
+  stretch the frame over the whole area.
+- **The hint triggers on "narrower than 16:9"**, which in practice means a laptop
+  (the driver pillarboxes it). The Apple TV is native 16:9 and never triggers it.
+  It shows for 15s in single view only.
+- **Not applied on the opt-in WebGPU compositing path** (`gpuCompositing`), which
+  draws the frame itself. `cropLetterbox: false` in settings.json turns cropping
+  off entirely.
+
 ### Capture-card health and the log file
 
 The wall is Windows 11 with two PCIe **Elgato 4K60 Pro MK.2** cards. Its startup
