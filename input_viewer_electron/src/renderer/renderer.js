@@ -286,8 +286,13 @@ async function saveSettings() {
   try {
     if (window.electronAPI) {
       const settingsToSave = {
-        leftDeviceId: state.leftDeviceId,
-        rightDeviceId: state.rightDeviceId,
+        // Before the startup inputs are chosen these are still null, and
+        // setLayout() / getVideoDevices() save before that point. Writing the
+        // null over the saved choice is what made the wall forget a manually
+        // picked input across restarts, so keep the saved one until a side
+        // has an input of its own.
+        leftDeviceId: state.leftDeviceId ?? state.settings.leftDeviceId ?? null,
+        rightDeviceId: state.rightDeviceId ?? state.settings.rightDeviceId ?? null,
         layoutMode: state.layoutMode,
         centerGap: state.centerGap,
         borderWidth: state.borderWidth,
@@ -319,6 +324,9 @@ async function saveSettings() {
         artnetSceneBySaver: state.settings.artnetSceneBySaver,
         cropLetterbox: state.settings.cropLetterbox
       }
+      // Mirror into the in-memory copy, which getVideoDevices() restores from.
+      state.settings.leftDeviceId = settingsToSave.leftDeviceId
+      state.settings.rightDeviceId = settingsToSave.rightDeviceId
       await window.electronAPI.saveSettings(settingsToSave)
     }
   } catch (e) {
@@ -582,12 +590,27 @@ async function getVideoDevices() {
     
     // Set default devices from settings or auto-assign
     if (state.devices.length > 0) {
+      // A side that is already showing a card that is still present keeps it.
+      //
+      // This runs on every `devicechange` too -- an EDID write in the Elgato
+      // utility fires one, so does plugging in a webcam -- and it used to
+      // re-pick both sides from saved settings every time. Those could be stale
+      // (or null, see saveSettings), so the left side silently became "first
+      // enabled device": the label and the dropdown said Apple TV while the
+      // stream still showed the presenter, and the next health reopen would
+      // have switched the wall to the Apple TV. Seen on the wall on 2026-10-01.
+      const present = (id) => !!id && state.devices.some(d => d.deviceId === id)
+      const keepLeft = present(state.leftDeviceId)
+      const keepRight = present(state.rightDeviceId)
+
       // Try to restore from settings
       const savedLeft = state.devices.find(d => d.deviceId === state.settings.leftDeviceId)
       const savedRight = state.devices.find(d => d.deviceId === state.settings.rightDeviceId)
       
       // Auto-assign devices if not saved
-      if (savedLeft) {
+      if (keepLeft) {
+        // unchanged
+      } else if (savedLeft) {
         state.leftDeviceId = savedLeft.deviceId
       } else {
         // Use first enabled device
@@ -595,7 +618,9 @@ async function getVideoDevices() {
         state.leftDeviceId = firstEnabled ? firstEnabled.deviceId : state.devices[0].deviceId
       }
       
-      if (savedRight) {
+      if (keepRight) {
+        // unchanged
+      } else if (savedRight) {
         state.rightDeviceId = savedRight.deviceId
       } else {
         // For dual mode: use second device if available, otherwise duplicate first
@@ -4315,6 +4340,8 @@ async function openInitialStreams(layoutMode) {
   if (layoutMode === 'dual' && state.rightDeviceId) {
     await startVideoStream(state.rightDeviceId, elements.rightVideo, 'right')
   }
+  // Every earlier save in startup ran before the inputs were chosen.
+  saveSettings()
   return true
 }
 
@@ -4552,6 +4579,7 @@ export {
   // how artnetSpotDepth shipped in 3.0.0 unable to persist: the setting existed,
   // loaded and worked, and was reset to its default by the next unrelated save.
   saveSettings,
+  getVideoDevices,
   updateArtnetUI,
   toggleArtnet,
   setArtnetSaverMode,
