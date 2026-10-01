@@ -81,35 +81,70 @@ export function lumaGrid(rgba) {
  *   a crop; 'none' when the picture fills the frame; null when undecidable
  *   (all black, asymmetric, or no known shape) -- callers keep what they had.
  */
+function rowActive(luma, w, y) {
+  let n = 0
+  for (let x = 0; x < w; x++) if (luma[y * w + x] > CROP.BLACK_MAX) n++
+  return n > w * CROP.ACTIVE_SHARE
+}
+
+function colActive(luma, w, h, x, y0 = 0, y1 = h) {
+  let n = 0
+  for (let y = y0; y < y1; y++) if (luma[y * w + x] > CROP.BLACK_MAX) n++
+  return n > (y1 - y0) * CROP.ACTIVE_SHARE
+}
+
+/**
+ * The pure-black margin on each side of a thumbnail, as shares of the frame.
+ * Null when the whole frame is black: there is nothing to measure against.
+ */
+export function measureBars(luma, w, h) {
+  if (!luma || w <= 0 || h <= 0) return null
+  let top = 0
+  while (top < h && !rowActive(luma, w, top)) top++
+  if (top === h) return null
+  let bottom = h - 1
+  while (bottom > top && !rowActive(luma, w, bottom)) bottom--
+  let left = 0
+  while (left < w && !colActive(luma, w, h, left)) left++
+  let right = w - 1
+  while (right > left && !colActive(luma, w, h, right)) right--
+  return {
+    top: top / h,
+    bottom: (h - 1 - bottom) / h,
+    left: left / w,
+    right: (w - 1 - right) / w,
+    // Thumbnail rows/columns, for callers that need the exact edges.
+    rows: { top, bottom },
+    cols: { left, right },
+  }
+}
+
+/** The exact, centred crop that leaves a picture of `ratio` in a frame of `frameRatio`. */
+export function boxForShape(shape, frameRatio) {
+  let inset
+  if (shape.ratio > frameRatio) {
+    const v = (1 - frameRatio / shape.ratio) / 2 * 100
+    inset = { top: v, right: 0, bottom: v, left: 0 }
+  } else {
+    const v = (1 - shape.ratio / frameRatio) / 2 * 100
+    inset = { top: 0, right: v, bottom: 0, left: v }
+  }
+  return { shape: shape.name, ratio: shape.ratio, inset }
+}
+
 export function detectContentBox(luma, w, h, frameW, frameH) {
   if (!luma || w <= 0 || h <= 0 || !frameW || !frameH) return null
 
-  const rowActive = (y) => {
-    let n = 0
-    for (let x = 0; x < w; x++) if (luma[y * w + x] > CROP.BLACK_MAX) n++
-    return n > w * CROP.ACTIVE_SHARE
-  }
-  const colActive = (x) => {
-    let n = 0
-    for (let y = 0; y < h; y++) if (luma[y * w + x] > CROP.BLACK_MAX) n++
-    return n > h * CROP.ACTIVE_SHARE
-  }
-
-  let top = 0
-  while (top < h && !rowActive(top)) top++
-  if (top === h) return null // all black: nothing to judge by
-  let bottom = h - 1
-  while (bottom > top && !rowActive(bottom)) bottom--
-  let left = 0
-  while (left < w && !colActive(left)) left++
-  let right = w - 1
-  while (right > left && !colActive(right)) right--
+  const bars = measureBars(luma, w, h)
+  if (!bars) return null // all black: nothing to judge by
+  const { top, bottom } = bars.rows
+  const { left, right } = bars.cols
 
   // Bar sizes as shares of the frame.
-  const barT = top / h
-  const barB = (h - 1 - bottom) / h
-  const barL = left / w
-  const barR = (w - 1 - right) / w
+  const barT = bars.top
+  const barB = bars.bottom
+  const barL = bars.left
+  const barR = bars.right
   if (Math.abs(barT - barB) > CROP.SYMMETRY_TOLERANCE) return null
   if (Math.abs(barL - barR) > CROP.SYMMETRY_TOLERANCE) return null
 
@@ -129,15 +164,7 @@ export function detectContentBox(luma, w, h, frameW, frameH) {
 
   // The exact, centred crop for that shape -- not the measured one, which is
   // only as precise as the thumbnail.
-  let inset
-  if (shape.ratio > frameRatio) {
-    const v = (1 - frameRatio / shape.ratio) / 2 * 100
-    inset = { top: v, right: 0, bottom: v, left: 0 }
-  } else {
-    const v = (1 - shape.ratio / frameRatio) / 2 * 100
-    inset = { top: 0, right: v, bottom: 0, left: v }
-  }
-  return { shape: shape.name, ratio: shape.ratio, inset }
+  return boxForShape(shape, frameRatio)
 }
 
 /** CSS for a crop: an `object-view-box` value, or '' for none. */
@@ -194,6 +221,132 @@ export function createCropTracker() {
     /** 'none' or a crop. */
     current() {
       return current
+    },
+  }
+}
+
+// =============================================================================
+// Saved boxes (#316)
+// =============================================================================
+//
+// Automatic detection re-measures every picture, and pure-black symmetric
+// content -- a black slide, a screensaver -- is indistinguishable from the
+// card's bars in one frame, so the crop resized with the content. What IS
+// reliable: a given source resolution always produces exactly the same bars.
+//
+// So in "saved" mode a side only ever switches between boxes saved for its
+// input (or the full frame), with two rules:
+//   enter a box  only when the bars match it on every side, STABLE_SAMPLES times;
+//   leave a box  only when picture appears in the area it crops away,
+//                STABLE_SAMPLES times. Black inside the box can never move it.
+
+/** Boxes an input gets until someone edits its list: what the wall's laptops send. */
+export const DEFAULT_SAVED_SHAPES = ['5:1', '16:10']
+
+/** How far measured bars may be from a saved box, as a share of the frame. One thumbnail row is ~1.9%. */
+export const MATCH_TOLERANCE = 0.025
+
+/** Shape by name, or null. */
+export function shapeByName(name) {
+  return SHAPES.find(s => s.name === name) || null
+}
+
+/** Do the measured bars match this box on every side? */
+export function barsMatchBox(bars, box) {
+  if (!bars || !box) return false
+  const { top, right, bottom, left } = box.inset
+  return Math.abs(bars.top - top / 100) <= MATCH_TOLERANCE &&
+    Math.abs(bars.bottom - bottom / 100) <= MATCH_TOLERANCE &&
+    Math.abs(bars.left - left / 100) <= MATCH_TOLERANCE &&
+    Math.abs(bars.right - right / 100) <= MATCH_TOLERANCE
+}
+
+/**
+ * Is there picture in the area this box crops away?
+ *
+ * One thumbnail row/column inside the box's edge is skipped: the smooth
+ * downscale blends the picture's first row into the bar's last one, and that
+ * blend is not picture outside the box.
+ */
+export function pictureOutside(luma, w, h, box) {
+  const { top, right, bottom, left } = box.inset
+  const yTop = Math.floor(top / 100 * h) - 1        // rows [0, yTop) are outside
+  const yBot = h - Math.floor(bottom / 100 * h) + 1 // rows [yBot, h) are outside
+  const xL = Math.floor(left / 100 * w) - 1
+  const xR = w - Math.floor(right / 100 * w) + 1
+  for (let y = 0; y < yTop; y++) if (rowActive(luma, w, y)) return true
+  for (let y = Math.max(0, yBot); y < h; y++) if (rowActive(luma, w, y)) return true
+  for (let x = 0; x < xL; x++) if (colActive(luma, w, h, x)) return true
+  for (let x = Math.max(0, xR); x < w; x++) if (colActive(luma, w, h, x)) return true
+  return false
+}
+
+/**
+ * Debounced crop for one side in "saved" mode.
+ *
+ * update() takes the raw thumbnail rather than a detection, because the two
+ * rules ask different questions of it than detectContentBox does.
+ */
+export function createSavedBoxTracker() {
+  let current = 'none'
+  let pending = null   // { kind: 'enter'|'leave', key, count }
+  let reason = null
+
+  const keyOf = (b) => (b && b !== 'none' ? b.shape : 'none')
+  const bump = (kind, key) => {
+    if (pending && pending.kind === kind && pending.key === key) pending.count += 1
+    else pending = { kind, key, count: 1 }
+    return pending.count >= CROP.STABLE_SAMPLES
+  }
+
+  return {
+    /**
+     * @param {{luma: Uint8Array, w: number, h: number, frameRatio: number, uniform: boolean}} sample
+     *   uniform: the frame is one flat colour -- black, or the driver's grey
+     *   no-signal image -- and says nothing about bars.
+     * @param {string[]} savedShapes
+     * @returns {boolean} true when the crop changed; reason() says why
+     */
+    update(sample, savedShapes) {
+      if (!sample || sample.uniform) return false
+      const bars = measureBars(sample.luma, sample.w, sample.h)
+      if (!bars) return false
+      const boxes = savedShapes.map(shapeByName).filter(Boolean)
+        .map(s => boxForShape(s, sample.frameRatio))
+      const match = boxes.find(b => barsMatchBox(bars, b)) || null
+
+      if (current === 'none') {
+        if (!match) { pending = null; return false }
+        if (!bump('enter', match.shape)) return false
+        current = match
+        reason = `matches saved ${match.shape} box`
+        pending = null
+        return true
+      }
+
+      // In a box: stay unless picture shows up where it is cropping.
+      if (!pictureOutside(sample.luma, sample.w, sample.h, current)) {
+        pending = null
+        return false
+      }
+      const next = match && match.shape !== current.shape ? match : 'none'
+      if (!bump('leave', keyOf(next))) return false
+      reason = `picture outside the ${current.shape} box` +
+        (next === 'none' ? '' : `, matches saved ${next.shape} box`)
+      current = next
+      pending = null
+      return true
+    },
+    reset() {
+      current = 'none'
+      pending = null
+      reason = null
+    },
+    current() {
+      return current
+    },
+    reason() {
+      return reason
     },
   }
 }
