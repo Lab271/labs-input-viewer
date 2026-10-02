@@ -27,9 +27,14 @@
  */
 
 export const CROP = {
-  /** Thumbnail the detector reads. 54 rows resolves a bar to ~2% of the frame. */
-  SAMPLE_W: 96,
-  SAMPLE_H: 54,
+  /**
+   * Thumbnail the detector reads. 216 rows resolves a bar to ~0.5% of the frame.
+   * It was 96x54 (~2% a row), which could not tell 'dual half' (2.433:1) from
+   * 21:9 (2.370:1): both measured 2.400. Reading 384x216 every 2 s is still
+   * negligible work.
+   */
+  SAMPLE_W: 384,
+  SAMPLE_H: 216,
   /** Luma (0-255) at or below which a pixel counts as bar. The padding is pure black. */
   BLACK_MAX: 10,
   /** A row/column is picture if more than this share of its pixels is above BLACK_MAX. */
@@ -51,10 +56,15 @@ export const CROP = {
  * 1710x1107 -- and the wall's EDID offers each of them so mirroring is 1:1.
  * Without it a mirror matched no shape, so its bars were never cropped. It sits
  * between 3:2 and 16:10, which is why matching takes the NEAREST shape.
+ *
+ * 'dual half' is one half of the wall in dual view: (6000 - gap) / 2 by 1200,
+ * offered by the EDID as 2920x1200 so an extended laptop display can fill a half.
+ * It sits 2.6% from 21:9, close enough that the thumbnail's precision matters.
  */
 export const SHAPES = [
   { name: '5:1', ratio: 5 },
   { name: '32:9', ratio: 32 / 9 },
+  { name: 'dual half', ratio: 2920 / 1200 },
   { name: '21:9', ratio: 64 / 27 },
   { name: '2:1', ratio: 2 },
   { name: '16:9', ratio: 16 / 9 },
