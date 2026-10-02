@@ -144,7 +144,9 @@ export function detectContentBox(luma, w, h, frameW, frameH) {
     const v = (1 - shape.ratio / frameRatio) / 2 * 100
     inset = { top: 0, right: v, bottom: 0, left: v }
   }
-  return { shape: shape.name, ratio: shape.ratio, inset }
+  // The measured ratio rides along for the log: it is what says why a shape
+  // was chosen over its neighbour (3:2, MacBook and 16:10 are close together).
+  return { shape: shape.name, ratio: shape.ratio, inset, measured }
 }
 
 /** CSS for a crop: an `object-view-box` value, or '' for none. */
