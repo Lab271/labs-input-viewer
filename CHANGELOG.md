@@ -9,6 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Electron Version (v3.x)
 
+### [3.3.2] - 2026-10-02
+
+#### Fixed
+
+- **A mirrored MacBook screen was not cropped.** Mirroring gives a picture of
+  ~1.54:1, which matched none of the crop shapes, so its black bars stayed.
+  Every MacBook's default size has that shape (Pro 14" 1512x982, Pro 16"
+  1728x1117, Air 13" 1470x956, Air 15" 1710x1107), and there is now a `MacBook`
+  shape for it, between 16:10 and 3:2. It also catches macOS mirroring into a
+  1920x1200 mode and adding black bars of its own. The wall's EDID offers all
+  four sizes, so mirroring is 1:1
+
+### [3.3.1] - 2026-10-01
+
+#### Fixed
+
+- **The wall could switch from the laptop to the Apple TV on its own.** Every
+  `devicechange` (an EDID write in the Elgato utility, a webcam plugged in or
+  out) re-picked both sides from saved settings, which could be stale. The left
+  side then silently became "first enabled device", the Apple TV card, while
+  still showing the laptop, and the next health reopen switched the wall to it.
+  A side now keeps its input while that card is still present
+- **The wall forgot a manually picked input across restarts.** Startup saved the
+  settings before the inputs were chosen, writing `null` over the saved choice
+- **The 3840x768 tip is off by default.** It asked presenters to change their
+  laptop's resolution, and on the wall's HDBaseT link that is what lost the
+  picture. `aspectHint: true` in `settings.json` turns it back on
+
 ### [3.3.0] - 2026-10-01
 
 A laptop at 3840x768, the wall's own 5:1, now fills the whole wall.
