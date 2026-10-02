@@ -45,6 +45,12 @@ export const CROP = {
 /**
  * Shapes a source is snapped to. 5:1 is the wall; the rest are what laptops,
  * cameras and players commonly send.
+ *
+ * 'MacBook' is a mirrored MacBook screen. Its default "looks like" sizes are all
+ * ~1.54:1 -- Pro 14" 1512x982, Pro 16" 1728x1117, Air 13" 1470x956, Air 15"
+ * 1710x1107 -- and the wall's EDID offers each of them so mirroring is 1:1.
+ * Without it a mirror matched no shape, so its bars were never cropped. It sits
+ * between 3:2 and 16:10, which is why matching takes the NEAREST shape.
  */
 export const SHAPES = [
   { name: '5:1', ratio: 5 },
@@ -53,6 +59,7 @@ export const SHAPES = [
   { name: '2:1', ratio: 2 },
   { name: '16:9', ratio: 16 / 9 },
   { name: '16:10', ratio: 16 / 10 },
+  { name: 'MacBook', ratio: 1.542 },
   { name: '3:2', ratio: 3 / 2 },
   { name: '4:3', ratio: 4 / 3 },
   { name: '5:4', ratio: 5 / 4 },

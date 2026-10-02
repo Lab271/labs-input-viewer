@@ -50,6 +50,22 @@ describe('detectContentBox', () => {
     expect(r.inset.top).toBe(0)
   })
 
+  it('crops a mirrored MacBook screen, for every MacBook model', () => {
+    // Default "looks like" sizes; the EDID offers each so mirroring is 1:1.
+    for (const [w, h] of [[1512, 982], [1728, 1117], [1470, 956], [1710, 1107]]) {
+      const r = detect(frame(w / h))
+      expect(r?.shape, `${w}x${h}`).toBe('MacBook')
+      // Pillarboxed in the 16:9 frame: (1 - 1.542/(16/9)) / 2 = 6.6% each side.
+      expect(r.inset.left).toBeCloseTo(6.63, 1)
+      expect(r.inset.top).toBe(0)
+    }
+  })
+
+  it('still tells 3:2 and 16:10 apart from a MacBook', () => {
+    expect(detect(frame(3 / 2))?.shape).toBe('3:2')
+    expect(detect(frame(1.6))?.shape).toBe('16:10')
+  })
+
   it('reports a native 16:9 source (the Apple TV) as filling the frame', () => {
     expect(detect(frame(16 / 9))).toBe('none')
   })
