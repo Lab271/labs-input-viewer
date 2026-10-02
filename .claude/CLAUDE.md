@@ -206,8 +206,9 @@ laptop at 3840x768 (5:1, the wall's own shape) arrives as a band a third of the
 frame tall. Uncropped, single view shows that 16:9 frame in the middle of the 5:1
 wall, black all round.
 
-`src/renderer/content-box.js` (pure, unit tested) finds the bars in the 96x54
-thumbnail the health check already takes every 2s. `renderer.js` applies the
+`src/renderer/content-box.js` (pure, unit tested) finds the bars in the 384x216
+thumbnail the health check already takes every 2s. (It was 96x54, too coarse to
+tell the 2920x1200 'dual half' mode from 21:9.) `renderer.js` applies the
 result as `object-view-box` on the `<video>`, so `object-fit: contain` then fits
 the real picture. That costs no extra decode and no canvas.
 

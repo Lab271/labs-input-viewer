@@ -61,6 +61,16 @@ describe('detectContentBox', () => {
     }
   })
 
+  it('crops the 2920x1200 dual-half mode, and tells it from 21:9', () => {
+    // 2.433:1 against 2.370:1, 2.6% apart: what the 384x216 thumbnail is for.
+    const half = detect(frame(2920 / 1200))
+    expect(half?.shape).toBe('dual half')
+    expect(half.inset.top).toBeCloseTo(13.47, 1)
+    expect(detect(frame(2918 / 1200))?.shape).toBe('dual half')   // (6000 - 164) / 2
+    expect(detect(frame(2560 / 1080))?.shape).toBe('21:9')
+    expect(detect(frame(3440 / 1440))?.shape).toBe('21:9')
+  })
+
   it('still tells 3:2 and 16:10 apart from a MacBook', () => {
     expect(detect(frame(3 / 2))?.shape).toBe('3:2')
     expect(detect(frame(1.6))?.shape).toBe('16:10')
