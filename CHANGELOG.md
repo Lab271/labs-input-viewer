@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Electron Version (v3.x)
 
+### [3.3.4] - 2026-10-02
+
+#### Fixed
+
+- **A laptop at 2920x1200 was cropped to 21:9.** The wall's EDID offers
+  2920x1200, one half of the wall in dual view, so an extended laptop display can
+  fill a half. Its shape (2.433:1) is now a crop shape (`dual half`)
+- **The black-bar detector reads a 384x216 thumbnail instead of 96x54.** At 54
+  rows (~2% each) the dual half and 21:9, only 2.6% apart, both measured 2.400:1.
+  Every shape is now measured to ~0.5%; a mirrored MacBook measures 1.546:1
+  instead of 1.500:1
+
+### [3.3.3] - 2026-10-02
+
+#### Fixed
+
+- **Dual view showed a black right panel after starting in single view.** Startup
+  in single view opens only the left input, and switching to dual view never
+  opened the right one, while the dropdown said it was active. Switching to dual
+  now opens it, as clicking the input did
+- `[Crop]` log lines include the measured shape, e.g. `(measured 1.546:1)`, so a
+  crop to a neighbouring shape can be explained from the log
+
 ### [3.3.2] - 2026-10-02
 
 #### Fixed
