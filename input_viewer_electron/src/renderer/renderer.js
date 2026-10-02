@@ -981,7 +981,8 @@ function resetCrop(side) {
 
 function describeCrop(crop, video) {
   if (crop === 'none') return 'none'
-  return `${crop.shape} ${viewBoxCss(crop)} of ${video?.videoWidth}x${video?.videoHeight}`
+  const measured = typeof crop.measured === 'number' ? ` (measured ${crop.measured.toFixed(3)}:1)` : ''
+  return `${crop.shape} ${viewBoxCss(crop)} of ${video?.videoWidth}x${video?.videoHeight}${measured}`
 }
 
 /** Source rectangle of the visible picture, in the video's own pixels. */
@@ -1963,6 +1964,22 @@ function layoutAnimMs () {
     : LAYOUT_ANIM_MS
 }
 
+/**
+ * Dual view needs a live right-hand stream, and may not have one.
+ *
+ * Startup in single view opens only the left side (openInitialStreams), so the
+ * right side has an input selected but nothing playing. Switching to dual view
+ * then showed a black right panel while the dropdown said Presenter was active,
+ * until someone clicked the input again (seen on the wall on 2026-10-02).
+ */
+function ensureRightStream() {
+  const id = state.rightDeviceId
+  if (!id) return
+  const track = elements.rightVideo?.srcObject?.getVideoTracks?.()[0]
+  if (track && track.readyState !== 'ended') return
+  startVideoStream(id, elements.rightVideo, 'right')
+}
+
 function setLayout(mode) {
   state.layoutMode = mode
   state.settings.layoutMode = mode
@@ -1998,6 +2015,7 @@ function setLayout(mode) {
       elements.rightFeed.classList.remove('collapsed')
       elements.centerDivider.classList.remove('hidden', 'overlay')
       elements.bottomLogo.classList.add('hidden')
+      ensureRightStream()
       break
     case 'single':
       document.body.classList.add('single-view')
