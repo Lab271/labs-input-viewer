@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Electron Version (v3.x)
 
+### [3.3.5] - 2026-10-03
+
+#### Fixed
+
+- **A mirrored Mac in a wide mode stayed small in the middle.** Mirroring a
+  MacBook (1.54:1) into a wide mode such as 2920x1200 or 3840x768 gets black at
+  the sides from macOS, then black above and below from the card fitting the wide
+  picture into 16:9. The crop removed only one pair of bars. With bars on both
+  axes it now crops to a box of the snapped shape sized to contain the measured
+  picture, rounded so it never cuts into it. Bars on one axis are cropped exactly
+  as before
+
 ### [3.3.4] - 2026-10-02
 
 #### Fixed
