@@ -47,6 +47,14 @@ let mainWindow
 // electron-vite sets ELECTRON_RENDERER_URL only during `dev` command
 const isDev = !!process.env.ELECTRON_RENDERER_URL
 
+function originOf(url) {
+  try {
+    return new URL(url).origin
+  } catch {
+    return null
+  }
+}
+
 // Auto-updater (lazy-loaded to avoid crash in dev mode)
 let autoUpdater = null
 
@@ -235,8 +243,12 @@ function createWindow() {
   })
 
   // Load the index.html
+  // In dev, load whatever port Vite actually bound. When 5173 is taken (another
+  // checkout's `npm run dev`) Vite moves on to 5174, and a hard-coded 5173 would
+  // silently run the OTHER checkout's renderer in this window.
   if (isDev) {
-    mainWindow.loadURL('http://localhost:5173')
+    console.log('[App] loading renderer from', process.env.ELECTRON_RENDERER_URL)
+    mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
     mainWindow.webContents.openDevTools()
   } else {
     mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'))
@@ -246,10 +258,12 @@ function createWindow() {
   // else and refuse to open child windows, so a compromised renderer cannot
   // pull in remote code or spawn a window with different preferences.
   // Anything genuinely external goes to the user's real browser.
-  const allowedOrigin = isDev ? 'http://localhost:5173' : null
+  const allowedOrigin = isDev ? new URL(process.env.ELECTRON_RENDERER_URL).origin : null
 
   mainWindow.webContents.on('will-navigate', (event, url) => {
-    if (allowedOrigin && url.startsWith(allowedOrigin)) return
+    // Compare parsed origins, not a string prefix: a prefix match would also let
+    // through http://localhost:51730 or http://localhost:5173.example.com.
+    if (allowedOrigin && originOf(url) === allowedOrigin) return
     if (url.startsWith('file://')) return
     console.warn('[Security] Blocked navigation to', url)
     event.preventDefault()
