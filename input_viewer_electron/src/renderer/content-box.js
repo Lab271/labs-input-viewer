@@ -45,6 +45,17 @@ export const CROP = {
   SHAPE_TOLERANCE: 0.06,
   /** Identical results needed in a row before the crop changes (~6 s at 2 s). */
   STABLE_SAMPLES: 3,
+  /**
+   * Bars of at least this share on BOTH axes make a windowbox: the picture sits
+   * in a box inside a box. ~4 thumbnail columns / 2 rows.
+   */
+  WINDOWBOX_MIN_BAR: 0.01,
+  /**
+   * Insets within this many percent count as the same crop. A windowbox crop is
+   * sized from a measurement, so it moves by a thumbnail pixel between samples;
+   * without this the debounce would never see three identical results.
+   */
+  INSET_JITTER: 1.0,
 }
 
 /**
@@ -144,10 +155,37 @@ export function detectContentBox(luma, w, h, frameW, frameH) {
   const shape = SHAPES.reduce((best, s) => (off(s) < off(best) ? s : best))
   if (off(shape) > CROP.SHAPE_TOLERANCE) return null
 
-  // The exact, centred crop for that shape -- not the measured one, which is
-  // only as precise as the thumbnail.
+  // Black on BOTH axes: a windowbox. A Mac mirroring its 1.54:1 screen into a
+  // wide mode (3840x768, 2920x1200) gets black at the sides from macOS, then
+  // black above and below from the card fitting that wide picture into 16:9.
+  // The one-axis box below would remove only one pair of bars and leave the
+  // picture small in the middle. Seen in the mock setup on 2026-10-03:
+  // content 1220x790 in 1920x1080, bars 13.4% top and bottom, 18.2% each side.
+  const windowbox = Math.min(barT, barB) > CROP.WINDOWBOX_MIN_BAR &&
+    Math.min(barL, barR) > CROP.WINDOWBOX_MIN_BAR
+
   let inset
-  if (shape.ratio > frameRatio) {
+  if (windowbox) {
+    // The shape's box, sized to CONTAIN what was measured, so it never cuts
+    // picture: at worst it leaves a sliver of black (the thumbnail counts a
+    // blended edge row as picture). Not the exact box, because where the
+    // picture sits inside the outer box is not something the shape alone says.
+    let bw = contentW
+    let bh = contentW / shape.ratio
+    if (bh < contentH) {
+      bh = contentH
+      bw = contentH * shape.ratio
+    }
+    bw = Math.min(bw, frameW)
+    bh = Math.min(bh, frameH)
+    // Rounded DOWN: a smaller inset is a larger box, so rounding never cuts.
+    const r1 = (v) => Math.floor(v * 10) / 10
+    const sx = r1((1 - bw / frameW) / 2 * 100)
+    const sy = r1((1 - bh / frameH) / 2 * 100)
+    inset = { top: sy, right: sx, bottom: sy, left: sx }
+  } else if (shape.ratio > frameRatio) {
+    // The exact, centred crop for that shape -- not the measured one, which is
+    // only as precise as the thumbnail.
     const v = (1 - frameRatio / shape.ratio) / 2 * 100
     inset = { top: v, right: 0, bottom: v, left: 0 }
   } else {
@@ -156,7 +194,7 @@ export function detectContentBox(luma, w, h, frameW, frameH) {
   }
   // The measured ratio rides along for the log: it is what says why a shape
   // was chosen over its neighbour (3:2, MacBook and 16:10 are close together).
-  return { shape: shape.name, ratio: shape.ratio, inset, measured }
+  return { shape: shape.name, ratio: shape.ratio, inset, measured, windowbox }
 }
 
 /** CSS for a crop: an `object-view-box` value, or '' for none. */
@@ -175,7 +213,14 @@ export function createCropTracker() {
   let current = 'none'
   let candidate = null
   let count = 0
-  const key = (c) => (c && c !== 'none' ? c.shape : c)
+  // Same shape, same kind, and insets within INSET_JITTER: the same crop.
+  const same = (a, b) => {
+    if (a === b) return true
+    if (!a || !b || a === 'none' || b === 'none') return false
+    if (a.shape !== b.shape || !!a.windowbox !== !!b.windowbox) return false
+    return ['top', 'right', 'bottom', 'left']
+      .every(k => Math.abs(a.inset[k] - b.inset[k]) <= CROP.INSET_JITTER)
+  }
 
   return {
     /**
@@ -185,12 +230,12 @@ export function createCropTracker() {
      */
     update(detected) {
       if (detected === null) return false
-      if (key(detected) === key(current)) {
+      if (same(detected, current)) {
         candidate = null
         count = 0
         return false
       }
-      if (key(detected) === key(candidate)) {
+      if (same(detected, candidate)) {
         count += 1
       } else {
         candidate = detected

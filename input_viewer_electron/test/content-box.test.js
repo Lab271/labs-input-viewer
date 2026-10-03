@@ -31,6 +31,29 @@ function frame(ratio, fill = () => 128) {
 
 const detect = (luma) => detectContentBox(luma, W, H, FW, FH)
 
+/**
+ * A windowbox: a picture of `ratio` fitted into a screen of `screenRatio`
+ * (black around it, as macOS mirroring does), and that screen fitted into the
+ * 16:9 frame (black around it, as the card does). Returns the thumbnail and the
+ * picture's true box as insets in percent.
+ */
+function windowboxed(ratio, screenRatio) {
+  const frameRatio = FW / FH
+  // screen box in the frame (shares)
+  let sw = 1, sh = 1
+  if (screenRatio > frameRatio) sh = frameRatio / screenRatio
+  else sw = screenRatio / frameRatio
+  // picture box in the screen (shares of the frame)
+  let pw = sw, ph = sh
+  if (ratio > screenRatio) ph = sh * screenRatio / ratio
+  else pw = sw * ratio / screenRatio
+  const luma = new Uint8Array(W * H)
+  const x0 = Math.round((1 - pw) / 2 * W), x1 = Math.round((1 + pw) / 2 * W)
+  const y0 = Math.round((1 - ph) / 2 * H), y1 = Math.round((1 + ph) / 2 * H)
+  for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) luma[y * W + x] = 128
+  return { luma, truth: { top: (1 - ph) / 2 * 100, left: (1 - pw) / 2 * 100 } }
+}
+
 describe('detectContentBox', () => {
   it('finds a 5:1 source letterboxed in the 16:9 frame, and crops exactly', () => {
     const r = detect(frame(5))
@@ -69,6 +92,29 @@ describe('detectContentBox', () => {
     expect(detect(frame(2918 / 1200))?.shape).toBe('dual half')   // (6000 - 164) / 2
     expect(detect(frame(2560 / 1080))?.shape).toBe('21:9')
     expect(detect(frame(3440 / 1440))?.shape).toBe('21:9')
+  })
+
+  it('crops a windowbox on all four sides, never into the picture', () => {
+    // A Mac mirroring its 1.54:1 screen into a wide mode: black at the sides
+    // from macOS, black above and below from the card.
+    for (const [ratio, screen] of [[1512 / 982, 2920 / 1200], [1512 / 982, 5], [1.6, 5]]) {
+      const { luma, truth } = windowboxed(ratio, screen)
+      const r = detect(luma)
+      expect(r?.windowbox, `${ratio.toFixed(2)} in ${screen.toFixed(2)}`).toBe(true)
+      // Contains the picture (never cuts), within half a thumbnail row/column:
+      // this synthetic frame rounds its own edges to whole thumbnail pixels,
+      // where a real downscale blends them and errs the safe way.
+      expect(r.inset.top).toBeLessThanOrEqual(truth.top + 50 / H)
+      expect(r.inset.left).toBeLessThanOrEqual(truth.left + 50 / W)
+      expect(truth.top - r.inset.top).toBeLessThan(1)
+      expect(truth.left - r.inset.left).toBeLessThan(1)
+    }
+  })
+
+  it('keeps the exact one-axis crop when only one pair of bars is there', () => {
+    expect(detect(frame(1512 / 982)).windowbox).toBe(false)
+    expect(detect(frame(5)).windowbox).toBe(false)
+    expect(detect(frame(5)).inset.left).toBe(0)
   })
 
   it('still tells 3:2 and 16:10 apart from a MacBook', () => {
@@ -153,6 +199,17 @@ describe('createCropTracker', () => {
     const tenth = detect(frame(1.6))
     for (let i = 0; i < 10; i++) expect(t.update(i % 2 ? five : tenth)).toBe(false)
     expect(t.current()).toBe('none')
+  })
+
+  it('ignores windowbox insets that move by a thumbnail pixel', () => {
+    const t = createCropTracker()
+    const a = { shape: 'MacBook', ratio: 1.542, windowbox: true, inset: { top: 13.4, right: 18.2, bottom: 13.4, left: 18.2 } }
+    const b = { ...a, inset: { top: 13.9, right: 18.0, bottom: 13.9, left: 18.0 } }   // <1% apart
+    for (let i = 0; i < CROP.STABLE_SAMPLES; i++) t.update(a)
+    for (let i = 0; i < 10; i++) expect(t.update(i % 2 ? a : b)).toBe(false)
+    const moved = { ...a, inset: { top: 20, right: 25, bottom: 20, left: 25 } }        // a real change
+    for (let i = 1; i < CROP.STABLE_SAMPLES; i++) expect(t.update(moved)).toBe(false)
+    expect(t.update(moved)).toBe(true)
   })
 
   it('reset() drops the crop for a new stream', () => {
