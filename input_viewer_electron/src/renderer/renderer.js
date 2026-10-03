@@ -478,7 +478,9 @@ function captureFrame() {
   // the same black-bar crop), so freezing does not change the picture: this
   // used to stretch each frame over its whole area.
   if (state.layoutMode === 'dual') {
-    const gap = state.layoutGap
+    // The same gap #center-divider is sized to. The side borders need nothing
+    // here: they sit outside #video-wrapper, which the canvas is sized to.
+    const gap = state.centerGap || 0
     const halfWidth = (canvas.width - gap) / 2
     drawFitted(ctx, 'left', elements.leftVideo, 0, 0, halfWidth, canvas.height)
     drawFitted(ctx, 'right', elements.rightVideo, halfWidth + gap, 0, halfWidth, canvas.height)

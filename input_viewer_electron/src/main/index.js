@@ -118,7 +118,6 @@ const defaultSettings = {
   leftDeviceId: null,
   rightDeviceId: null,
   layoutMode: 'dual',
-  layoutGap: 2,
   inputs: {}, // { deviceId: { name: string, enabled: boolean } }
 
   // Weather screensaver (issue #101). OFF by default, deliberately: this is the
