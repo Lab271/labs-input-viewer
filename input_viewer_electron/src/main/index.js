@@ -120,6 +120,11 @@ const defaultSettings = {
   layoutMode: 'dual',
   inputs: {}, // { deviceId: { name: string, enabled: boolean } }
 
+  // Multi-view: each half of the wall can show a different input. Off means dual
+  // view always shows one input on both halves, and the dropdown has one row of
+  // inputs that sets both. On by default: that is how the wall has always worked.
+  multiView: true,
+
   // Weather screensaver (issue #101). OFF by default, deliberately: this is the
   // only feature that talks to a third party unprompted, so an install that is
   // not supposed to reach the internet stays that way until someone opts in.
@@ -480,6 +485,37 @@ ipcMain.handle('artnet-send', async (event, request) => {
   } catch (err) {
     // Never throws back across IPC: a dead relay must not surface as a rejected
     // invoke() inside the screensaver's frame loop.
+    return { ok: false, error: err && err.message ? err.message : String(err) }
+  }
+})
+
+// Remote keyboard presses, for the same reason as artnet-send above: in production
+// the renderer is `file://`, so a renderer fetch() with an X-API-Key header is a
+// cross-origin request that needs a CORS preflight, and the presenter-PC device
+// answers no OPTIONS. From main there is no origin and no preflight.
+//
+// Returns { ok, status } or { ok: false, error }; never throws across IPC.
+const REMOTE_KEY_TIMEOUT_MS = 2000
+
+ipcMain.handle('remote-key-send', async (event, request) => {
+  const { url, apiKey } = request || {}
+  let parsed
+  try {
+    parsed = new URL(String(url))
+  } catch {
+    return { ok: false, error: 'invalid url' }
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return { ok: false, error: `refusing protocol ${parsed.protocol}` }
+  }
+  try {
+    const res = await fetch(parsed.toString(), {
+      method: 'GET',
+      headers: { 'X-API-Key': String(apiKey ?? '') },
+      signal: AbortSignal.timeout(REMOTE_KEY_TIMEOUT_MS)
+    })
+    return { ok: res.ok, status: res.status }
+  } catch (err) {
     return { ok: false, error: err && err.message ? err.message : String(err) }
   }
 })

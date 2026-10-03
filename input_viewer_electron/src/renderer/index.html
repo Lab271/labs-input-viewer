@@ -86,53 +86,31 @@
     <span id="input-name-text"></span>
   </div>
 
-  <!-- Dropdown Panel Trigger -->
-  <div id="dropdown-trigger">
-    <span class="dropdown-arrow">▼</span>
+  <!-- Dropdown trigger: the tab at the top edge. Hover or tap opens the controls. -->
+  <div id="dropdown-trigger" role="button" tabindex="0" aria-label="Show input controls" aria-expanded="false">
+    <span class="dropdown-arrow" aria-hidden="true">&#9660;</span>
   </div>
 
-  <!-- Dropdown Panel (simplified) -->
-  <div id="dropdown-panel">
-    <div class="dropdown-content">
-      <!-- View Mode Toggle -->
-      <div class="view-mode-row">
-        <button id="view-mode-dual" class="view-mode-btn active">Dual</button>
-        <button id="view-mode-single" class="view-mode-btn">Single</button>
+  <!-- Dropdown 2b, "over the wall". There is no panel: opening it lays a picker
+       over each half of the wall (rendered into #wall-pickers by
+       renderDropdownInputLists) and a small capsule at the top. Moving the
+       pointer below the pickers closes it (closeDropdownIfBelow). The id stays #dropdown-panel because the open/close state,
+       the thumbnail sweep and the volume poll all key off it. -->
+  <div id="dropdown-panel" aria-hidden="true">
+    <div id="wall-pickers"></div>
+
+    <div id="wall-capsule" class="wall-capsule">
+      <div class="view-toggle" role="group" aria-label="View">
+        <button id="view-mode-dual" class="view-mode-btn active" aria-pressed="true">Dual</button>
+        <button id="view-mode-single" class="view-mode-btn" aria-pressed="false">Single</button>
       </div>
-
-      <!-- Dual mode: Two columns -->
-      <div id="dual-columns" class="column-layout">
-        <div class="column">
-          <div class="column-header">Left</div>
-          <div id="left-input-list"></div>
-        </div>
-        <div class="column">
-          <div class="column-header">Right</div>
-          <div id="right-input-list"></div>
-        </div>
-      </div>
-
-      <!-- Single mode: One list -->
-      <div id="single-input-list" class="single-input-list hidden"></div>
-
-      <!-- Volume Controls -->
-      <div class="dropdown-divider"></div>
-      <div id="dropdown-volume-section" class="dropdown-volume-section">
-        <!-- Dynamic input volume sliders rendered by JS -->
-        <div id="dropdown-input-volumes"></div>
-        <!-- System volume -->
-        <div class="volume-row system-volume">
-          <span class="volume-label">Output</span>
-          <input type="range" id="dropdown-system-volume" min="0" max="100" value="50">
-          <span id="dropdown-system-volume-value" class="volume-value">50%</span>
-        </div>
-      </div>
-      <div class="dropdown-divider"></div>
-
-      <!-- Settings button -->
-      <button id="open-settings-btn" class="settings-btn">
-        <span class="icon">&#9881;</span>
-        Settings
+      <label class="capsule-volume">
+        <span class="mono-label">Output</span>
+        <input type="range" id="dropdown-system-volume" min="0" max="100" value="50" aria-label="Output volume">
+        <span id="dropdown-system-volume-value" class="mono-value">50%</span>
+      </label>
+      <button id="open-settings-btn" class="icon-btn" aria-label="Settings" title="Settings">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.31 9.91 L21.82 10.09 L21.82 13.91 L19.31 14.09 L18.65 15.68 L20.29 17.59 L17.59 20.29 L15.68 18.65 L14.09 19.31 L13.91 21.82 L10.09 21.82 L9.91 19.31 L8.32 18.65 L6.41 20.29 L3.71 17.59 L5.35 15.68 L4.69 14.09 L2.18 13.91 L2.18 10.09 L4.69 9.91 L5.35 8.32 L3.71 6.41 L6.41 3.71 L8.32 5.35 L9.91 4.69 L10.09 2.18 L13.91 2.18 L14.09 4.69 L15.68 5.35 L17.59 3.71 L20.29 6.41 L18.65 8.32 Z"/><circle cx="12" cy="12" r="3.2"/></svg>
       </button>
     </div>
   </div>
@@ -140,13 +118,13 @@
   <!-- Shortcut legend, a dropup at the bottom edge (mirrors the dropdown above).
        The rows are rendered from shortcuts.js, so this cannot drift from what the
        keys actually do -- which is the whole point of that list (#258). -->
-  <div id="legend-trigger">
-    <span class="legend-arrow">&#9650;</span>
+  <div id="legend-trigger" role="button" tabindex="0" aria-label="Show keyboard shortcuts" aria-expanded="false" aria-controls="legend-panel">
+    <span class="legend-arrow" aria-hidden="true">&#9650;</span>
   </div>
 
-  <div id="legend-panel">
+  <div id="legend-panel" role="region" aria-labelledby="legend-title">
     <div class="legend-content">
-      <div class="legend-title">Keyboard Shortcuts</div>
+      <div class="legend-title" id="legend-title">Keyboard shortcuts</div>
       <div id="legend-grid" class="legend-grid"></div>
     </div>
   </div>
@@ -162,141 +140,151 @@
     <div id="presenter-debug-log"></div>
   </div>
 
-  <!-- Settings Modal -->
+  <!-- Settings Modal. A side nav with one pane per section; everything saves as
+       it changes, so there is no Apply. The shortcut table that used to close
+       this panel moved out: the legend at the bottom edge has the same rows. -->
   <div id="settings-modal" class="modal hidden">
-    <div class="settings-modal-content">
-      <div class="modal-header">
-        <h2>Settings</h2>
-        <button id="close-settings-btn" class="close-btn">&times;</button>
-      </div>
+    <div class="settings-modal-content" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <nav class="settings-nav" aria-label="Settings sections">
+        <h2 id="settings-title">Settings</h2>
+        <button class="settings-nav-item active" data-section="inputs" aria-current="page">
+          <span>Inputs</span><span id="settings-nav-inputs" class="nav-status"></span>
+        </button>
+        <button class="settings-nav-item" data-section="layout">
+          <span>Layout</span><span id="settings-nav-layout" class="nav-status"></span>
+        </button>
+        <button class="settings-nav-item" data-section="remote">
+          <span>Remote keyboard</span><span id="settings-nav-remote" class="nav-status"></span>
+        </button>
+        <button class="settings-nav-item" data-section="artnet">
+          <span>Art-Net lighting</span><span id="settings-nav-artnet" class="nav-status"></span>
+        </button>
+        <div class="modal-footer">
+          <span id="settings-app-version">Input Viewer</span>
+          <span>Lab271@SchubergPhilis</span>
+        </div>
+      </nav>
 
-      <!-- Inputs Section -->
-      <div class="settings-section">
-        <h3>Inputs</h3>
-        <div id="settings-input-list" class="input-name-list"></div>
-      </div>
+      <div class="settings-body">
+        <button id="close-settings-btn" class="icon-btn close-btn" aria-label="Close settings" title="Close (Esc)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
 
-      <!-- Layout Section -->
-      <div class="settings-section">
-        <h3>Layout</h3>
-        <div class="slider-row">
-          <label>Center Gap</label>
-          <input type="range" id="settings-center-gap" min="20" max="200" value="60">
-          <span id="settings-center-gap-value">60px</span>
-        </div>
-        <div class="slider-row">
-          <label>Side Borders</label>
-          <input type="range" id="settings-border-width" min="0" max="200" value="0">
-          <span id="settings-border-width-value">0px</span>
-        </div>
-      </div>
+        <!-- Inputs -->
+        <section class="settings-section" data-section="inputs">
+          <h3>Inputs</h3>
+          <div class="toggle-row toggle-row-described">
+            <div>
+              <label for="multi-view-toggle">Multi-view</label>
+              <p class="settings-description">Let each half of the wall show a different input. When this is off, dual view shows the same input on both halves, and the dropdown has one row of inputs: one tap and it's on the wall.</p>
+            </div>
+            <button id="multi-view-toggle" class="toggle-switch active" role="switch" aria-checked="true"></button>
+          </div>
+          <div id="settings-input-list" class="input-name-list"></div>
+        </section>
 
-      <!-- No-Signal Detection Section -->
-      <div class="settings-section">
-        <h3>No-Signal Detection</h3>
-        <div class="setup-card">
-          <p>Capture what your capture card shows when there's no input connected, so the app can detect it automatically.</p>
-          <div class="setup-btn-row">
-            <button id="capture-left-btn" class="btn-primary">Capture Left</button>
-            <button id="capture-right-btn" class="btn-secondary">Capture Right</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Remote Keyboard Section -->
-      <div class="settings-section">
-        <h3>Remote Keyboard</h3>
-        <p class="settings-description">Forward arrow key presses to a remote presenter PC via network.</p>
-        <div class="toggle-row">
-          <label for="remote-keyboard-toggle">Enable Remote Keyboard</label>
-          <div id="remote-keyboard-toggle" class="toggle-switch"></div>
-        </div>
-        <div id="remote-keyboard-fields" class="remote-keyboard-fields hidden">
-          <div class="input-row">
-            <label for="remote-keyboard-host">Hostname</label>
-            <input type="text" id="remote-keyboard-host" placeholder="space_keyboard.local">
-          </div>
-          <div class="input-row">
-            <label for="remote-keyboard-api-key">API Key</label>
-            <input type="password" id="remote-keyboard-api-key" placeholder="Enter API key">
-          </div>
-          <div class="toggle-row">
-            <label for="presenter-debug-toggle">Show debug overlay</label>
-            <div id="presenter-debug-toggle" class="toggle-switch"></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Art-Net Lighting Section -->
-      <div class="settings-section">
-        <h3>Art-Net Lighting</h3>
-        <p class="settings-description">Drive the room lighting from the active
-          screensaver. Nothing is sent until this is enabled <em>and</em> a URL is
-          given &mdash; there is no default relay.</p>
-        <div class="toggle-row">
-          <label for="artnet-toggle">Enable Art-Net</label>
-          <div id="artnet-toggle" class="toggle-switch"></div>
-        </div>
-        <div id="artnet-fields" class="artnet-fields hidden">
-          <div class="input-row">
-            <label for="artnet-url">Relay URL</label>
-            <input type="text" id="artnet-url" placeholder="https://spacelights.lab271.io">
-          </div>
-          <div class="input-row">
-            <label for="artnet-target">Target</label>
-            <!-- A select rather than free text on purpose: an unrecognised
-                 target silently falls back to /all (see colourEndpoint), so a
-                 typo would look like broken fixtures rather than a bad setting.
-                 group:/strip: targets are site-specific and stay file-only; an
-                 existing one is preserved as an extra option rather than being
-                 overwritten when this panel opens. -->
-            <select id="artnet-target">
-              <option value="all">All fixtures &mdash; one flat colour</option>
-              <option value="spatial">Spatial &mdash; colours follow the wall</option>
-              <option value="effect:spot">Spot &mdash; follows the bright part of the wall</option>
-              <option value="effect:ripple">Ripple</option>
-              <option value="effect:plasma">Plasma</option>
-              <option value="effect:blobs">Blobs</option>
-              <option value="effect:aurora">Aurora</option>
-            </select>
+        <!-- Layout -->
+        <section class="settings-section hidden" data-section="layout">
+          <h3>Layout</h3>
+          <div id="layout-diagram" class="layout-diagram" aria-hidden="true"></div>
+          <div class="slider-row">
+            <label for="settings-center-gap">Center gap <span class="field-hint">Dual view only</span></label>
+            <input type="range" id="settings-center-gap" min="20" max="200" value="60">
+            <span id="settings-center-gap-value" class="mono-value">60px</span>
           </div>
           <div class="slider-row">
-            <label>Max Brightness</label>
-            <input type="range" id="artnet-max-brightness" min="0" max="100" value="80">
-            <span id="artnet-max-brightness-value" class="value">80%</span>
+            <label for="settings-border-width">Side borders <span class="field-hint">Each side</span></label>
+            <input type="range" id="settings-border-width" min="0" max="200" value="0">
+            <span id="settings-border-width-value" class="mono-value">0px</span>
           </div>
-          <div class="slider-row" id="artnet-spot-depth-row">
-            <label>Spot Depth</label>
-            <input type="range" id="artnet-spot-depth" min="0" max="100" value="50">
-            <span id="artnet-spot-depth-value" class="value">50%</span>
-          </div>
-          <div class="input-row">
-            <label for="artnet-release-scene">Release Scene (optional)</label>
-            <input type="text" id="artnet-release-scene" placeholder="Leave empty to keep the last colour">
-          </div>
-          <div class="input-row">
-            <label>Per Screensaver</label>
-            <p class="settings-description">Each screensaver can drive the lights
-              from its own picture (the default), hold a fixed scene, run an
-              effect, or leave the room alone. When the signal comes back the
-              room returns to however it was before the screensaver started.</p>
-            <div id="artnet-saver-list" class="artnet-saver-list"></div>
-          </div>
-        </div>
-      </div>
+        </section>
 
-      <!-- Shortcuts Section -->
-      <div class="settings-section">
-        <h3>Keyboard Shortcuts</h3>
-                <!-- Rows are rendered from shortcuts.js (#258). This table was
-             hand-maintained and had drifted: it was missing Q, V, +/- and F11,
-             so the one place documenting the keys omitted four of them. -->
-        <table class="shortcuts-table" id="shortcuts-table"></table>
-      </div>
+        <!-- Remote keyboard -->
+        <section class="settings-section hidden" data-section="remote">
+          <h3>Remote keyboard</h3>
+          <p class="settings-description">Forward arrow key presses to a remote presenter PC via network.</p>
+          <div class="toggle-row">
+            <label for="remote-keyboard-toggle">Enable Remote Keyboard</label>
+            <button id="remote-keyboard-toggle" class="toggle-switch" role="switch" aria-checked="false"></button>
+          </div>
+          <div id="remote-keyboard-fields" class="remote-keyboard-fields hidden">
+            <div class="input-row">
+              <label for="remote-keyboard-host">Hostname</label>
+              <input type="text" id="remote-keyboard-host" placeholder="space_keyboard.local" spellcheck="false">
+            </div>
+            <div class="input-row">
+              <label for="remote-keyboard-api-key">API Key</label>
+              <div class="input-with-button">
+                <input type="password" id="remote-keyboard-api-key" placeholder="Enter API key" spellcheck="false" autocomplete="off">
+                <button id="remote-keyboard-api-key-reveal" class="pill-btn pill-btn-small" aria-pressed="false">Show</button>
+              </div>
+            </div>
+            <p id="remote-keyboard-status" class="status-line" role="status"></p>
+            <div class="toggle-row">
+              <label for="presenter-debug-toggle">Show debug overlay</label>
+              <button id="presenter-debug-toggle" class="toggle-switch" role="switch" aria-checked="false"></button>
+            </div>
+          </div>
+        </section>
 
-      <div class="modal-footer">
-        <span id="settings-app-version">Input Viewer</span>
-        <span>Lab271@SchubergPhilis</span>
+        <!-- Art-Net lighting -->
+        <section class="settings-section hidden" data-section="artnet">
+          <h3>Art-Net lighting</h3>
+          <p class="settings-description">Drive the room lighting from the active
+            screensaver. Nothing is sent until this is enabled <em>and</em> a URL is
+            given &mdash; there is no default relay.</p>
+          <div class="toggle-row">
+            <label for="artnet-toggle">Enable Art-Net</label>
+            <button id="artnet-toggle" class="toggle-switch" role="switch" aria-checked="false"></button>
+          </div>
+          <div id="artnet-fields" class="artnet-fields hidden">
+            <div class="input-row">
+              <label for="artnet-url">Relay URL</label>
+              <input type="text" id="artnet-url" placeholder="https://spacelights.lab271.io" spellcheck="false">
+            </div>
+            <p id="artnet-status" class="status-line" role="status"></p>
+            <div class="input-row">
+              <label for="artnet-target">Target</label>
+              <!-- A select rather than free text on purpose: an unrecognised
+                   target silently falls back to /all (see colourEndpoint), so a
+                   typo would look like broken fixtures rather than a bad setting.
+                   group:/strip: targets are site-specific and stay file-only; an
+                   existing one is preserved as an extra option rather than being
+                   overwritten when this panel opens. -->
+              <select id="artnet-target">
+                <option value="all">All fixtures &mdash; one flat colour</option>
+                <option value="spatial">Spatial &mdash; colours follow the wall</option>
+                <option value="effect:spot">Spot &mdash; follows the bright part of the wall</option>
+                <option value="effect:ripple">Ripple</option>
+                <option value="effect:plasma">Plasma</option>
+                <option value="effect:blobs">Blobs</option>
+                <option value="effect:aurora">Aurora</option>
+              </select>
+            </div>
+            <div class="input-row">
+              <label for="artnet-release-scene">Release Scene (optional)</label>
+              <input type="text" id="artnet-release-scene" placeholder="Leave empty to keep the last colour" spellcheck="false">
+            </div>
+            <div class="slider-row">
+              <label for="artnet-max-brightness">Max Brightness</label>
+              <input type="range" id="artnet-max-brightness" min="0" max="100" value="80">
+              <span id="artnet-max-brightness-value" class="mono-value value">80%</span>
+            </div>
+            <div class="slider-row" id="artnet-spot-depth-row">
+              <label for="artnet-spot-depth">Spot Depth</label>
+              <input type="range" id="artnet-spot-depth" min="0" max="100" value="50">
+              <span id="artnet-spot-depth-value" class="mono-value value">50%</span>
+            </div>
+            <div class="input-row">
+              <label>Per Screensaver <span id="artnet-saver-count" class="field-hint"></span></label>
+              <p class="settings-description">Each screensaver can drive the lights
+                from its own picture (the default), hold a fixed scene, run an
+                effect, or leave the room alone. When the signal comes back the
+                room returns to however it was before the screensaver started.</p>
+              <div id="artnet-saver-list" class="artnet-saver-list"></div>
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   </div>

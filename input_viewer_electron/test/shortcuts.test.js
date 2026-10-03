@@ -163,18 +163,19 @@ describe('inputKeyFor', () => {
   })
 })
 
-describe('the Settings table is no longer hand-maintained', () => {
-  it('ships as an empty container for the renderer to fill', () => {
-    expect(INDEX_HTML).toContain('id="shortcuts-table"')
+describe('Settings carries no copy of the shortcut list', () => {
+  // The Settings table was the second rendered copy of SHORTCUTS. The redesign
+  // dropped it: the legend at the bottom edge shows the same rows, and #258's
+  // lesson was that every extra copy is one more place to drift.
+  it('has no shortcut table any more', () => {
+    expect(INDEX_HTML).not.toContain('id="shortcuts-table"')
   })
 
-  it('has no hardcoded rows left to drift', () => {
-    // The whole point of #258. A <tr> back in this file means someone started a
-    // second list again.
-    const start = INDEX_HTML.indexOf('id="shortcuts-table"')
-    const table = INDEX_HTML.slice(start, INDEX_HTML.indexOf('</table>', start))
-    expect(table).not.toContain('<tr>')
-    expect(table).not.toContain('<kbd>')
+  it('ships the legend as an empty container for the renderer to fill', () => {
+    const start = INDEX_HTML.indexOf('id="legend-grid"')
+    expect(start).toBeGreaterThan(-1)
+    const grid = INDEX_HTML.slice(start, INDEX_HTML.indexOf('</div>', start))
+    expect(grid).not.toContain('<kbd>')
   })
 })
 

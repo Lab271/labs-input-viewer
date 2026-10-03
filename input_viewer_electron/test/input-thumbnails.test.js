@@ -306,11 +306,12 @@ describe('the tile is sized, not stretched', () => {
     expect(body).not.toMatch(/width:\s*100%/)
   })
 
-  it('lays each list out for its own width', () => {
-    // ~149px dual columns have no room for a name beside the tile; ~322px single
-    // rows do. One rule for both would be wrong in one of them.
+  it('stacks the name under the tile, in a strip that scrolls sideways', () => {
+    // Dropdown 2b: each half gets one horizontal strip of tiles. Five or more
+    // inputs scroll rather than wrapping into a second row that would push the
+    // volume slider off the half.
     expect(ruleBody('.input-option')).toMatch(/flex-direction:\s*column/)
-    expect(ruleBody('.single-input-option')).toMatch(/flex-direction:\s*row/)
+    expect(ruleBody('.picker-strip')).toMatch(/overflow-x:\s*auto/)
   })
 
   it('never lets the tile absorb the row slack', () => {
