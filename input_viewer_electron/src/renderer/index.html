@@ -123,13 +123,13 @@
   <!-- Shortcut legend, a dropup at the bottom edge (mirrors the dropdown above).
        The rows are rendered from shortcuts.js, so this cannot drift from what the
        keys actually do -- which is the whole point of that list (#258). -->
-  <div id="legend-trigger">
-    <span class="legend-arrow">&#9650;</span>
+  <div id="legend-trigger" role="button" tabindex="0" aria-label="Show keyboard shortcuts" aria-expanded="false" aria-controls="legend-panel">
+    <span class="legend-arrow" aria-hidden="true">&#9650;</span>
   </div>
 
-  <div id="legend-panel">
+  <div id="legend-panel" role="region" aria-labelledby="legend-title">
     <div class="legend-content">
-      <div class="legend-title">Keyboard Shortcuts</div>
+      <div class="legend-title" id="legend-title">Keyboard shortcuts</div>
       <div id="legend-grid" class="legend-grid"></div>
     </div>
   </div>

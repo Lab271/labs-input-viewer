@@ -436,11 +436,23 @@ describe('the legend geometry mirrors the dropdown', () => {
     return bodies.join('\n')
   }
 
-  it('anchors to the bottom edge and hides itself a full height below', () => {
+  it('fades rather than slides, and is hidden from the pointer while closed', () => {
+    // The redesign's motion is fades only. visibility (not just opacity) is what
+    // stops an invisible panel from catching clicks meant for the wall.
     const body = ruleBody('#legend-panel')
-    expect(body).toMatch(/bottom:\s*0/)
-    // 100% of its own height, so it is off-screen whatever the row count.
-    expect(body).toMatch(/transform:\s*translateX\(-50%\)\s*translateY\(100%\)/)
+    expect(body).toMatch(/opacity:\s*0/)
+    expect(body).toMatch(/visibility:\s*hidden/)
+    expect(body).not.toMatch(/translateY\(100%\)/)
+  })
+
+  it('overlaps its tab, so hovering from the tab into the panel never crosses a gap', () => {
+    // A gap between the 30px tab and the panel would close the hover-opened
+    // panel on the way up. The panel's bottom offset must stay below the tab's
+    // height, for the fine and the coarse (44px) tab alike.
+    const bottoms = [...CSS.matchAll(/#legend-panel\s*\{[^}]*?bottom:\s*(\d+)px/g)].map(m => +m[1])
+    expect(bottoms).toEqual([24, 38])
+    expect(bottoms[0]).toBeLessThan(30)
+    expect(bottoms[1]).toBeLessThan(44)
   })
 
   it('sets an explicit width, not only a max', () => {

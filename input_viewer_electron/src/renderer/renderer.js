@@ -2633,6 +2633,7 @@ function closeLegend () {
 function updateLegendState () {
   elements.legendPanel.classList.toggle('touch-open', state.legendOpen)
   elements.legendTrigger.classList.toggle('touch-open', state.legendOpen)
+  elements.legendTrigger.setAttribute('aria-expanded', state.legendOpen ? 'true' : 'false')
 }
 
 // Line icons for the view toggle: two panes side by side, and one pane.
@@ -4151,6 +4152,15 @@ function setupEventListeners() {
 
   elements.legendPanel.addEventListener('mouseleave', () => {
     showCursor()
+  })
+
+  // Keyboard path to the legend tab, like the dropdown's.
+  elements.legendTrigger.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      e.stopPropagation()
+      toggleLegend()
+    }
   })
 
   elements.legendTrigger.addEventListener('touchstart', (e) => {

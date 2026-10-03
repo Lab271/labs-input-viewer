@@ -1074,12 +1074,12 @@ body #dropdown-trigger.touch-open {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: rgba(2, 12, 23, 0.6);
   /* Mirrored corners: rounded on the side away from the edge it hangs off. */
   border-radius: 12px 12px 0 0;
   cursor: pointer;
   opacity: 0;
-  transition: opacity 0.3s ease;
+  transition: opacity var(--motion);
   z-index: 100;
   -webkit-app-region: no-drag;
 }
@@ -1088,54 +1088,55 @@ body.cursor-visible #legend-trigger {
   opacity: 0.7;
 }
 
-.legend-arrow {
-  font-size: 14px;
-  color: var(--text-color);
-  transition: transform 0.3s ease;
+#legend-trigger:hover,
+#legend-trigger.touch-open {
+  opacity: 1;
 }
 
+.legend-arrow {
+  font-size: 12px;
+  color: var(--text-color);
+}
+
+/* Floats just above the bottom edge, in the same surface as the capsule and
+   Settings. It overlaps the tab by a few pixels on purpose: hover moves from the
+   tab into the panel without crossing a gap, which would close it.
+
+   Fades only, like everything else in this visual language. visibility is
+   delayed on the way out so the fade plays before it stops taking the pointer. */
 #legend-panel {
   position: fixed;
-  bottom: 0;
+  bottom: 24px;
   left: 50%;
-  transform: translateX(-50%) translateY(100%);
-  background-color: var(--panel-bg);
-  border: 1px solid var(--panel-border);
-  border-bottom: none;
-  border-radius: 12px 12px 0 0;
+  transform: translateX(-50%);
+  background-color: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-container);
   z-index: 99;
   /* An explicit width, not just a max.
-     
+
      A fixed-position element is shrink-to-fit, so `max-width` caps it but never
      expands it -- and `grid-template-columns: repeat(auto-fit, ...)` needs a
      DEFINITE width to work out how many columns fit. With only a max the panel
      sized to its content's minimum: measured 467px wide and one column at a
      1500px viewport, which is the long-list-running-off-the-bottom this grid
      exists to avoid. */
-  width: min(1100px, 92vw);
-  max-height: 60vh;
+  width: min(1100px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
   overflow-y: auto;
-  transition: transform 0.3s ease;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity var(--motion), visibility 0s linear var(--motion-ms);
   -webkit-app-region: no-drag;
 }
 
 #legend-trigger:hover + #legend-panel,
-#legend-panel:hover {
-  transform: translateX(-50%) translateY(0);
-}
-
-#legend-trigger:hover .legend-arrow {
-  transform: rotate(180deg);
-}
-
-/* State-based, for touch and programmatic control. Mirrors the dropdown. */
+#legend-panel:hover,
 #legend-trigger.touch-open + #legend-panel,
 #legend-panel.touch-open {
-  transform: translateX(-50%) translateY(0);
-}
-
-#legend-trigger.touch-open .legend-arrow {
-  transform: rotate(180deg);
+  opacity: 1;
+  visibility: visible;
+  transition: opacity var(--motion), visibility 0s;
 }
 
 /* Keep the cursor up while the legend is open, same as the dropdown does. */
@@ -1154,27 +1155,30 @@ body:has(#legend-panel:hover) * {
     width: 80px;
     height: 44px;
   }
+
+  /* Still overlapping the taller tab. */
+  #legend-panel {
+    bottom: 38px;
+  }
 }
 
 .legend-content {
-  padding: 20px 24px;
+  padding: 20px 24px 22px;
 }
 
 .legend-title {
-  font-size: 12px;
-  font-weight: 600;
   margin-bottom: 14px;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  font: 400 12px/1.2 var(--font-mono);
+  color: var(--turquoise);
+  letter-spacing: 0.02em;
 }
 
 /* auto-fit rather than a fixed column count: one rule covers the 6000px wall and
    a small dev window, wrapping to however many columns the width allows. */
 .legend-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 8px 24px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px 28px;
 }
 
 .legend-row {
@@ -1182,17 +1186,23 @@ body:has(#legend-panel:hover) * {
   /* Top-aligned, not centred: a label that wraps to two lines should keep its key
      chip beside the FIRST line rather than floating against the middle. */
   align-items: flex-start;
-  gap: 10px;
+  gap: 12px;
   /* min-width:0 so a long label wraps inside its cell rather than widening the
-     track -- the same grid trap that overflowed the dropdown columns. */
+     track -- the same grid trap that overflowed the old dropdown columns. */
   min-width: 0;
 }
 
 /* Fixed width so the labels line up in a column instead of ragging against
    whatever the key chips happen to measure. */
 .legend-keys {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
   flex-shrink: 0;
-  width: 84px;
+  width: 96px;
+  font: 400 12px/1 var(--font-mono);
+  color: var(--text-muted);
 }
 
 /* Wraps rather than truncates. Measured at 1100px wide: three of the twelve
@@ -1201,13 +1211,15 @@ body:has(#legend-panel:hover) * {
    confusing without it, was the part being cut. A legend that hides what a key
    does defeats itself; uneven row heights are the cheaper cost. */
 .legend-label {
-  font-size: 12px;
-  color: var(--text-color);
   min-width: 0;
-  line-height: 1.5;
+  padding-top: 3px;
+  font: 700 13px/1.45 var(--font-sans);
+  letter-spacing: -0.02em;
+  color: var(--text-color);
 }
 
 .legend-note {
+  font-weight: 400;
   color: var(--text-muted);
 }
 
