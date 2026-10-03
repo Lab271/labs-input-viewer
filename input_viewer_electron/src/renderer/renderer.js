@@ -63,6 +63,15 @@ import {
 // Snapshot thumbnails for the dropdown input rows (#242).
 import { createThumbnailStore } from './input-thumbnails.js'
 
+// What the Settings panel reports about itself (nav status, status lines).
+import {
+  remoteKeyUrl,
+  inputKeyLabel,
+  remoteKeyboardStatus,
+  artnetStatus,
+  orphanBannerText
+} from './settings-status.js'
+
 // Test-mode launch flags (#248).
 import {
   parseTestFlags,
@@ -162,6 +171,15 @@ const state = {
   remoteKeyboardEnabled: false,
   remoteKeyboardHost: '',
   remoteKeyboardApiKey: '',
+  // Outcome of the most recent press, for the Settings status line. In memory
+  // only: it describes this session, not the configuration.
+  remoteKeyboardLast: null,
+  // Settings modal: which pane is showing, which inputs have their no-signal
+  // panel expanded (kept across re-renders), and the last capture result per
+  // device so the panel can say what happened.
+  settingsSection: 'inputs',
+  expandedRefPanels: new Set(),
+  captureResults: new Map(),
   // Presenter tool debug overlay
   presenterDebugEnabled: false,
   // Experimental WebGPU compositing (issue #62). Off by default: the CSS
@@ -193,31 +211,30 @@ const elements = {
   dropdownPanel: document.getElementById('dropdown-panel'),
   updateNotification: document.getElementById('update-notification'),
   updateMessage: document.getElementById('update-message'),
-  // New dropdown elements
-  shortcutsTable: document.getElementById('shortcuts-table'),
+  // Dropdown 2b: pickers over the wall, the capsule and the Close pill
+  wallPickers: document.getElementById('wall-pickers'),
+  wallCloseBtn: document.getElementById('wall-close-btn'),
   legendTrigger: document.getElementById('legend-trigger'),
   legendPanel: document.getElementById('legend-panel'),
   legendGrid: document.getElementById('legend-grid'),
   viewModeDual: document.getElementById('view-mode-dual'),
   viewModeSingle: document.getElementById('view-mode-single'),
-  dualColumns: document.getElementById('dual-columns'),
-  leftInputList: document.getElementById('left-input-list'),
-  rightInputList: document.getElementById('right-input-list'),
-  singleInputList: document.getElementById('single-input-list'),
   openSettingsBtn: document.getElementById('open-settings-btn'),
-  // New settings modal elements
+  // Settings modal
   settingsModal: document.getElementById('settings-modal'),
   closeSettingsBtn: document.getElementById('close-settings-btn'),
+  settingsNavInputs: document.getElementById('settings-nav-inputs'),
+  settingsNavLayout: document.getElementById('settings-nav-layout'),
+  settingsNavRemote: document.getElementById('settings-nav-remote'),
+  settingsNavArtnet: document.getElementById('settings-nav-artnet'),
+  multiViewToggle: document.getElementById('multi-view-toggle'),
   settingsInputList: document.getElementById('settings-input-list'),
+  layoutDiagram: document.getElementById('layout-diagram'),
   settingsCenterGap: document.getElementById('settings-center-gap'),
   settingsCenterGapValue: document.getElementById('settings-center-gap-value'),
   settingsBorderWidth: document.getElementById('settings-border-width'),
   settingsBorderWidthValue: document.getElementById('settings-border-width-value'),
-  captureLeftBtn: document.getElementById('capture-left-btn'),
-  captureRightBtn: document.getElementById('capture-right-btn'),
   settingsAppVersion: document.getElementById('settings-app-version'),
-  // Dropdown volume control elements
-  dropdownInputVolumes: document.getElementById('dropdown-input-volumes'),
   dropdownSystemVolume: document.getElementById('dropdown-system-volume'),
   dropdownSystemVolumeValue: document.getElementById('dropdown-system-volume-value'),
   // Cached label references (avoids DOM queries in hot paths)
@@ -233,6 +250,10 @@ const elements = {
   remoteKeyboardFields: document.getElementById('remote-keyboard-fields'),
   remoteKeyboardHost: document.getElementById('remote-keyboard-host'),
   remoteKeyboardApiKey: document.getElementById('remote-keyboard-api-key'),
+  remoteKeyboardApiKeyReveal: document.getElementById('remote-keyboard-api-key-reveal'),
+  remoteKeyboardStatus: document.getElementById('remote-keyboard-status'),
+  artnetStatus: document.getElementById('artnet-status'),
+  artnetSaverCount: document.getElementById('artnet-saver-count'),
   // Presenter tool debug overlay
   presenterDebugToggle: document.getElementById('presenter-debug-toggle'),
   artnetToggle: document.getElementById('artnet-toggle'),
@@ -306,6 +327,7 @@ async function saveSettings() {
         presenterDebugEnabled: state.presenterDebugEnabled,
         gpuCompositing: state.gpuCompositing,
         inputs: state.settings.inputs,
+        multiView: state.settings.multiView !== false,
         initialSetupComplete: state.settings.initialSetupComplete,
         noSignalReferences: state.settings.noSignalReferences,
         // Read from state.settings rather than state, like inputs above: these
@@ -354,6 +376,8 @@ function getDefaultSettings() {
     rightVolume: 1.0,
     systemVolume: 50,
     layoutMode: null, // null means use screen-based detection
+    // Each half of the wall may show a different input. Mirrors main's default.
+    multiView: true,
     initialSetupComplete: false,
     noSignalReferences: null,
     remoteKeyboardEnabled: false,
@@ -396,13 +420,17 @@ function isInputEnabled(deviceId) {
   return true // Default to enabled
 }
 
-// Set custom name for input
+// Set custom name for input. An empty name clears it, so the hardware label
+// (shown as the field's placeholder) applies again.
 function setInputName(deviceId, name) {
   if (!state.settings.inputs[deviceId]) {
     state.settings.inputs[deviceId] = { enabled: true }
   }
-  state.settings.inputs[deviceId].name = name
+  const trimmed = typeof name === 'string' ? name.trim() : ''
+  state.settings.inputs[deviceId].name = trimmed || null
   saveSettings()
+  renderDropdownInputLists()
+  if (isSettingsOpen()) renderLayoutDiagram()
 }
 
 // Toggle input enabled/disabled
@@ -414,6 +442,39 @@ function toggleInputEnabled(deviceId) {
   saveSettings()
   renderDropdownInputLists()
   renderSettingsInputList()
+}
+
+/**
+ * Multi-view: may the two halves show different inputs?
+ *
+ * Off makes dual view behave like the number keys always have -- one input on both
+ * halves -- and gives the dropdown a single row of inputs that sets both.
+ */
+function isMultiView() {
+  return state.settings?.multiView !== false
+}
+
+function setMultiView(on) {
+  state.settings.multiView = Boolean(on)
+  saveSettings()
+  // Turning it off must not leave the halves showing two inputs: from now on they
+  // are always the same, so bring the right half in line with the left.
+  if (!on && state.leftDeviceId && state.rightDeviceId !== state.leftDeviceId) {
+    selectInputForSide(state.leftDeviceId, 'right')
+  }
+  updateMultiViewUI()
+  renderDropdownInputLists()
+}
+
+function updateMultiViewUI() {
+  setSwitch(elements.multiViewToggle, isMultiView())
+}
+
+/** Reflect a boolean on a role="switch" button (the class is what CSS styles). */
+function setSwitch(el, on) {
+  if (!el) return
+  el.classList.toggle('active', on)
+  el.setAttribute('aria-checked', on ? 'true' : 'false')
 }
 
 // =============================================================================
@@ -636,6 +697,9 @@ async function getVideoDevices() {
     }
     
     renderDropdownInputLists()
+    // Hot-plug while Settings is open: a card coming or going changes the rows,
+    // the Key column and the orphaned-reference banner.
+    if (isSettingsOpen()) renderSettingsInputList()
     return state.devices
   } catch (error) {
     console.error(`[Video] device enumeration failed: ${error?.name}: ${error?.message}`)
@@ -1987,12 +2051,11 @@ function setLayout(mode) {
   // Update view mode button states in dropdown
   elements.viewModeDual.classList.toggle('active', mode === 'dual')
   elements.viewModeSingle.classList.toggle('active', mode === 'single')
+  elements.viewModeDual.setAttribute('aria-pressed', mode === 'dual' ? 'true' : 'false')
+  elements.viewModeSingle.setAttribute('aria-pressed', mode === 'single' ? 'true' : 'false')
 
-  // Update dropdown input list visibility
-  updateDropdownVisibility()
-
-  // Update volume controls to show correct inputs
-  renderDropdownVolumeControls()
+  // The pickers follow the layout: one per half in dual view, one in single.
+  renderDropdownInputLists()
 
   // Cancel any pending hide from a previous switch. Without this, switching
   // single -> dual -> single inside the animation window leaves the earlier timer
@@ -2045,6 +2108,9 @@ function setCenterGap(gap) {
   state.settings.centerGap = gap
   elements.centerDivider.style.width = `${gap}px`
   elements.settingsCenterGapValue.textContent = `${gap}px`
+  // The pickers' gap column matches the divider.
+  document.documentElement.style.setProperty('--center-gap', `${gap}px`)
+  renderLayoutDiagram()
   debouncedSaveSettings()
 }
 
@@ -2053,7 +2119,47 @@ function setBorderWidth(width) {
   state.settings.borderWidth = width
   document.documentElement.style.setProperty('--border-width', `${width}px`)
   elements.settingsBorderWidthValue.textContent = `${width}px`
+  renderLayoutDiagram()
   debouncedSaveSettings()
+}
+
+/**
+ * The flat drawing of the wall in Settings > Layout: side borders, both halves
+ * with what is on them, and the centre gap, to scale against the real window
+ * width. Single view draws one block, since the gap does not apply there.
+ */
+function renderLayoutDiagram() {
+  const box = elements.layoutDiagram
+  if (!box) return
+  box.innerHTML = ''
+  const total = Math.max(1, window.innerWidth || 6000)
+  const border = state.borderWidth || 0
+  const gap = state.layoutMode === 'dual' ? (state.centerGap || 0) : 0
+  const halves = state.layoutMode === 'dual' ? 2 : 1
+  const half = Math.max(1, (total - border * 2 - gap) / halves)
+
+  const block = (className, grow, text) => {
+    const el = document.createElement('div')
+    el.className = className
+    el.style.flex = `${grow} 1 0`
+    if (text) {
+      el.textContent = text
+      el.title = text
+    }
+    return el
+  }
+  const nameOf = (id) => {
+    const d = state.devices.find(x => x.deviceId === id)
+    return d ? getInputName(id, d.label || 'Input') : 'Nothing'
+  }
+
+  if (border > 0) box.appendChild(block('layout-border', border))
+  box.appendChild(block('layout-half', half, nameOf(state.leftDeviceId)))
+  if (halves === 2) {
+    if (gap > 0) box.appendChild(block('layout-gap', gap))
+    box.appendChild(block('layout-half', half, nameOf(state.rightDeviceId)))
+  }
+  if (border > 0) box.appendChild(block('layout-border', border))
 }
 
 // =============================================================================
@@ -2082,36 +2188,23 @@ async function selectInput(index, side = 'both') {
   renderDropdownInputLists()
 }
 
+let inputNameTimer = null
+
 function showInputName(name) {
+  // The open pickers already name what is on each half, in the same spot the
+  // operator is looking; a toast underneath them would only be hidden by them.
+  if (state.dropdownOpen) return
   elements.inputNameText.textContent = name
   elements.inputNameOverlay.classList.remove('hidden')
-  
-  // Remove after animation
-  setTimeout(() => {
+
+  // One timer, restarted: rapid switching used to leave earlier timers to hide
+  // the newest name early.
+  clearTimeout(inputNameTimer)
+  inputNameTimer = setTimeout(() => {
     elements.inputNameOverlay.classList.add('hidden')
   }, 2000)
 }
 
-// =============================================================================
-// UI Rendering
-// =============================================================================
-
-/**
- * Update dropdown visibility based on layout mode
- */
-function updateDropdownVisibility() {
-  if (state.layoutMode === 'dual') {
-    elements.dualColumns.classList.remove('hidden')
-    elements.singleInputList.classList.add('hidden')
-  } else {
-    elements.dualColumns.classList.add('hidden')
-    elements.singleInputList.classList.remove('hidden')
-  }
-}
-
-/**
- * Render the simplified dropdown input lists (enabled inputs only)
- */
 // =============================================================================
 // Art-Net frame observer
 // =============================================================================
@@ -2542,15 +2635,25 @@ function updateLegendState () {
   elements.legendTrigger.classList.toggle('touch-open', state.legendOpen)
 }
 
+// Line icons for the view toggle: two panes side by side, and one pane.
+const VIEW_ICONS = {
+  'layout-dual': '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="6" width="8.5" height="12" rx="1.5"/><rect x="13" y="6" width="8.5" height="12" rx="1.5"/></svg>',
+  'layout-single': '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="6" width="19" height="12" rx="1.5"/></svg>',
+}
+
 /**
- * Label the dropdown's view-mode buttons and render the Settings table.
+ * Label the capsule's view-mode buttons with their icon, a name for screen
+ * readers, and the key chip.
  *
- * Both read from the same SHORTCUTS list as the keydown handler (#258), so the
- * three cannot disagree. Called once at startup; nothing here changes with
- * state, unlike the input rows which re-render on every device change.
+ * Reads from the same SHORTCUTS list as the keydown handler (#258), so the two
+ * cannot disagree. Called once at startup; nothing here changes with state,
+ * unlike the input tiles which re-render on every device change.
+ *
+ * The Settings shortcut table this used to fill is gone: the legend at the
+ * bottom edge shows the same rows, and a second copy in Settings was only one
+ * more place to scroll past.
  */
 function renderShortcutHints() {
-  // Dual / Single buttons: the two dropdown controls that have a key.
   const buttons = [
     { el: elements.viewModeDual, id: 'layout-dual', text: 'Dual' },
     { el: elements.viewModeSingle, id: 'layout-single', text: 'Single' },
@@ -2558,168 +2661,212 @@ function renderShortcutHints() {
   for (const { el, id, text } of buttons) {
     if (!el) continue
     const shortcut = SHORTCUTS.find(sc => sc.id === id)
-    el.textContent = text
+    el.innerHTML = VIEW_ICONS[id] || ''
+    const name = document.createElement('span')
+    name.className = 'sr-only'
+    name.textContent = text
+    el.appendChild(name)
+    el.title = shortcut ? `${text} view (${shortcut.chips.join(' / ')})` : `${text} view`
     if (shortcut) el.appendChild(shortcutChips(shortcut))
-  }
-
-  // Settings table: every shortcut, in list order.
-  const table = elements.shortcutsTable
-  if (!table) return
-  table.innerHTML = ''
-  for (const shortcut of SHORTCUTS) {
-    const row = document.createElement('tr')
-
-    const keyCell = document.createElement('td')
-    keyCell.appendChild(shortcutChips(shortcut, 'shortcut-keys'))
-    row.appendChild(keyCell)
-
-    const labelCell = document.createElement('td')
-    labelCell.textContent = shortcut.label
-    if (shortcut.note) {
-      const note = document.createElement('span')
-      note.className = 'shortcut-note'
-      note.textContent = ` (${shortcut.note})`
-      labelCell.appendChild(note)
-    }
-    row.appendChild(labelCell)
-
-    table.appendChild(row)
   }
 }
 
-function renderDropdownInputLists() {
-  // Clear lists
-  elements.leftInputList.innerHTML = ''
-  elements.rightInputList.innerHTML = ''
-  elements.singleInputList.innerHTML = ''
-
-  // Filter to enabled devices only
-  const enabledDevices = state.devices.filter(d => isInputEnabled(d.deviceId))
-
-  enabledDevices.forEach((device, index) => {
-    const customName = getInputName(device.deviceId, device.label || `Input ${index + 1}`)
-    const isLeftActive = device.deviceId === state.leftDeviceId
-    const isRightActive = device.deviceId === state.rightDeviceId
-
-    // The number key that selects this input, or null past the fourth (#258).
-    // Null rather than an invented key: the wall can have more capture devices
-    // than there are number keys, and labelling a fifth row '5' would promise a
-    // binding that does not exist.
-    const key = inputKeyFor(index)
-
-    // Name via textContent, never innerHTML: this string is a device label from
-    // capture hardware or a user-entered rename.
-    //
-    // `showKey` is false for the dual columns, and that is a correctness point
-    // rather than a layout one. `1`-`4` call selectInput() with the default
-    // side='both', which sets BOTH feeds; clicking a row in the Left column calls
-    // selectInputForSide(id, 'left') and sets one. A chip on a per-side row would
-    // therefore document a key that does something different from the control it
-    // sits next to. In single view only one feed is shown, so setting both and
-    // setting that one are the same thing to the operator, and the chip is honest.
-    //
-    // It also fixes the fit: a dual column is ~173px against the single list's
-    // ~358px, and a name plus a chip left about 98px for the name.
-    const buildOption = (className, isActive, side, showKey) => {
-      const option = document.createElement('div')
-      option.className = `${className}${isActive ? ' selected' : ''}`
-      // The sweep finds rows by this rather than by held references (#242): rows
-      // are rebuilt on any device or selection change, which can happen while a
-      // sweep is still running.
-      option.dataset.deviceId = device.deviceId
-
-      // Snapshot tile. Rendered even before a still exists, so the row does not
-      // change height when one lands -- an empty tile is the placeholder.
-      const thumb = document.createElement('div')
-      thumb.className = 'input-thumb'
-      const cached = inputThumbnails.get(device.deviceId)
-      if (cached) {
-        thumb.style.backgroundImage = `url("${cached}")`
-        thumb.classList.add('has-thumb')
-      }
-      option.appendChild(thumb)
-
-      const label = document.createElement('span')
-      label.className = 'input-option-label'
-
-      const name = document.createElement('span')
-      name.className = 'input-option-name'
-      name.textContent = customName
-      label.appendChild(name)
-      if (key && showKey) label.appendChild(shortcutKeyChip(key))
-      option.appendChild(label)
-
-      option.addEventListener('click', () => {
-        selectInputForSide(device.deviceId, side)
-      })
-      return option
-    }
-
-    elements.leftInputList.appendChild(
-      buildOption('input-option', isLeftActive, 'left', false))
-    elements.rightInputList.appendChild(
-      buildOption('input-option', isRightActive, 'right', false))
-    elements.singleInputList.appendChild(
-      buildOption('single-input-option', isLeftActive, 'left', true))
-  })
+/** Display name for a device, falling back to its hardware label. */
+function deviceName(deviceId, index) {
+  const device = state.devices.find(d => d.deviceId === deviceId)
+  if (!device) return null
+  return getInputName(deviceId, device.label || `Input ${index + 1}`)
 }
 
 /**
- * Render the dropdown volume controls for active inputs
+ * What the open dropdown shows over the wall, given the view and Multi-view.
+ *
+ * - dual + Multi-view: a picker per half, each setting its own half, no key chips
+ *   (1-4 set BOTH halves, so a chip would document a different action).
+ * - dual without Multi-view: one picker across both halves that sets both, with
+ *   chips -- a tap and the key now do the same thing.
+ * - single: one picker over the whole wall, with chips. With Multi-view on it
+ *   sets the visible (left) half, which in single view is the whole picture.
+ *
+ * Exported for tests.
  */
-function renderDropdownVolumeControls() {
-  elements.dropdownInputVolumes.innerHTML = ''
+function pickerPlan() {
+  if (state.layoutMode !== 'dual') {
+    return [{ side: isMultiView() ? 'left' : 'both', label: 'Whole wall', showKeys: true }]
+  }
+  if (!isMultiView()) {
+    return [{ side: 'both', label: 'Both halves', showKeys: true }]
+  }
+  return [
+    { side: 'left', label: 'Left half', showKeys: false },
+    { side: 'right', label: 'Right half', showKeys: false },
+  ]
+}
 
-  // Determine which inputs to show based on layout mode
-  const inputsToShow = []
+/**
+ * Render the pickers over the wall (dropdown 2b).
+ *
+ * Kept under its old name: every path that changes what the dropdown should show
+ * -- device change, input switch by click or key, rename, enable/disable, layout,
+ * Multi-view -- already calls this, which is what keeps it from going stale.
+ */
+function renderDropdownInputLists() {
+  const host = elements.wallPickers
+  if (!host) return
+  host.innerHTML = ''
 
-  if (state.layoutMode === 'dual') {
-    // In dual mode, show both inputs (or one if same)
-    if (state.leftDeviceId) {
-      inputsToShow.push({ side: 'left', deviceId: state.leftDeviceId })
+  const plan = pickerPlan()
+  host.style.gridTemplateColumns = plan.length === 2
+    ? 'minmax(0, 1fr) var(--center-gap, 60px) minmax(0, 1fr)'
+    : 'minmax(0, 1fr)'
+
+  const enabledDevices = state.devices.filter(d => isInputEnabled(d.deviceId))
+
+  plan.forEach(({ side, label, showKeys }, i) => {
+    if (i === 1) {
+      const gap = document.createElement('div')
+      gap.className = 'wall-picker-gap'
+      host.appendChild(gap)
     }
-    if (state.rightDeviceId && state.rightDeviceId !== state.leftDeviceId) {
-      inputsToShow.push({ side: 'right', deviceId: state.rightDeviceId })
-    }
-  } else {
-    // In single mode, show only the active input
-    if (state.leftDeviceId) {
-      inputsToShow.push({ side: 'left', deviceId: state.leftDeviceId })
-    }
+    host.appendChild(buildPicker(side, label, showKeys, enabledDevices))
+  })
+}
+
+function buildPicker(side, labelText, showKeys, enabledDevices) {
+  const currentId = side === 'right' ? state.rightDeviceId : state.leftDeviceId
+
+  const picker = document.createElement('section')
+  picker.className = 'wall-picker'
+  picker.dataset.side = side
+  picker.setAttribute('aria-label', labelText)
+
+  const label = document.createElement('div')
+  label.className = 'mono-label picker-label'
+  label.textContent = labelText
+  picker.appendChild(label)
+
+  // Name via textContent, never innerHTML: device labels come from capture
+  // hardware and names from a user rename.
+  const current = document.createElement('div')
+  current.className = 'picker-current'
+  const currentName = currentId ? deviceName(currentId, 0) : null
+  current.textContent = currentName || 'Nothing selected'
+  picker.appendChild(current)
+
+  const strip = document.createElement('div')
+  strip.className = 'picker-strip'
+  strip.setAttribute('role', 'group')
+  strip.setAttribute('aria-label', `Inputs for ${labelText.toLowerCase()}`)
+
+  if (enabledDevices.length === 0) {
+    const empty = document.createElement('p')
+    empty.className = 'picker-empty'
+    empty.textContent = state.devices.length === 0
+      ? 'No capture inputs found. Connect one, or check the camera permission.'
+      : 'Every input is switched off. Turn one on in Settings > Inputs.'
+    strip.appendChild(empty)
   }
 
-  // Create volume row for each input
-  inputsToShow.forEach(({ side, deviceId }) => {
-    const device = state.devices.find(d => d.deviceId === deviceId)
-    if (!device) return
+  enabledDevices.forEach((device, index) => {
+    // The number key that selects this input, or null past the fourth (#258):
+    // the wall can have more inputs than there are number keys.
+    const key = showKeys ? inputKeyFor(index) : null
+    const isActive = device.deviceId === currentId
 
-    const name = getInputName(deviceId, device.label || 'Input')
-    const volume = side === 'left' ? state.leftVolume : state.rightVolume
-    const volumePercent = Math.round(volume * 100)
+    const option = document.createElement('button')
+    option.type = 'button'
+    option.className = `input-option${isActive ? ' selected' : ''}`
+    option.setAttribute('aria-pressed', isActive ? 'true' : 'false')
+    // The thumbnail sweep finds tiles by this rather than by held references
+    // (#242): tiles are rebuilt on any device or selection change, which can
+    // happen while a sweep is still running.
+    option.dataset.deviceId = device.deviceId
 
-    const row = document.createElement('div')
-    row.className = 'volume-row'
-    row.innerHTML = `
-      <span class="volume-label" title="${name}">${name}</span>
-      <input type="range" min="0" max="100" value="${volumePercent}" data-side="${side}">
-      <span class="volume-value">${volumePercent}%</span>
-    `
+    // Snapshot tile. Rendered before a still exists, so nothing moves when one
+    // lands -- the empty tile is the placeholder.
+    const thumb = document.createElement('div')
+    thumb.className = 'input-thumb'
+    const cached = inputThumbnails.get(device.deviceId)
+    if (cached) {
+      thumb.style.backgroundImage = `url("${cached}")`
+      thumb.classList.add('has-thumb')
+    }
+    option.appendChild(thumb)
 
-    // Volume slider event
-    const slider = row.querySelector('input[type="range"]')
-    const valueSpan = row.querySelector('.volume-value')
-    slider.addEventListener('input', (e) => {
-      const vol = parseInt(e.target.value) / 100
-      if (side === 'left') {
-        setLeftVolume(vol)
-      } else {
-        setRightVolume(vol)
-      }
-      valueSpan.textContent = `${e.target.value}%`
+    const row = document.createElement('span')
+    row.className = 'input-option-label'
+    const name = document.createElement('span')
+    name.className = 'input-option-name'
+    name.textContent = getInputName(device.deviceId, device.label || `Input ${index + 1}`)
+    row.appendChild(name)
+    if (key) row.appendChild(shortcutKeyChip(key))
+    option.appendChild(row)
+
+    option.addEventListener('click', () => {
+      if (side === 'both') selectInputForBoth(device.deviceId)
+      else selectInputForSide(device.deviceId, side)
     })
-
-    elements.dropdownInputVolumes.appendChild(row)
+    strip.appendChild(option)
   })
+  picker.appendChild(strip)
+
+  picker.appendChild(buildPickerVolume(side))
+  return picker
+}
+
+/**
+ * Volume for the half this picker controls. Volume belongs to a side, not to an
+ * input; a picker for both halves sets both.
+ */
+function buildPickerVolume(side) {
+  const row = document.createElement('label')
+  row.className = 'picker-volume'
+
+  const text = document.createElement('span')
+  text.className = 'mono-label'
+  text.textContent = 'Volume'
+  row.appendChild(text)
+
+  const volume = side === 'right' ? state.rightVolume : state.leftVolume
+  const percent = Math.round(volume * 100)
+  const slider = document.createElement('input')
+  slider.type = 'range'
+  slider.min = '0'
+  slider.max = '100'
+  slider.value = String(percent)
+  slider.dataset.side = side
+  slider.setAttribute('aria-label', side === 'both' ? 'Volume, both halves'
+    : side === 'right' ? 'Volume, right half' : 'Volume')
+  row.appendChild(slider)
+
+  const value = document.createElement('span')
+  value.className = 'mono-value volume-value'
+  value.textContent = `${percent}%`
+  row.appendChild(value)
+
+  slider.addEventListener('input', (e) => {
+    const vol = parseInt(e.target.value, 10) / 100
+    if (side === 'left' || side === 'both') setLeftVolume(vol)
+    if (side === 'right' || side === 'both') setRightVolume(vol)
+    value.textContent = `${e.target.value}%`
+  })
+  return row
+}
+
+/** Volume lives in the pickers now; kept so existing callers still refresh it. */
+function renderDropdownVolumeControls() {
+  renderDropdownInputLists()
+}
+
+/**
+ * Put one input on both halves, as the number keys do, but with the same fade a
+ * click on one half gets.
+ */
+async function selectInputForBoth(deviceId) {
+  await Promise.all([
+    selectInputForSide(deviceId, 'left'),
+    selectInputForSide(deviceId, 'right'),
+  ])
 }
 
 /**
@@ -2759,77 +2906,156 @@ async function selectInputForSide(deviceId, side) {
   showInputName(name)
   saveSettings()
   renderDropdownInputLists()
-  renderDropdownVolumeControls()
+  // What is on the wall changed: the Settings rows' capture buttons and the
+  // layout drawing both depend on it.
+  if (isSettingsOpen()) {
+    renderSettingsInputList()
+    renderLayoutDiagram()
+  }
 }
 
 /**
- * Render the settings modal input list
+ * Which half a device is on screen in, for capturing its no-signal screen: the
+ * left half first (it is the visible one in single view), the right half only in
+ * dual view. Null when the device is not on the wall.
+ */
+function visibleSideOf(deviceId) {
+  if (state.leftDeviceId === deviceId) return 'left'
+  if (state.layoutMode === 'dual' && state.rightDeviceId === deviceId) return 'right'
+  return null
+}
+
+/**
+ * Render the Settings > Inputs table: Key, On, Name, Startup, No-signal.
+ *
+ * Built from elements throughout: names come from capture hardware or a rename,
+ * and this used to interpolate them into innerHTML, so a `"` or `<` in one broke
+ * the row.
  */
 function renderSettingsInputList() {
-  elements.settingsInputList.innerHTML = ''
+  const list = elements.settingsInputList
+  if (!list) return
+  list.innerHTML = ''
   renderOrphanedReferences()
 
+  if (state.devices.length === 0) {
+    const empty = document.createElement('p')
+    empty.className = 'settings-description'
+    empty.textContent = 'No capture inputs found. Connect one, or check that the app ' +
+      'is allowed to use the camera.'
+    list.appendChild(empty)
+    updateSettingsNav()
+    return
+  }
+
+  const head = document.createElement('div')
+  head.className = 'input-table-head'
+  for (const text of ['Key', 'On', 'Name', 'Startup', 'No-signal']) {
+    const cell = document.createElement('span')
+    cell.textContent = text
+    head.appendChild(cell)
+  }
+  list.appendChild(head)
+
+  const enabledIds = state.devices.filter(d => isInputEnabled(d.deviceId)).map(d => d.deviceId)
+
   state.devices.forEach((device, index) => {
-    const isEnabled = isInputEnabled(device.deviceId)
-    const customName = getInputName(device.deviceId, device.label || `Input ${index + 1}`)
-    const isDefault = state.defaultInputId === device.deviceId
+    const id = device.deviceId
+    const isEnabled = isInputEnabled(id)
+    const hardwareLabel = device.label || `Input ${index + 1}`
+    const customName = state.settings.inputs[id]?.name || ''
+    const displayName = customName || hardwareLabel
+    const isDefault = state.defaultInputId === id
+    const refs = getReferenceScreenshots(id)
 
     const row = document.createElement('div')
-    row.className = 'input-name-row'
+    row.className = `input-name-row${isEnabled ? '' : ' disabled'}`
+    row.dataset.deviceId = id
 
-    // Reference state for this input. A device with none is silently inert:
-    // checkNoSignalFromSource returns false unconditionally and logs nothing,
-    // so detection appears broken when it has simply never been configured.
-    // Surfacing the count is the point (#161).
-    const refs = getReferenceScreenshots(device.deviceId)
+    // Key: the dropdown / number-key numbering, which counts enabled inputs only.
+    const key = document.createElement('span')
+    key.className = 'input-key'
+    key.textContent = inputKeyLabel(isEnabled ? enabledIds.indexOf(id) : -1)
+    row.appendChild(key)
 
-    row.innerHTML = `
-      <span class="input-number">${index + 1}</span>
-      <div class="toggle-switch ${isEnabled ? 'active' : ''}" data-device-id="${device.deviceId}"></div>
-      <input type="text" class="input-name-field" value="${customName}" data-device-id="${device.deviceId}" />
-      <button class="default-btn${isDefault ? ' active' : ''}" data-device-id="${device.deviceId}">Default</button>
-      <button class="ref-toggle-btn${refs.length === 0 ? ' warn' : ''}" data-device-id="${device.deviceId}">
-        ${refs.length === 0 ? '⚠ No reference' : `${refs.length} reference${refs.length === 1 ? '' : 's'}`}
-      </button>
-    `
+    // On
+    const toggle = document.createElement('button')
+    toggle.type = 'button'
+    toggle.className = 'toggle-switch'
+    toggle.setAttribute('role', 'switch')
+    toggle.setAttribute('aria-label', `Use ${displayName}`)
+    toggle.dataset.deviceId = id
+    setSwitch(toggle, isEnabled)
+    toggle.addEventListener('click', () => toggleInputEnabled(id))
+    row.appendChild(toggle)
 
-    // Toggle switch event
-    const toggleSwitch = row.querySelector('.toggle-switch')
-    toggleSwitch.addEventListener('click', () => {
-      toggleInputEnabled(device.deviceId)
-    })
-
-    // Name field events
-    const nameField = row.querySelector('.input-name-field')
-    nameField.addEventListener('change', (e) => {
-      setInputName(device.deviceId, e.target.value)
-      renderDropdownInputLists() // Update dropdown with new name
-    })
+    // Name: empty means the hardware label, which is the placeholder.
+    const nameField = document.createElement('input')
+    nameField.type = 'text'
+    nameField.className = 'input-name-field'
+    nameField.value = customName
+    nameField.placeholder = hardwareLabel
+    nameField.spellcheck = false
+    nameField.dataset.deviceId = id
+    nameField.setAttribute('aria-label', `Name for ${hardwareLabel}`)
+    nameField.addEventListener('change', (e) => setInputName(id, e.target.value))
     nameField.addEventListener('keydown', (e) => {
-      e.stopPropagation()
-      if (e.key === 'Enter') {
-        e.target.blur()
-      }
+      if (e.key === 'Enter') e.target.blur()
     })
+    row.appendChild(nameField)
 
-    // Default button event
-    const defaultBtn = row.querySelector('.default-btn')
-    defaultBtn.addEventListener('click', () => {
-      setDefaultInput(device.deviceId)
-    })
+    // Startup (was "Default"): a radio pill. Clicking the chosen one clears it.
+    const startup = document.createElement('button')
+    startup.type = 'button'
+    startup.className = 'pill-btn pill-btn-small startup-pill default-btn'
+    startup.setAttribute('role', 'radio')
+    startup.setAttribute('aria-checked', isDefault ? 'true' : 'false')
+    startup.title = isDefault
+      ? 'Shown at startup. Click to clear.'
+      : 'Show this input when the app starts'
+    startup.textContent = 'Startup'
+    startup.dataset.deviceId = id
+    startup.addEventListener('click', () => setDefaultInput(isDefault ? null : id))
+    row.appendChild(startup)
 
-    elements.settingsInputList.appendChild(row)
+    // No-signal badge, which expands the panel under the row.
+    const expanded = state.expandedRefPanels.has(id)
+    const badge = document.createElement('button')
+    badge.type = 'button'
+    badge.className = `pill-btn pill-btn-small ref-toggle-btn${refs.length === 0 ? ' warn' : ''}`
+    badge.setAttribute('aria-expanded', expanded ? 'true' : 'false')
+    badge.textContent = refs.length === 0
+      ? 'No reference'
+      : `${refs.length} reference${refs.length === 1 ? '' : 's'}`
+    badge.dataset.deviceId = id
+    row.appendChild(badge)
 
-    // Expandable reference panel: thumbnails with per-reference delete.
+    // A disabled input that is still on screen: it stays until the half switches.
+    if (!isEnabled && (state.leftDeviceId === id || state.rightDeviceId === id)) {
+      const note = document.createElement('span')
+      note.className = 'input-row-note'
+      note.textContent = 'Still on the wall until you switch'
+      row.appendChild(note)
+    }
+
+    list.appendChild(row)
+
     const panel = document.createElement('div')
-    panel.className = 'ref-panel hidden'
-    renderReferencePanel(panel, device.deviceId)
-    elements.settingsInputList.appendChild(panel)
+    panel.className = `ref-panel${expanded ? '' : ' hidden'}`
+    panel.dataset.deviceId = id
+    renderReferencePanel(panel, id)
+    list.appendChild(panel)
 
-    row.querySelector('.ref-toggle-btn').addEventListener('click', () => {
-      panel.classList.toggle('hidden')
+    badge.addEventListener('click', () => {
+      if (state.expandedRefPanels.has(id)) state.expandedRefPanels.delete(id)
+      else state.expandedRefPanels.add(id)
+      const open = state.expandedRefPanels.has(id)
+      panel.classList.toggle('hidden', !open)
+      badge.setAttribute('aria-expanded', open ? 'true' : 'false')
     })
   })
+
+  updateSettingsNav()
 }
 
 /**
@@ -2851,16 +3077,19 @@ function renderOrphanedReferences() {
   const total = orphans.reduce((n, o) => n + o.count, 0)
   const box = document.createElement('div')
   box.className = 'ref-orphans'
+  box.setAttribute('role', 'note')
 
-  const text = document.createElement('span')
-  text.textContent =
-    `${total} reference${total === 1 ? '' : 's'} belong to ` +
-    `${orphans.length} device${orphans.length === 1 ? '' : 's'} that ${orphans.length === 1 ? 'is' : 'are'} ` +
-    'not connected. If a device changed its id, re-capture its no-signal screen.'
+  const text = document.createElement('div')
+  text.className = 'ref-orphans-text'
+  text.appendChild(document.createTextNode(orphanBannerText(total, orphans.length)))
+  const caveat = document.createElement('span')
+  caveat.textContent = 'Discarding also removes references of cards that are only unplugged right now.'
+  text.appendChild(caveat)
   box.appendChild(text)
 
   const btn = document.createElement('button')
-  btn.className = 'ref-prune-btn'
+  btn.type = 'button'
+  btn.className = 'pill-btn pill-btn-small ref-prune-btn'
   btn.textContent = 'Discard them'
   btn.addEventListener('click', async () => {
     pruneOrphanedReferences(state.devices.map((d) => d.deviceId))
@@ -2874,10 +3103,11 @@ function renderOrphanedReferences() {
 }
 
 /**
- * Fill a device's reference panel with thumbnails and delete buttons.
+ * Fill a device's no-signal panel: its reference thumbnails with a delete each,
+ * the notes, and the capture button.
  *
- * References are stored as ImageData at the detect resolution, so a thumbnail
- * is just that data drawn to a small canvas -- no separate copy is kept.
+ * References are stored as ImageData at the detect resolution, so a thumbnail is
+ * just that data drawn to a small canvas -- no separate copy is kept.
  *
  * @param {HTMLElement} panel
  * @param {string} deviceId
@@ -2891,55 +3121,91 @@ function renderReferencePanel(panel, deviceId) {
     hint.className = 'ref-empty'
     hint.textContent =
       'No reference captured. Detection cannot fire for this input until one ' +
-      'exists: show its no-signal screen, then use Capture above.'
+      'exists: show its no-signal screen, then capture it below.'
     panel.appendChild(hint)
-    return
+  } else {
+    const grid = document.createElement('div')
+    grid.className = 'ref-grid'
+
+    refs.forEach((ref, i) => {
+      const item = document.createElement('div')
+      item.className = 'ref-item'
+
+      const canvas = document.createElement('canvas')
+      canvas.width = ref.width
+      canvas.height = ref.height
+      canvas.className = 'ref-thumb'
+      canvas.getContext('2d')?.putImageData(ref, 0, 0)
+      canvas.title = `${ref.width}x${ref.height}`
+
+      const del = document.createElement('button')
+      del.type = 'button'
+      del.className = 'ref-delete'
+      del.textContent = '×'
+      del.title = 'Delete this reference'
+      del.setAttribute('aria-label', `Delete reference ${i + 1}`)
+      del.addEventListener('click', async () => {
+        removeReferenceScreenshot(deviceId, i)
+        state.settings.noSignalReferences = serializeReferences()
+        await saveSettings()
+        // Re-render the whole list: the row's count badge changes too.
+        renderSettingsInputList()
+      })
+
+      item.appendChild(canvas)
+      item.appendChild(del)
+      grid.appendChild(item)
+    })
+    panel.appendChild(grid)
+
+    const note = document.createElement('p')
+    note.className = 'ref-note'
+    note.textContent = refs.length === 1
+      ? 'A frame matching this reference counts as no signal. Capture more if this ' +
+        'card shows other no-signal screens (unsupported mode, HDCP error).'
+      : `A frame matching any of these ${refs.length} counts as no signal.`
+    panel.appendChild(note)
   }
 
-  const grid = document.createElement('div')
-  grid.className = 'ref-grid'
+  // Capture: from whichever half this device is on. References belong to the
+  // device, so the half is only where the picture comes from.
+  const side = visibleSideOf(deviceId)
+  const row = document.createElement('div')
+  row.className = 'ref-capture-row'
 
-  refs.forEach((ref, i) => {
-    const item = document.createElement('div')
-    item.className = 'ref-item'
-
-    const canvas = document.createElement('canvas')
-    canvas.width = ref.width
-    canvas.height = ref.height
-    canvas.className = 'ref-thumb'
-    canvas.getContext('2d').putImageData(ref, 0, 0)
-    canvas.title = `${ref.width}x${ref.height}`
-
-    const del = document.createElement('button')
-    del.className = 'ref-delete'
-    del.textContent = '×'
-    del.title = 'Delete this reference'
-    del.addEventListener('click', async () => {
-      removeReferenceScreenshot(deviceId, i)
-      state.settings.noSignalReferences = serializeReferences()
-      await saveSettings()
-      // Re-render the whole list: the row's count badge changes too.
-      renderSettingsInputList()
-    })
-
-    item.appendChild(canvas)
-    item.appendChild(del)
-    grid.appendChild(item)
+  const btn = document.createElement('button')
+  btn.type = 'button'
+  btn.className = 'pill-btn primary ref-capture-btn'
+  btn.textContent = side === 'right' ? 'Capture from right half' : 'Capture from left half'
+  btn.disabled = !side
+  btn.addEventListener('click', async () => {
+    btn.disabled = true
+    const result = await captureNoSignalForSide(side)
+    state.captureResults.set(deviceId, result)
+    // Re-render: the badge count, the thumbnails and the message all change.
+    renderSettingsInputList()
   })
+  row.appendChild(btn)
 
-  panel.appendChild(grid)
-
-  const note = document.createElement('p')
-  note.className = 'ref-note'
-  note.textContent = refs.length === 1
-    ? 'A frame matching this reference counts as no signal. Capture more if this ' +
-      'card shows other no-signal screens (unsupported mode, HDCP error).'
-    : `A frame matching any of these ${refs.length} counts as no signal.`
-  panel.appendChild(note)
+  const msg = document.createElement('span')
+  msg.className = 'ref-capture-msg'
+  msg.setAttribute('role', 'status')
+  if (!side) {
+    msg.textContent = 'Put this input on the wall first'
+  } else {
+    const last = state.captureResults.get(deviceId)
+    if (last) {
+      msg.textContent = last.message
+      msg.classList.add(last.ok ? 'ok' : 'error')
+    }
+  }
+  row.appendChild(msg)
+  panel.appendChild(row)
 }
 
 /**
- * Set the default input for startup
+ * Set or clear the input shown at startup. Null clears it, which the old
+ * "Default" button could not do.
  */
 function setDefaultInput(deviceId) {
   state.defaultInputId = deviceId
@@ -2952,27 +3218,142 @@ function setDefaultInput(deviceId) {
  * Show the settings modal
  */
 function showSettingsModal() {
+  // Settings is opened from the dropdown's capsule; the pickers would only sit
+  // behind it.
+  closeDropdown()
   elements.settingsModal.classList.remove('hidden')
+  updateMultiViewUI()
   renderSettingsInputList()
+  renderLayoutDiagram()
   updateRemoteKeyboardUI()
   updatePresenterDebugUI()
+  updateArtnetUI()
+  showSettingsSection(state.settingsSection)
+  startSettingsStatusRefresh()
+  showCursor()
+}
+
+function isSettingsOpen() {
+  return Boolean(elements.settingsModal) &&
+    !elements.settingsModal.classList.contains('hidden')
+}
+
+/** Show one pane of the Settings modal and mark its nav item current. */
+function showSettingsSection(name) {
+  state.settingsSection = name
+  const modal = elements.settingsModal
+  if (!modal) return
+  for (const section of modal.querySelectorAll('.settings-section')) {
+    section.classList.toggle('hidden', section.dataset.section !== name)
+  }
+  for (const item of modal.querySelectorAll('.settings-nav-item')) {
+    const current = item.dataset.section === name
+    item.classList.toggle('active', current)
+    if (current) item.setAttribute('aria-current', 'page')
+    else item.removeAttribute('aria-current')
+  }
+  modal.querySelector('.settings-body')?.scrollTo?.(0, 0)
+}
+
+/** A status dot, optionally followed by text. */
+function statusDot(tone, text) {
+  const frag = document.createDocumentFragment()
+  const dot = document.createElement('span')
+  dot.className = `status-dot${tone === 'ok' ? ' ok' : tone === 'warn' ? ' warn' : ''}`
+  frag.appendChild(dot)
+  if (text) frag.appendChild(document.createTextNode(text))
+  return frag
+}
+
+/**
+ * Nav-item status: Inputs counts enabled inputs with no no-signal reference;
+ * Remote keyboard and Art-Net say On/Off, green when configured and orange when
+ * switched on but incomplete or failing.
+ */
+function updateSettingsNav() {
+  const missing = state.devices
+    .filter(d => isInputEnabled(d.deviceId))
+    .filter(d => getReferenceScreenshots(d.deviceId).length === 0).length
+  if (elements.settingsNavInputs) {
+    elements.settingsNavInputs.innerHTML = ''
+    if (missing > 0) {
+      const count = document.createElement('span')
+      count.className = 'nav-count'
+      count.textContent = String(missing)
+      count.title = `${missing} input${missing === 1 ? '' : 's'} without a no-signal reference`
+      elements.settingsNavInputs.appendChild(count)
+    }
+  }
+
+  const rk = remoteKeyboardStatus(remoteKeyboardInfo())
+  if (elements.settingsNavRemote) {
+    elements.settingsNavRemote.innerHTML = ''
+    elements.settingsNavRemote.appendChild(statusDot(rk.tone, rk.nav))
+  }
+  const an = artnetStatus(state.settings, getArtnetSync()?.getStatus?.() ?? null)
+  if (elements.settingsNavArtnet) {
+    elements.settingsNavArtnet.innerHTML = ''
+    elements.settingsNavArtnet.appendChild(statusDot(an.tone, an.nav))
+  }
+}
+
+function remoteKeyboardInfo() {
+  return {
+    enabled: state.remoteKeyboardEnabled,
+    host: state.remoteKeyboardHost,
+    apiKey: state.remoteKeyboardApiKey,
+    last: state.remoteKeyboardLast,
+  }
+}
+
+function renderStatusLine(el, status) {
+  if (!el) return
+  el.innerHTML = ''
+  if (status.line) el.appendChild(statusDot(status.tone, status.line))
+}
+
+/**
+ * Keep the status lines current while Settings is open: Art-Net sends happen in
+ * the background, so its line cannot be updated only on input events.
+ */
+let settingsStatusTimer = null
+
+function refreshSettingsStatus() {
+  if (!isSettingsOpen()) {
+    stopSettingsStatusRefresh()
+    return
+  }
+  renderStatusLine(elements.remoteKeyboardStatus, remoteKeyboardStatus(remoteKeyboardInfo()))
+  renderStatusLine(elements.artnetStatus,
+    artnetStatus(state.settings, getArtnetSync()?.getStatus?.() ?? null))
+  updateSettingsNav()
+}
+
+function startSettingsStatusRefresh() {
+  refreshSettingsStatus()
+  if (settingsStatusTimer === null) {
+    settingsStatusTimer = setInterval(refreshSettingsStatus, 1000)
+  }
+}
+
+function stopSettingsStatusRefresh() {
+  if (settingsStatusTimer !== null) {
+    clearInterval(settingsStatusTimer)
+    settingsStatusTimer = null
+  }
 }
 
 /**
  * Update the remote keyboard settings UI to reflect current state
  */
 function updateRemoteKeyboardUI() {
-  // Update toggle
-  if (state.remoteKeyboardEnabled) {
-    elements.remoteKeyboardToggle.classList.add('active')
-    elements.remoteKeyboardFields.classList.remove('hidden')
-  } else {
-    elements.remoteKeyboardToggle.classList.remove('active')
-    elements.remoteKeyboardFields.classList.add('hidden')
-  }
+  setSwitch(elements.remoteKeyboardToggle, state.remoteKeyboardEnabled)
+  elements.remoteKeyboardFields.classList.toggle('hidden', !state.remoteKeyboardEnabled)
   // Update input fields
   elements.remoteKeyboardHost.value = state.remoteKeyboardHost || ''
   elements.remoteKeyboardApiKey.value = state.remoteKeyboardApiKey || ''
+  renderStatusLine(elements.remoteKeyboardStatus, remoteKeyboardStatus(remoteKeyboardInfo()))
+  updateSettingsNav()
 }
 
 /**
@@ -2982,6 +3363,8 @@ function toggleRemoteKeyboard() {
   state.remoteKeyboardEnabled = !state.remoteKeyboardEnabled
   state.settings.remoteKeyboardEnabled = state.remoteKeyboardEnabled
   updateRemoteKeyboardUI()
+  // The debug overlay belongs to this feature; it must not outlive it.
+  updatePresenterDebugUI()
   saveSettings()
 }
 
@@ -2991,6 +3374,8 @@ function toggleRemoteKeyboard() {
 function setRemoteKeyboardHost(host) {
   state.remoteKeyboardHost = host
   state.settings.remoteKeyboardHost = host
+  state.remoteKeyboardLast = null
+  refreshSettingsStatus()
   debouncedSaveSettings()
 }
 
@@ -3000,7 +3385,20 @@ function setRemoteKeyboardHost(host) {
 function setRemoteKeyboardApiKey(apiKey) {
   state.remoteKeyboardApiKey = apiKey
   state.settings.remoteKeyboardApiKey = apiKey
+  state.remoteKeyboardLast = null
+  refreshSettingsStatus()
   debouncedSaveSettings()
+}
+
+/** Show or hide the API key: it is typed blind otherwise. */
+function toggleApiKeyReveal() {
+  const field = elements.remoteKeyboardApiKey
+  const btn = elements.remoteKeyboardApiKeyReveal
+  if (!field || !btn) return
+  const reveal = field.type === 'password'
+  field.type = reveal ? 'text' : 'password'
+  btn.textContent = reveal ? 'Hide' : 'Show'
+  btn.setAttribute('aria-pressed', reveal ? 'true' : 'false')
 }
 
 /**
@@ -3049,9 +3447,14 @@ function renderArtnetSaverList() {
   const configured = [...new Set(Object.values(mapping))]
     .filter(v => typeof v === 'string' && (v.startsWith('scene:') || v.startsWith('effect:')))
 
+  let customised = 0
   for (const saver of listScreensavers()) {
     const row = document.createElement('div')
     row.className = 'artnet-saver-row'
+    if (Object.hasOwn(mapping, saver)) {
+      customised++
+      row.classList.add('customised')
+    }
 
     const name = document.createElement('span')
     name.className = 'artnet-saver-name'
@@ -3081,10 +3484,17 @@ function renderArtnetSaverList() {
       select.appendChild(opt)
     }
     select.value = current
+    select.setAttribute('aria-label', `Lighting for ${saver}`)
     select.addEventListener('change', (e) => setArtnetSaverMode(saver, e.target.value))
     row.appendChild(select)
 
     list.appendChild(row)
+  }
+
+  if (elements.artnetSaverCount) {
+    elements.artnetSaverCount.textContent = customised === 0
+      ? 'all default'
+      : `${customised} customised`
   }
 }
 
@@ -3105,12 +3515,15 @@ function setArtnetSaverMode(saver, mode) {
   else mapping[saver] = mode
   state.settings.artnetSceneBySaver = mapping
   saveSettings()
+  renderArtnetSaverList()
 }
 
 function updateArtnetUI() {
   const enabled = Boolean(state.settings.artnetEnabled)
-  elements.artnetToggle.classList.toggle('active', enabled)
+  setSwitch(elements.artnetToggle, enabled)
   elements.artnetFields.classList.toggle('hidden', !enabled)
+  renderStatusLine(elements.artnetStatus,
+    artnetStatus(state.settings, getArtnetSync()?.getStatus?.() ?? null))
 
   elements.artnetUrl.value = state.settings.artnetUrl || ''
   elements.artnetReleaseScene.value = state.settings.artnetReleaseScene || ''
@@ -3161,9 +3574,15 @@ function toggleArtnet() {
 
 function setArtnetUrl(url) {
   state.settings.artnetUrl = url.trim()
+  refreshSettingsStatus()
   debouncedSaveSettings()
-  refreshArtnetCatalogue()
+  // Asks the relay for its scene names. Debounced: this used to fire one status
+  // request per keystroke while a URL was being typed.
+  clearTimeout(artnetCatalogueTimer)
+  artnetCatalogueTimer = setTimeout(refreshArtnetCatalogue, 600)
 }
+
+let artnetCatalogueTimer = null
 
 function setArtnetTarget(target) {
   state.settings.artnetTarget = target
@@ -3195,13 +3614,11 @@ function setArtnetReleaseScene(scene) {
  * Update the presenter debug overlay visibility to reflect current state
  */
 function updatePresenterDebugUI() {
-  if (state.presenterDebugEnabled) {
-    elements.presenterDebugToggle.classList.add('active')
-    elements.presenterDebugOverlay.classList.remove('hidden')
-  } else {
-    elements.presenterDebugToggle.classList.remove('active')
-    elements.presenterDebugOverlay.classList.add('hidden')
-  }
+  setSwitch(elements.presenterDebugToggle, state.presenterDebugEnabled)
+  // Only while Remote Keyboard is on: its switch is hidden with the other remote
+  // keyboard fields, so an overlay left on would otherwise have no visible way off.
+  const show = state.presenterDebugEnabled && state.remoteKeyboardEnabled
+  elements.presenterDebugOverlay.classList.toggle('hidden', !show)
 }
 
 /**
@@ -3239,6 +3656,7 @@ function logPresenterDebug(message, status = '') {
  */
 function hideSettingsModal() {
   elements.settingsModal.classList.add('hidden')
+  stopSettingsStatusRefresh()
 }
 
 /**
@@ -3249,40 +3667,85 @@ function closeAllPanels() {
   hideSettingsModal()
 }
 
+/** True when Esc has something to close before it may touch fullscreen. */
+function anyPanelOpen() {
+  return isSettingsOpen() || state.dropdownOpen || state.legendOpen
+}
+
 /**
- * Toggle dropdown open/close state
+ * Toggle dropdown open/close state (the touch path).
  */
 function toggleDropdown() {
-  state.dropdownOpen = !state.dropdownOpen
+  if (state.dropdownOpen) closeDropdown()
+  else openDropdown()
+}
+
+/**
+ * Open the controls over the wall.
+ *
+ * Both open paths land here -- hover on the trigger and a tap on it. Opening
+ * starts a thumbnail sweep (#242) and the system-volume poll, and keeps the
+ * cursor up for as long as the controls are showing.
+ */
+function openDropdown() {
+  if (isSettingsOpen()) return
+  const wasOpen = state.dropdownOpen
+  state.dropdownOpen = true
   updateDropdownState()
-  // Touch path into the dropdown (#242). Only on open; closing needs no sweep.
-  if (state.dropdownOpen) {
-    refreshInputThumbnails()
-    startVolumePolling()
-  } else {
-    stopVolumePolling()
-  }
+  showCursor()
+  armDropdownIdleClose()
+  if (wasOpen) return
+  closeLegend()
+  renderDropdownInputLists()
+  refreshInputThumbnails()
+  startVolumePolling()
 }
 
 /**
  * Close the dropdown
  */
 function closeDropdown() {
+  clearTimeout(dropdownIdleTimer)
+  dropdownIdleTimer = null
   state.dropdownOpen = false
   updateDropdownState()
   stopVolumePolling()
 }
 
 /**
- * Update dropdown CSS classes based on state
+ * The controls cover the picture, so they must not stay up on an unattended
+ * wall: close them after a stretch with no pointer, touch or key activity.
  */
-function updateDropdownState() {
-  elements.dropdownPanel.classList.toggle('touch-open', state.dropdownOpen)
-  elements.dropdownTrigger.classList.toggle('touch-open', state.dropdownOpen)
+const DROPDOWN_IDLE_MS = 30_000
+let dropdownIdleTimer = null
+
+function armDropdownIdleClose() {
+  clearTimeout(dropdownIdleTimer)
+  dropdownIdleTimer = setTimeout(() => {
+    dropdownIdleTimer = null
+    if (state.dropdownOpen) closeDropdown()
+  }, DROPDOWN_IDLE_MS)
 }
 
 /**
- * Capture no-signal reference for a specific side
+ * Update dropdown CSS classes based on state
+ */
+function updateDropdownState() {
+  const open = state.dropdownOpen
+  elements.dropdownPanel.classList.toggle('touch-open', open)
+  elements.dropdownTrigger.classList.toggle('touch-open', open)
+  elements.dropdownPanel.setAttribute('aria-hidden', open ? 'false' : 'true')
+  elements.dropdownTrigger.setAttribute('aria-expanded', open ? 'true' : 'false')
+}
+
+/**
+ * Capture a no-signal reference from what one half of the wall is showing.
+ *
+ * Returns what happened rather than only logging it, so the Settings row can say
+ * so: a failed capture used to be silent.
+ *
+ * @param {'left'|'right'} side
+ * @returns {Promise<{ok: boolean, message: string}>}
  */
 async function captureNoSignalForSide(side) {
   const video = side === 'left' ? elements.leftVideo : elements.rightVideo
@@ -3290,12 +3753,12 @@ async function captureNoSignalForSide(side) {
 
   if (!deviceId) {
     console.error(`[Setup] No device selected for ${side}`)
-    return
+    return { ok: false, message: 'Nothing is selected on that half.' }
   }
 
   if (!video || !video.srcObject || video.readyState < 2) {
     console.error(`[Setup] Video feed not ready for ${side}`)
-    return
+    return { ok: false, message: 'Capture failed: the feed is not showing a picture yet.' }
   }
 
   // Capture screenshot
@@ -3304,7 +3767,7 @@ async function captureNoSignalForSide(side) {
 
   if (!imageData) {
     console.error(`[Setup] Failed to capture screenshot for ${side}`)
-    return
+    return { ok: false, message: 'Capture failed: could not read a frame from the feed.' }
   }
 
   // Save reference
@@ -3318,16 +3781,7 @@ async function captureNoSignalForSide(side) {
   await saveSettings()
 
   console.log(`[Setup] No-signal reference captured for ${side} (${deviceId})`)
-
-  // Visual feedback - briefly change button text
-  const btn = side === 'left' ? elements.captureLeftBtn : elements.captureRightBtn
-  const originalText = btn.textContent
-  btn.textContent = '✓ Captured!'
-  btn.disabled = true
-  setTimeout(() => {
-    btn.textContent = originalText
-    btn.disabled = false
-  }, 1500)
+  return { ok: true, message: 'Captured.' }
 }
 
 // =============================================================================
@@ -3338,7 +3792,13 @@ function showCursor() {
   document.body.classList.add('cursor-visible')
 
   clearTimeout(state.cursorTimeout)
-  state.cursorTimeout = setTimeout(() => {
+  state.cursorTimeout = setTimeout(function hideCursor() {
+    // Never hide it under open controls or Settings: both are used with the
+    // pointer, and an invisible one over a form is just lost.
+    if (state.dropdownOpen || isSettingsOpen()) {
+      state.cursorTimeout = setTimeout(hideCursor, state.cursorHideDelay)
+      return
+    }
     document.body.classList.remove('cursor-visible')
   }, state.cursorHideDelay)
 }
@@ -3402,6 +3862,7 @@ function resetShakeDetection() {
  */
 function handleMouseMove(event) {
   showCursor()
+  if (state.dropdownOpen) armDropdownIdleClose()
 
   // Only check for shake when screensaver is active
   if (isScreensaverRunning()) {
@@ -3423,43 +3884,39 @@ function handleMouseMove(event) {
  */
 async function sendRemoteKeypress(direction) {
   if (!state.remoteKeyboardEnabled) return
-  if (!state.remoteKeyboardHost || !state.remoteKeyboardApiKey) {
+  if (!state.remoteKeyboardHost?.trim() || !state.remoteKeyboardApiKey) {
     logPresenterDebug(`${direction}: skipped (host/API key not set)`, 'error')
+    refreshSettingsStatus()
     return
   }
 
-  const host = state.remoteKeyboardHost.trim()
-  // Add http:// prefix and .local suffix if needed
-  let url = host
-  if (!url.startsWith('http://') && !url.startsWith('https://')) {
-    url = `http://${url}`
-  }
-  if (!url.includes('.') && !url.includes(':')) {
-    url = `${url}.local`
-  }
-  url = `${url}/${direction}`
-
+  // Builds http://<host>[.local]/<direction>; see remoteKeyUrl for the .local rule.
+  const url = remoteKeyUrl(state.remoteKeyboardHost, direction)
   logPresenterDebug(`${direction} → ${url}`)
 
+  // Through the main process: from the file:// renderer this request needs a CORS
+  // preflight that the presenter-PC device does not answer. See remote-key-send.
+  let result
   try {
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'X-API-Key': state.remoteKeyboardApiKey
-      }
-    })
-
-    if (!response.ok) {
-      console.warn(`[Remote Keyboard] Request failed: ${response.status}`)
-      logPresenterDebug(`${direction}: failed (HTTP ${response.status})`, 'error')
-    } else {
-      console.log(`[Remote Keyboard] Sent: ${direction}`)
-      logPresenterDebug(`${direction}: sent (HTTP ${response.status})`, 'ok')
-    }
+    result = window.electronAPI?.remoteKeySend
+      ? await window.electronAPI.remoteKeySend({ url, apiKey: state.remoteKeyboardApiKey })
+      : { ok: false, error: 'not available outside the app' }
   } catch (error) {
-    console.warn(`[Remote Keyboard] Error: ${error.message}`)
-    logPresenterDebug(`${direction}: error (${error.message})`, 'error')
+    result = { ok: false, error: error.message }
   }
+
+  state.remoteKeyboardLast = { ...result, direction, at: Date.now() }
+  if (result.ok) {
+    console.log(`[Remote Keyboard] Sent: ${direction}`)
+    logPresenterDebug(`${direction}: sent (HTTP ${result.status})`, 'ok')
+  } else if (result.status) {
+    console.warn(`[Remote Keyboard] Request failed: ${result.status}`)
+    logPresenterDebug(`${direction}: failed (HTTP ${result.status})`, 'error')
+  } else {
+    console.warn(`[Remote Keyboard] Error: ${result.error}`)
+    logPresenterDebug(`${direction}: error (${result.error})`, 'error')
+  }
+  refreshSettingsStatus()
 }
 
 // =============================================================================
@@ -3504,13 +3961,19 @@ const SHORTCUT_ACTIONS = {
 
   'fullscreen': () => window.electronAPI.toggleFullscreen(),
 
+  // One thing per press. With something open, Esc closes it and stops there:
+  // closing Settings on the wall used to drop it out of fullscreen in the same
+  // press. Only with nothing open does it unfreeze and leave fullscreen.
   'escape': () => {
-    closeAllPanels()
-    closeLegend()
+    if (anyPanelOpen()) {
+      closeAllPanels()
+      closeLegend()
+      return
+    }
     if (state.frozen) {
       toggleFreeze() // Unfreeze on escape
     }
-    window.electronAPI.isFullscreen().then(isFs => {
+    window.electronAPI?.isFullscreen?.().then(isFs => {
       if (isFs) window.electronAPI.toggleFullscreen()
     })
   },
@@ -3521,9 +3984,24 @@ const SHORTCUT_ACTIONS = {
   'remote-forward': () => sendRemoteKeypress('right'),
 }
 
+/**
+ * True while the key belongs to a form control rather than to the app.
+ *
+ * Not only text fields: with a <select> focused (the Art-Net target, say) Q used
+ * to quit the app and D/S switched the layout behind the modal. Escape still
+ * gets through, so Esc closes Settings from inside a field.
+ */
+function isTypingTarget(target) {
+  if (!target) return false
+  const tag = target.tagName
+  return tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' ||
+    target.isContentEditable === true
+}
+
 function handleKeyDown(event) {
-  // Don't handle if typing in an input
-  if (event.target.tagName === 'INPUT') return
+  if (state.dropdownOpen) armDropdownIdleClose()
+  // Don't handle if typing in a form control, except Escape.
+  if (isTypingTarget(event.target) && event.key !== 'Escape') return
 
   console.log(`[Key] pressed: "${event.key}" (code: ${event.code})`)
 
@@ -3553,29 +4031,26 @@ function setupEventListeners() {
   // Keyboard shortcuts
   document.addEventListener('keydown', handleKeyDown)
 
-  // Keep cursor visible when hovering dropdown
-  elements.dropdownTrigger.addEventListener('mouseenter', () => {
-    document.body.classList.add('cursor-visible')
-    clearTimeout(state.cursorTimeout)
-    // Hover path into the dropdown (#242). The panel's visibility is pure CSS
-    // (#dropdown-trigger:hover + #dropdown-panel), so this listener -- which
-    // already existed for the cursor -- is the only JS signal that it opened.
-    refreshInputThumbnails()
-    startVolumePolling()
+  // Hover path into the controls: the tab at the top edge. They stay open once
+  // the pointer moves on -- the pickers cover the wall, so "leaving" means
+  // nothing -- and close with the Close pill, Esc, or after a quiet stretch.
+  elements.dropdownTrigger.addEventListener('mouseenter', () => openDropdown())
+
+  // Keyboard path to the same tab.
+  elements.dropdownTrigger.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      e.stopPropagation()
+      toggleDropdown()
+    }
   })
 
-  elements.dropdownPanel.addEventListener('mouseenter', () => {
-    document.body.classList.add('cursor-visible')
-    clearTimeout(state.cursorTimeout)
-    startVolumePolling()
-  })
+  elements.wallCloseBtn?.addEventListener('click', () => closeDropdown())
 
-  elements.dropdownPanel.addEventListener('mouseleave', () => {
-    showCursor() // Reset cursor timeout
-    stopVolumePolling()
-  })
+  // Any touch on the open controls counts as activity.
+  elements.dropdownPanel.addEventListener('pointerdown', () => armDropdownIdleClose())
 
-  // View mode buttons in dropdown
+  // View mode buttons in the capsule
   elements.viewModeDual.addEventListener('click', () => setLayout('dual'))
   elements.viewModeSingle.addEventListener('click', () => setLayout('single'))
 
@@ -3583,6 +4058,13 @@ function setupEventListeners() {
   elements.openSettingsBtn.addEventListener('click', () => {
     showSettingsModal()
   })
+
+  // Settings side nav
+  for (const item of elements.settingsModal.querySelectorAll('.settings-nav-item')) {
+    item.addEventListener('click', () => showSettingsSection(item.dataset.section))
+  }
+
+  elements.multiViewToggle?.addEventListener('click', () => setMultiView(!isMultiView()))
 
   // Close settings modal
   elements.closeSettingsBtn.addEventListener('click', () => {
@@ -3605,15 +4087,6 @@ function setupEventListeners() {
     setBorderWidth(parseInt(e.target.value))
   })
 
-  // No-signal capture buttons
-  elements.captureLeftBtn.addEventListener('click', () => {
-    captureNoSignalForSide('left')
-  })
-
-  elements.captureRightBtn.addEventListener('click', () => {
-    captureNoSignalForSide('right')
-  })
-
   // Remote keyboard settings
   elements.remoteKeyboardToggle.addEventListener('click', toggleRemoteKeyboard)
 
@@ -3621,16 +4094,10 @@ function setupEventListeners() {
     setRemoteKeyboardHost(e.target.value)
   })
 
-  elements.remoteKeyboardHost.addEventListener('keydown', (e) => {
-    e.stopPropagation() // Prevent keyboard shortcuts while typing
-  })
+  elements.remoteKeyboardApiKeyReveal?.addEventListener('click', toggleApiKeyReveal)
 
   elements.remoteKeyboardApiKey.addEventListener('input', (e) => {
     setRemoteKeyboardApiKey(e.target.value)
-  })
-
-  elements.remoteKeyboardApiKey.addEventListener('keydown', (e) => {
-    e.stopPropagation() // Prevent keyboard shortcuts while typing
   })
 
   // Presenter tool debug overlay toggle
@@ -3659,12 +4126,9 @@ function setupEventListeners() {
     setArtnetReleaseScene(e.target.value)
   })
 
-  // A URL or scene name contains letters that are themselves shortcuts -- D and
-  // S switch layout, Q quits. Without this, typing a hostname reconfigures the
-  // app underneath you.
-  for (const field of [elements.artnetUrl, elements.artnetReleaseScene]) {
-    field.addEventListener('keydown', (e) => { e.stopPropagation() })
-  }
+  // Typing in these fields must not trigger shortcuts (D and S switch layout, Q
+  // quits). handleKeyDown ignores every form control, so nothing per-field is
+  // needed here any more -- and Escape still reaches it to close Settings.
 
   // System volume slider in dropdown
   elements.dropdownSystemVolume.addEventListener('input', async (e) => {
@@ -3703,23 +4167,13 @@ function setupEventListeners() {
     }
   }, { passive: true })
 
-  // Touch support for dropdown
+  // Touch support for the controls. There is no "outside" to tap any more --
+  // they cover the wall -- so they close with the Close pill.
   elements.dropdownTrigger.addEventListener('touchstart', (e) => {
     e.preventDefault() // Prevent mouse events from firing
     toggleDropdown()
     showCursor()
   }, { passive: false })
-
-  // Close dropdown when tapping outside
-  document.addEventListener('touchstart', (e) => {
-    if (state.dropdownOpen) {
-      const isInsideDropdown = elements.dropdownPanel.contains(e.target) ||
-                               elements.dropdownTrigger.contains(e.target)
-      if (!isInsideDropdown) {
-        closeDropdown()
-      }
-    }
-  }, { passive: true })
 
   // Device changes (when plugging/unplugging devices)
   navigator.mediaDevices.addEventListener('devicechange', async () => {
@@ -4365,6 +4819,11 @@ async function openInitialStreams(layoutMode) {
     }
   }
 
+  // Without Multi-view the halves always show the same input.
+  if (!isMultiView() && state.leftDeviceId) {
+    state.rightDeviceId = state.leftDeviceId
+  }
+
   // Always start left stream
   await startVideoStream(state.leftDeviceId, elements.leftVideo, 'left')
 
@@ -4616,5 +5075,24 @@ export {
   toggleArtnet,
   setArtnetSaverMode,
   setArtnetTarget,
-  setArtnetSpotDepth
+  setArtnetSpotDepth,
+  // Dropdown 2b, Multi-view and the rebuilt Settings panel.
+  pickerPlan,
+  openDropdown,
+  closeDropdown,
+  toggleDropdown,
+  setMultiView,
+  isMultiView,
+  showSettingsModal,
+  hideSettingsModal,
+  isSettingsOpen,
+  showSettingsSection,
+  renderSettingsInputList,
+  renderLayoutDiagram,
+  setDefaultInput,
+  captureNoSignalForSide,
+  sendRemoteKeypress,
+  selectInputForSide,
+  selectInputForBoth,
+  setupEventListeners
 }

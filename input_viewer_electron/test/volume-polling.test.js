@@ -140,17 +140,19 @@ describe('nothing polls it unconditionally any more', () => {
   })
 
   it('is wired to both ways the dropdown opens', () => {
-    // Hover is pure CSS for visibility, so the mouseenter listeners are the only JS
-    // signal; touch goes through toggleDropdown.
-    expect(RENDERER).toMatch(/dropdownTrigger\.addEventListener\('mouseenter'[\s\S]{0,400}startVolumePolling\(\)/)
-    expect(RENDERER).toMatch(/dropdownPanel\.addEventListener\('mouseenter'[\s\S]{0,400}startVolumePolling\(\)/)
+    // Hover (mouseenter on the tab) and touch (toggleDropdown) both go through
+    // openDropdown, which is where polling starts.
+    expect(RENDERER).toMatch(/dropdownTrigger\.addEventListener\('mouseenter',\s*\(\)\s*=>\s*openDropdown\(\)\)/)
     const toggle = RENDERER.slice(RENDERER.indexOf('function toggleDropdown()'))
-    expect(toggle.slice(0, 400)).toContain('startVolumePolling()')
+    expect(toggle.slice(0, 200)).toContain('openDropdown()')
+    const open = RENDERER.slice(RENDERER.indexOf('function openDropdown()'))
+    expect(open.slice(0, 600)).toContain('startVolumePolling()')
   })
 
-  it('is wired to both ways it closes', () => {
-    expect(RENDERER).toMatch(/dropdownPanel\.addEventListener\('mouseleave'[\s\S]{0,300}stopVolumePolling\(\)/)
+  it('is wired to every way it closes', () => {
+    // Close pill, Esc and the idle timeout all call closeDropdown.
     const close = RENDERER.slice(RENDERER.indexOf('function closeDropdown()'))
     expect(close.slice(0, 300)).toContain('stopVolumePolling()')
+    expect(RENDERER).toMatch(/wallCloseBtn\?\.addEventListener\('click',\s*\(\)\s*=>\s*closeDropdown\(\)\)/)
   })
 })

@@ -33,8 +33,19 @@ The app auto-updates when new versions are available.
 
 ### Selecting Inputs
 
-1. Hover at the top of the screen to reveal the dropdown menu
-2. Select which video input to show on each side (Dual view) or single input (Single view)
+1. Hover at the top of the screen (or tap the tab there) to bring up the input controls
+2. They appear **over the wall itself**: each half shows what it is playing and a strip of
+   inputs to choose from. Tap an input to put it on that half. The controls stay open, so
+   you can change both halves in one go
+3. Press **Close** at the bottom (or `Esc`) when you are done. They also close by themselves
+   after 30 seconds without anything being touched, so they never cover an unattended wall
+
+In **Single** view there is one strip, for the whole wall, and its inputs carry the number
+keys `1`-`4` because a tap does the same as the key.
+
+**Multi-view** (Settings > Inputs, on by default) is what lets each half show a different
+input. With it off, dual view always shows one input on both halves and the controls have a
+single strip: one tap and it is on the whole wall.
 
 ### View Modes
 
@@ -85,9 +96,13 @@ bindings, so it always matches what the keys actually do.
 
 ## Settings
 
-Open Settings via the dropdown menu (gear icon).
+Open Settings with the gear in the capsule at the top of the input controls. It has four
+sections in a side menu: **Inputs**, **Layout**, **Remote keyboard** and **Art-Net
+lighting**. The menu shows what needs attention: a count of inputs without a no-signal
+reference, and On/Off for the two integrations (orange when one is on but not working or
+not filled in). Everything saves as you change it; there is no Apply button.
 
-Each input in the dropdown shows a **snapshot** of what it is currently sending, taken
+Each input in the controls shows a **snapshot** of what it is currently sending, taken
 when the dropdown opens. These are stills, not live previews — they are as recent as the
 moment you opened the panel. An input that is not currently on screen is sampled briefly to
 take its picture; one that cannot be reached, or that has nothing plugged into it, keeps an
@@ -95,31 +110,44 @@ empty tile.
 
 ### Inputs
 
-- **Enable/Disable** inputs using the toggle
-- **Rename** inputs for easier identification
-- **Set Default** input to load at startup
+- **Multi-view** - Whether each half of the wall can show a different input (see above)
+- **Key** - The number key that selects the input. Only enabled inputs are numbered, and
+  only the first four have a key
+- **On** - Disabled inputs are hidden from the controls and the number keys. One that is on
+  the wall when you switch it off stays there until that half is switched
+- **Name** - Leave empty to use the name the capture card reports
+- **Startup** - The input shown when the app starts. Click it again to clear it
+- **No-signal** - How many no-signal references the input has; click to see them
 
 ### Layout
 
-- **Center Gap** - Space between dual view panels
-- **Side Borders** - Black borders on the left/right edges
+A drawing of the wall shows the halves, the center gap and the side borders to scale.
+
+- **Center gap** - Space between the two halves (dual view only)
+- **Side borders** - Black borders on the left and right edges
 
 ### No-Signal Detection
 
 Capture what your capture card shows when nothing is connected. This allows the app to detect "no signal" and show the overlay.
 
-1. Disconnect the input from your capture card
-2. Click "Capture Left" or "Capture Right"
-3. The app will remember this pattern
+1. Disconnect the source from the capture card, so it shows its no-signal screen
+2. Put that input on the wall
+3. In Settings > Inputs, click its **No-signal** badge, then **Capture from left half** (or
+   right half, whichever it is on)
+4. The app remembers the picture. If the capture fails it says why
+
+References belong to the capture card, not to a half of the wall, so they keep working when
+the card moves to the other side.
 
 ## Volume Controls
 
-In the dropdown menu:
+In the input controls:
 
-- **Input sliders** - Control audio from each capture card
-- **Output slider** - Control system volume
+- **Volume** under each strip - The audio of that half of the wall. It belongs to the half,
+  not to the input, so it stays put when you switch inputs
+- **Output** in the capsule at the top - System volume
 
-The output slider syncs with your system volume every 2 seconds.
+The output slider follows the system volume while the controls are open.
 
 ## Remote Keyboard
 
@@ -168,8 +196,8 @@ The app listens for multiple key types to support different clickers:
 
 For touch screen setups:
 
-- **Tap** the dropdown trigger area to open/close the menu
-- **Tap outside** the menu to close it
+- **Tap** the tab at the top edge to bring up the input controls
+- **Tap Close** at the bottom to put them away
 
 ## Screensavers
 

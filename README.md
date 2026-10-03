@@ -8,8 +8,9 @@ A lightweight video input viewer — **OBS without the complexity**. View and ma
 
 ![Input Viewer in dual view, with the input dropdown open](assets/screenshot-dual.png)
 
-*Dual view with the dropdown open: per-side input selection, per-input and
-system volume, and the centre divider between the two feeds.*
+*Dual view with the input controls open: a strip of inputs and a volume slider
+over each half, and the capsule at the top for the view, output volume and
+Settings. Shown with eight `--mock` inputs.*
 
 ## Download
 
@@ -60,25 +61,27 @@ no-signal delay, and `+` / `-` step through the set (wrapping at both ends).
 Stepping restarts the rotation countdown, so a manual pick is not replaced
 moments later by the automatic rotation.
 
-Hover over the top edge to reveal the settings dropdown panel.
+Hover over the top edge (or tap the tab there) to bring up the input controls,
+which are laid over the wall itself: one strip of inputs per half, with a capsule
+at the top for the view, the output volume and Settings.
 
 ## Configuration
 
 ### Settings Panel
 
-Click the ⚙ gear icon to open the settings panel:
+Click the ⚙ gear icon to open the settings panel. A side menu has four sections:
 
-- **Toggle inputs** on/off
-- **Set default input** (shown at startup)
-- **Rename inputs** for easy identification
-- **Adjust center gap** between feeds
-- **Adjust border width** on sides
+- **Inputs** — Multi-view, and per input: on/off, name, the startup input, and its
+  no-signal references (captured from here)
+- **Layout** — center gap and side borders, with a drawing of the wall to scale
+- **Remote keyboard** and **Art-Net lighting** — each with a status line that says
+  whether it is working
 - Changes are saved automatically
 
 ### settings.json
 
-Settings are stored in the app's user data directory — the Settings panel shows
-the exact path. Inputs are keyed by capture device id, since index order is not
+Settings are stored in the app's user data directory (`settings.json` in
+Electron's `userData` folder). Inputs are keyed by capture device id, since index order is not
 stable across reboots:
 
 ```json

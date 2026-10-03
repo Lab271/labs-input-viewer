@@ -3,14 +3,37 @@
    ============================================================================= */
 
 :root {
+  /* Visual language from the dropdown 2b / Settings handoff. System fonts only:
+     the handoff's brand face is licensed for internal use, and this repo and its
+     installers are public. */
+  --surface: rgba(14, 24, 34, 0.97);
+  --hairline: rgba(255, 255, 255, 0.16);
+  --well: #020C17;
+  --raised: #1B242E;
+  --sbp-blue: #1E80ED;
+  --turquoise: #1EE8ED;
+  --signal-green: #0DEBA5;
+  --signal-orange: #FF7000;
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, Menlo, monospace;
+  --radius-pill: 999px;
+  /* Three rounded corners and one square one. */
+  --radius-container: 16px 16px 16px 2px;
+  --motion-ms: 200ms;
+  --ease: cubic-bezier(.2, 0, .2, 1);
+  --motion: var(--motion-ms) var(--ease);
+
   --bg-color: #000000;
   --text-color: #ffffff;
-  --text-muted: rgba(255, 255, 255, 0.6);
-  --accent-color: #0066ff;
-  --panel-bg: rgba(30, 30, 30, 0.95);
-  --panel-border: rgba(255, 255, 255, 0.1);
+  --text-muted: rgba(255, 255, 255, 0.64);
+  --accent-color: var(--sbp-blue);
+  --panel-bg: var(--surface);
+  --panel-border: var(--hairline);
   --hover-color: rgba(255, 255, 255, 0.1);
   --layout-gap: 20px;
+  /* Dropdown snapshot tiles: fixed, never the row width (#242). */
+  --input-thumb-w: 128px;
+  --input-thumb-h: 72px;
 }
 
 /* =============================================================================
@@ -24,7 +47,7 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  font-family: var(--font-sans);
   background-color: var(--bg-color);
   color: var(--text-color);
   overflow: hidden;
@@ -569,7 +592,149 @@ body.gpu-compositing #right-video {
 }
 
 /* =============================================================================
-   Dropdown Panel
+   Shared controls (dropdown 2b and Settings)
+   ============================================================================= */
+
+/* Buttons are pills; containers round three corners and square one
+   (--radius-container). Hit targets are at least 44px: this runs on a touch
+   wall as well as with a mouse. */
+.pill-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 20px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  background-color: var(--raised);
+  color: var(--text-color);
+  font: 700 14px/1 var(--font-sans);
+  letter-spacing: -0.02em;
+  cursor: pointer;
+  transition: background-color var(--motion), border-color var(--motion), opacity var(--motion);
+  -webkit-app-region: no-drag;
+}
+
+.pill-btn:hover {
+  border-color: rgba(255, 255, 255, 0.32);
+}
+
+.pill-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.pill-btn.primary {
+  background-color: var(--sbp-blue);
+  border-color: var(--sbp-blue);
+}
+
+.pill-btn-small {
+  min-height: 36px;
+  padding: 0 14px;
+  font-size: 12px;
+}
+
+.pill-btn svg,
+.icon-btn svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-color);
+  cursor: pointer;
+  transition: background-color var(--motion);
+  -webkit-app-region: no-drag;
+}
+
+.icon-btn:hover {
+  background-color: var(--raised);
+}
+
+.mono-label {
+  font: 400 12px/1.2 var(--font-mono);
+  color: var(--turquoise);
+  letter-spacing: 0.02em;
+}
+
+.mono-value {
+  font: 400 12px/1 var(--font-mono);
+  color: var(--text-muted);
+  min-width: 44px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+:focus-visible {
+  outline: 2px solid var(--sbp-blue);
+  outline-offset: 2px;
+}
+
+/* Range sliders: a 44px-tall hit area around a thin track. */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  background: transparent;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background-color: rgba(255, 255, 255, 0.22);
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  margin-top: -8px;
+  border-radius: 50%;
+  background-color: var(--text-color);
+  box-shadow: 0 0 0 4px var(--sbp-blue);
+}
+
+kbd {
+  display: inline-block;
+  min-width: 22px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  background-color: rgba(255, 255, 255, 0.12);
+  font: 400 12px/1.2 var(--font-mono);
+  text-align: center;
+  color: var(--text-color);
+}
+
+/* =============================================================================
+   Dropdown trigger
    ============================================================================= */
 
 #dropdown-trigger {
@@ -582,11 +747,11 @@ body.gpu-compositing #right-video {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: rgba(2, 12, 23, 0.6);
   border-radius: 0 0 12px 12px;
   cursor: pointer;
   opacity: 0;
-  transition: opacity 0.3s ease;
+  transition: opacity var(--motion);
   z-index: 100;
   -webkit-app-region: no-drag;
 }
@@ -599,53 +764,18 @@ body.cursor-visible #dropdown-trigger {
   opacity: 1;
 }
 
+/* The capsule takes the trigger's place while the controls are open. Qualified
+   with body so it outranks the cursor-visible rule above. */
+body #dropdown-trigger.touch-open {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .dropdown-arrow {
-  font-size: 14px;
+  font-size: 12px;
   color: var(--text-color);
-  transition: transform 0.3s ease;
 }
 
-#dropdown-panel {
-  position: fixed;
-  top: 0;
-  left: 50%;
-  transform: translateX(-50%) translateY(-100%);
-  background-color: var(--panel-bg);
-  border: 1px solid var(--panel-border);
-  border-top: none;
-  border-radius: 0 0 12px 12px;
-  padding: 0;
-  z-index: 99;
-  min-width: 320px;
-  max-width: 400px;
-  max-height: 80vh;
-  overflow-y: auto;
-  transition: transform 0.3s ease;
-  -webkit-app-region: no-drag;
-}
-
-#dropdown-trigger:hover + #dropdown-panel,
-#dropdown-panel:hover {
-  transform: translateX(-50%) translateY(0);
-}
-
-#dropdown-trigger:hover .dropdown-arrow,
-#dropdown-trigger:hover + #dropdown-panel ~ #dropdown-trigger .dropdown-arrow {
-  transform: rotate(180deg);
-}
-
-/* Keep cursor visible when panel is shown */
-body:has(#dropdown-trigger:hover),
-body:has(#dropdown-panel:hover) {
-  cursor: default !important;
-}
-
-body:has(#dropdown-trigger:hover) *,
-body:has(#dropdown-panel:hover) * {
-  cursor: default;
-}
-
-/* Touch-friendly dropdown (state-based instead of hover) */
 @media (pointer: coarse) {
   #dropdown-trigger {
     width: 80px;
@@ -653,18 +783,273 @@ body:has(#dropdown-panel:hover) * {
   }
 }
 
-/* State-based dropdown visibility for touch and programmatic control */
-#dropdown-trigger.touch-open + #dropdown-panel,
+/* =============================================================================
+   Dropdown 2b: controls over the wall
+   ============================================================================= */
+
+/* Fades only: no slide. visibility is delayed on the way out so the fade plays
+   before the layer stops taking clicks. */
+#dropdown-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 99;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity var(--motion), visibility 0s linear var(--motion-ms);
+  -webkit-app-region: no-drag;
+}
+
 #dropdown-panel.touch-open {
-  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition: opacity var(--motion), visibility 0s;
 }
 
-#dropdown-trigger.touch-open .dropdown-arrow {
-  transform: rotate(180deg);
+#dropdown-panel.touch-open,
+#dropdown-panel.touch-open * {
+  cursor: default;
 }
 
-.dropdown-content {
-  padding: 20px;
+/* Covers exactly the area the feeds cover: inside the side borders. Columns are
+   set from JS (renderDropdownInputLists): one picker per half with the centre
+   gap between them, or one picker across the whole width. */
+#wall-pickers {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--border-width, 0px);
+  right: var(--border-width, 0px);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.wall-picker {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  min-width: 0;
+  /* Room above for the capsule. */
+  padding: 84px clamp(16px, 3vw, 48px) 24px;
+  background: linear-gradient(to bottom,
+    rgba(2, 12, 23, 0.94) 0%,
+    rgba(2, 12, 23, 0.82) 62%,
+    rgba(2, 12, 23, 0.2) 100%);
+  overflow: hidden;
+}
+
+/* The centre-gap column between two pickers: the same scrim, nothing in it. */
+.wall-picker-gap {
+  background: linear-gradient(to bottom,
+    rgba(2, 12, 23, 0.94) 0%,
+    rgba(2, 12, 23, 0.82) 62%,
+    rgba(2, 12, 23, 0.2) 100%);
+}
+
+.picker-current {
+  max-width: 100%;
+  font: 800 22px/1.2 var(--font-sans);
+  letter-spacing: -0.03em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Scrolls sideways when the inputs don't fit (5+ on a laptop, say). */
+.picker-strip {
+  display: flex;
+  gap: 12px;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 4px 4px 10px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+}
+
+.input-option {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  width: calc(var(--input-thumb-w) + 8px);
+  padding: 4px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--motion), color var(--motion);
+}
+
+.input-option:hover {
+  background-color: rgba(255, 255, 255, 0.06);
+  color: var(--text-color);
+}
+
+.input-option.selected {
+  color: var(--text-color);
+}
+
+/* Fixed 128x72, never the row width (#242). */
+.input-thumb {
+  flex-shrink: 0;
+  width: var(--input-thumb-w);
+  height: var(--input-thumb-h);
+  border-radius: 6px;
+  background-color: var(--well);
+  background-size: cover;
+  background-position: center;
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  transition: outline-color var(--motion);
+}
+
+.input-thumb.has-thumb {
+  background-color: #000;
+}
+
+.input-option.selected .input-thumb {
+  outline-color: var(--sbp-blue);
+}
+
+.input-option-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+}
+
+/* min-width: 0 or a long capture-card label holds the row open and pushes the
+   chip out instead of ellipsising (flex's min-width: auto). */
+.input-option-name {
+  flex: 1;
+  min-width: 0;
+  font: 700 13px/1.3 var(--font-sans);
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.picker-empty {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.picker-volume {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: min(420px, 100%);
+}
+
+.picker-volume .mono-label {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* Capsule: view toggle, output volume, settings. */
+.wall-capsule {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 6px;
+  background-color: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-pill);
+  max-width: calc(100vw - 24px);
+}
+
+.view-toggle {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--radius-pill);
+  background-color: var(--well);
+}
+
+.view-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background-color var(--motion), color var(--motion);
+}
+
+.view-mode-btn svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linejoin: round;
+}
+
+.view-mode-btn.active {
+  background-color: var(--sbp-blue);
+  color: var(--text-color);
+}
+
+.capsule-volume {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 220px;
+  min-width: 0;
+}
+
+.capsule-volume .mono-label {
+  color: var(--text-muted);
+}
+
+.wall-close {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  min-height: 56px;
+  padding: 0 28px;
+  background-color: var(--surface);
+  font-size: 16px;
+}
+
+/* =============================================================================
+   Shortcut hints (#258)
+   ============================================================================= */
+
+/* Sized off the 12px floor, not shrunk until it stops competing: 10px at 0.55
+   opacity read fine on a laptop and was invisible on the wall. */
+.shortcut-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.shortcut-hint kbd {
+  font-size: 12px;
+}
+
+.view-mode-btn.active .shortcut-hint kbd {
+  background-color: rgba(255, 255, 255, 0.24);
 }
 
 /* =============================================================================
@@ -776,7 +1161,7 @@ body:has(#legend-panel:hover) * {
 }
 
 .legend-title {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   margin-bottom: 14px;
   color: var(--text-muted);
@@ -824,1038 +1209,6 @@ body:has(#legend-panel:hover) * {
 
 .legend-note {
   color: var(--text-muted);
-}
-
-.dropdown-divider {
-  height: 1px;
-  background: var(--panel-border);
-  margin: 16px 0;
-}
-
-/* =============================================================================
-   Dropdown - Volume Controls
-   ============================================================================= */
-
-.dropdown-volume-section {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.volume-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 8px;
-  border-radius: 6px;
-  background: rgba(0, 0, 0, 0.15);
-}
-
-.volume-row .volume-label {
-  font-size: 12px;
-  width: 80px;
-  flex-shrink: 0;
-  color: var(--text-color);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.volume-row input[type="range"] {
-  flex: 1;
-  height: 4px;
-  accent-color: var(--accent-color);
-}
-
-.volume-row .volume-value {
-  font-size: 11px;
-  color: var(--text-muted);
-  width: 36px;
-  text-align: right;
-  flex-shrink: 0;
-}
-
-.volume-row.system-volume {
-  margin-top: 4px;
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.dropdown-section {
-  margin-bottom: 20px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--panel-border);
-}
-
-.dropdown-section:last-of-type {
-  margin-bottom: 0;
-  padding-bottom: 0;
-  border-bottom: none;
-}
-
-.dropdown-section h4 {
-  margin: 0 0 12px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
-.dropdown-section table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.dropdown-section td {
-  padding: 6px 0;
-  font-size: 13px;
-}
-
-.dropdown-section td:first-child {
-  width: 80px;
-}
-
-.dropdown-footer {
-  display: flex;
-  justify-content: space-between;
-  font-size: 11px;
-  color: var(--text-muted);
-  padding-top: 12px;
-}
-
-/* Setting rows in dropdown */
-.setting-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 10px;
-}
-
-.setting-row:last-child {
-  margin-bottom: 0;
-}
-
-.setting-row label {
-  flex: 1;
-  font-size: 13px;
-  min-width: 80px;
-}
-
-.setting-row input[type="range"] {
-  width: 80px;
-  accent-color: var(--accent-color);
-}
-
-.setting-row span {
-  width: 45px;
-  font-size: 12px;
-  color: var(--text-muted);
-  text-align: right;
-}
-
-kbd {
-  display: inline-block;
-  padding: 4px 8px;
-  background-color: rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-  font-family: monospace;
-  font-size: 12px;
-}
-
-/* =============================================================================
-   Dropdown - View Mode Toggle
-   ============================================================================= */
-
-.view-mode-row {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  margin-bottom: 16px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--panel-border);
-}
-
-.view-mode-btn {
-  flex: 1;
-  padding: 10px 16px;
-  background: rgba(0, 0, 0, 0.2);
-  border: 1px solid transparent;
-  border-radius: 6px;
-  color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.15s;
-  text-align: center;
-}
-
-.view-mode-btn:hover {
-  background: var(--hover-color);
-}
-
-.view-mode-btn.active {
-  background: var(--accent-color);
-  color: white;
-}
-
-/* =============================================================================
-   Dropdown - Column Layout (Dual Mode)
-   ============================================================================= */
-
-.column-layout {
-  display: grid;
-  /* minmax(0, 1fr), not 1fr. `1fr` is minmax(auto, 1fr) and the auto minimum is
-     the item's min-content size, so any descendant that cannot wrap pins the
-     track open. A `white-space: nowrap` device name did exactly that: the tracks
-     computed to 339.758px each inside a 358px panel and the columns overflowed
-     the dropdown by ~320px. Same trap as flex `min-width: auto`, one level up. */
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.column {
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 8px;
-  padding: 12px;
-}
-
-.column-header {
-  font-size: 11px;
-  font-weight: 600;
-  margin-bottom: 10px;
-  text-align: center;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-/* =============================================================================
-   Dropdown - Input Options
-   ============================================================================= */
-
-.input-option {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  margin-bottom: 4px;
-  transition: all 0.15s;
-}
-
-.input-option:last-child {
-  margin-bottom: 0;
-}
-
-.input-option:hover {
-  background-color: var(--hover-color);
-}
-
-.input-option.selected {
-  background-color: var(--accent-color);
-}
-
-.input-option .num {
-  font-size: 11px;
-  font-weight: 600;
-  opacity: 0.6;
-  width: 16px;
-}
-
-.input-option.selected .num {
-  opacity: 1;
-}
-
-.input-option .name {
-  font-size: 13px;
-}
-
-/* =============================================================================
-   Dropdown - Single Input List (Single Mode)
-   ============================================================================= */
-
-.single-input-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 16px;
-}
-
-.single-input-option {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 14px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.single-input-option:hover {
-  background-color: var(--hover-color);
-}
-
-.single-input-option.selected {
-  background-color: var(--accent-color);
-}
-
-.single-input-option .num {
-  font-size: 12px;
-  font-weight: 600;
-  opacity: 0.6;
-  width: 18px;
-}
-
-.single-input-option.selected .num {
-  opacity: 1;
-}
-
-.single-input-option .name {
-  font-size: 14px;
-}
-
-/* =============================================================================
-   Dropdown - Settings Button
-   ============================================================================= */
-
-.settings-btn {
-  width: 100%;
-  padding: 10px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--panel-border);
-  border-radius: 6px;
-  color: var(--text-muted);
-  font-size: 12px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  transition: all 0.15s;
-}
-
-.settings-btn:hover {
-  background: var(--hover-color);
-  color: var(--text-color);
-}
-
-.settings-btn .icon {
-  font-size: 14px;
-}
-
-/* =============================================================================
-   Settings Modal
-   ============================================================================= */
-
-.settings-modal-content {
-  background: var(--panel-bg);
-  border-radius: 12px;
-  padding: 24px;
-  backdrop-filter: blur(20px);
-  border: 1px solid var(--panel-border);
-  max-width: 500px;
-  width: 90%;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 24px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--panel-border);
-}
-
-.modal-header h2 {
-  font-size: 18px;
-  font-weight: 500;
-  margin: 0;
-}
-
-.close-btn {
-  width: 32px;
-  height: 32px;
-  background: transparent;
-  border: none;
-  border-radius: 6px;
-  color: var(--text-muted);
-  font-size: 18px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.15s;
-}
-
-.close-btn:hover {
-  background: var(--hover-color);
-  color: var(--text-color);
-}
-
-.settings-section {
-  margin-bottom: 28px;
-}
-
-.settings-section:last-of-type {
-  margin-bottom: 0;
-}
-
-.settings-section h3 {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  margin: 0 0 14px 0;
-}
-
-/* =============================================================================
-   Settings Modal - Input Name List
-   ============================================================================= */
-
-.input-name-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.input-name-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.input-name-row .num {
-  width: 24px;
-  height: 24px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  font-weight: 600;
-  flex-shrink: 0;
-}
-
-.input-name-row input[type="text"] {
-  flex: 1;
-  padding: 10px 12px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--panel-border);
-  border-radius: 6px;
-  color: var(--text-color);
-  font-size: 13px;
-  outline: none;
-  transition: border-color 0.15s;
-}
-
-.input-name-row input[type="text"]:focus {
-  border-color: var(--accent-color);
-}
-
-.input-name-row .default-btn {
-  padding: 8px 12px;
-  background: transparent;
-  border: 1px solid var(--panel-border);
-  border-radius: 6px;
-  color: var(--text-muted);
-  font-size: 11px;
-  cursor: pointer;
-  transition: all 0.15s;
-  white-space: nowrap;
-}
-
-.input-name-row .default-btn:hover {
-  background: var(--hover-color);
-}
-
-.input-name-row .default-btn.active {
-  background: rgba(245, 158, 11, 0.2);
-  border-color: #f59e0b;
-  color: #f59e0b;
-}
-
-.input-name-row.disabled input[type="text"] {
-  opacity: 0.4;
-}
-
-.input-name-row.disabled .default-btn {
-  opacity: 0.4;
-  pointer-events: none;
-}
-
-/* =============================================================================
-   Settings Modal - Slider Rows
-   ============================================================================= */
-
-.slider-row {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 16px;
-}
-
-.slider-row:last-child {
-  margin-bottom: 0;
-}
-
-.slider-row label {
-  width: 100px;
-  font-size: 13px;
-  flex-shrink: 0;
-}
-
-.slider-row input[type="range"] {
-  flex: 1;
-  accent-color: var(--accent-color);
-}
-
-.slider-row .value {
-  width: 50px;
-  text-align: right;
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-/* =============================================================================
-   Settings Modal - Audio Controls
-   ============================================================================= */
-
-.audio-group {
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 8px;
-  padding: 14px;
-  margin-bottom: 12px;
-}
-
-.audio-group:last-child {
-  margin-bottom: 0;
-}
-
-.audio-label {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-bottom: 12px;
-  font-weight: 500;
-}
-
-/* =============================================================================
-   Settings Modal - No-Signal Setup Card
-   ============================================================================= */
-
-.setup-card {
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 8px;
-  padding: 16px;
-}
-
-.setup-card p {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin: 0 0 12px 0;
-  line-height: 1.5;
-}
-
-.setup-btn-row {
-  display: flex;
-  gap: 10px;
-}
-
-.setup-btn-row button {
-  flex: 1;
-  padding: 10px 16px;
-  border-radius: 6px;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-/* =============================================================================
-   Settings Modal - Shortcuts Table
-   ============================================================================= */
-
-/* =============================================================================
-   Shortcut hints (#258)
-   ============================================================================= */
-
-/* The key chip beside a dropdown control. Quieter than the kbd chips in the
-   Settings table -- this is a hint next to a control the operator is already
-   looking at, not a reference they came to read -- but only just.
-   
-   The first attempt used 10px at opacity 0.55, which looked right on a laptop
-   and disappeared entirely on the wall: 6000x1200 in a lit room, and 12px is
-   already this UI's floor for body text. A hint nobody can read fails at the one
-   thing the hints are for, so these are sized off the app's existing 12px rather
-   than shrunk until they stopped competing. */
-.shortcut-hint {
-  margin-left: auto;
-  flex-shrink: 0;
-  opacity: 0.7;
-}
-
-.shortcut-hint kbd {
-  padding: 2px 6px;
-  font-size: 11px;
-}
-
-/* On a selected row or the active view-mode button the chip sits on the accent
-   colour, where a translucent white loses most of its contrast. */
-.input-option.selected .shortcut-hint,
-.single-input-option.selected .shortcut-hint,
-.view-mode-btn.active .shortcut-hint {
-  opacity: 0.9;
-}
-
-.input-option.selected .shortcut-hint kbd,
-.single-input-option.selected .shortcut-hint kbd,
-.view-mode-btn.active .shortcut-hint kbd {
-  background-color: rgba(255, 255, 255, 0.22);
-}
-
-/* Inside a view-mode button the hint follows the label rather than being pushed
-   to the far edge -- the button is centred text, so margin-left:auto would drag
-   the chip away from the word it belongs to. */
-.view-mode-btn .shortcut-hint {
-  margin-left: 6px;
-}
-
-/* The name takes the room the chip does not, so a long device label truncates
-   instead of pushing the chip out of the row. */
-/* =============================================================================
-   Input thumbnails (#242)
-   ============================================================================= */
-
-/* A fixed tile size, and a different arrangement per list, because the two lists
-   are very different widths.
-   
-   The first attempt made the tile the full row width. Measured at a 1280x800
-   window that gave 292x164 tiles and 218px rows in the single list -- 1166px of
-   content in a 640px panel, so a four-input picker scrolled. Absurd for something
-   you hover over to choose an input.
-   
-   A fixed 128x72 is enough to recognise what an input is showing, and it changes
-   what fits: in the single list (~322px rows) the name sits BESIDE the tile; in a
-   dual column (~149px rows) it goes below. Two rules, each matching its width,
-   rather than one rule that is wrong in one of them. */
-:root {
-  --input-thumb-w: 128px;
-  --input-thumb-h: 72px;
-}
-
-/* Dual columns: tile above, name below. No room for anything else at ~149px. */
-.input-option {
-  flex-direction: column;
-  align-items: stretch;
-}
-
-/* Single list: tile left, name and chip filling the rest. */
-.single-input-option {
-  flex-direction: row;
-  align-items: center;
-}
-
-.input-thumb {
-  width: var(--input-thumb-w);
-  height: var(--input-thumb-h);
-  border-radius: 4px;
-  background-color: rgba(0, 0, 0, 0.5);
-  border: 1px solid var(--panel-border);
-  /* cover, matching the crop snapshotFromVideo() already applies, so a 4:3
-     capture is cropped rather than squashed in both places. */
-  background-size: cover;
-  background-position: center;
-  /* Never absorb the row's slack: the name is what should flex. */
-  flex-shrink: 0;
-}
-
-/* The tile is rendered before any still exists and is its own placeholder, so a
-   row does not change height when a snapshot lands. This only marks the arrival,
-   for anything that wants to style it differently. */
-.input-thumb.has-thumb {
-  border-color: transparent;
-}
-
-/* Name and chip on one line. This is the flex row that
-   `.shortcut-hint { margin-left: auto }` pushes the chip to the end of. */
-.input-option-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  /* min-width:0 so a long name ellipsises inside this box rather than widening
-     it and pushing the chip out -- the same reason it is on the name itself. */
-  min-width: 0;
-  flex: 1 1 auto;
-}
-
-/* Truncation applies only where a chip shares the row -- the single-view list.
-   The dual columns carry no chip (see buildOption in renderer.js: the number keys
-   set both feeds, so a per-side row must not advertise one), so their names wrap
-   as they did before the chips existed. At ~173px a column has no room to both
-   truncate and stay readable. */
-.single-input-option .input-option-name {
-  /* min-width:0 is what actually lets a flex item shrink below its content
-     width; without it the default min-width:auto keeps the name at full size and
-     pushes the chip out of the row instead of ellipsising. */
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.shortcut-note {
-  color: var(--text-muted);
-}
-
-.shortcuts-table {
-  width: 100%;
-  font-size: 12px;
-  border-collapse: collapse;
-}
-
-.shortcuts-table td {
-  padding: 8px 0;
-  border-bottom: 1px solid var(--panel-border);
-}
-
-.shortcuts-table tr:last-child td {
-  border-bottom: none;
-}
-
-.shortcuts-table td:first-child {
-  color: var(--text-muted);
-  width: 80px;
-}
-
-/* =============================================================================
-   Settings Modal - Footer
-   ============================================================================= */
-
-.modal-footer {
-  margin-top: 24px;
-  padding-top: 16px;
-  border-top: 1px solid var(--panel-border);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-/* =============================================================================
-   Input List (legacy - keeping for compatibility)
-   ============================================================================= */
-
-#input-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.input-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px;
-  background-color: var(--hover-color);
-  border-radius: 8px;
-}
-
-.input-item.disabled {
-  opacity: 0.5;
-}
-
-.input-item .input-number {
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: var(--accent-color);
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 600;
-  flex-shrink: 0;
-}
-
-.input-name-wrapper {
-  flex: 1;
-  min-width: 0;
-}
-
-.input-name-field {
-  width: 100%;
-  padding: 6px 10px;
-  background-color: rgba(255, 255, 255, 0.1);
-  border: 1px solid transparent;
-  border-radius: 6px;
-  color: var(--text-color);
-  font-size: 13px;
-  font-family: inherit;
-  outline: none;
-  transition: border-color 0.2s ease, background-color 0.2s ease;
-}
-
-.input-name-field:hover {
-  background-color: rgba(255, 255, 255, 0.15);
-}
-
-.input-name-field:focus {
-  border-color: var(--accent-color);
-  background-color: rgba(255, 255, 255, 0.2);
-}
-
-.input-item .input-actions {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.input-item button {
-  padding: 6px 12px;
-  background-color: transparent;
-  border: 1px solid var(--panel-border);
-  border-radius: 6px;
-  color: var(--text-color);
-  font-size: 12px;
-  cursor: pointer;
-  transition: background-color 0.2s ease;
-}
-
-.input-item button:hover:not(:disabled) {
-  background-color: var(--hover-color);
-}
-
-.input-item button:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.input-item button.active {
-  background-color: var(--accent-color);
-  border-color: var(--accent-color);
-}
-
-/* =============================================================================
-   Settings Controls
-   ============================================================================= */
-
-.panel-section {
-  margin-top: 20px;
-  padding-top: 16px;
-  border-top: 1px solid var(--panel-border);
-}
-
-.setting-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.setting-row label {
-  flex: 1;
-  font-size: 14px;
-}
-
-.setting-row input[type="range"] {
-  width: 100px;
-  accent-color: var(--accent-color);
-}
-
-.setting-row span {
-  width: 50px;
-  font-size: 12px;
-  color: var(--text-muted);
-  text-align: right;
-}
-
-/* Layout Buttons */
-.layout-buttons {
-  display: flex;
-  gap: 6px;
-}
-
-.layout-btn {
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: transparent;
-  border: 1px solid var(--panel-border);
-  border-radius: 6px;
-  color: var(--text-color);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color 0.2s ease, border-color 0.2s ease;
-}
-
-.layout-btn:hover {
-  background-color: var(--hover-color);
-}
-
-.layout-btn.active {
-  background-color: var(--accent-color);
-  border-color: var(--accent-color);
-}
-
-/* =============================================================================
-   Toggle Switch
-   ============================================================================= */
-
-.toggle-switch {
-  position: relative;
-  width: 44px;
-  height: 24px;
-  background-color: rgba(255, 255, 255, 0.2);
-  border-radius: 12px;
-  cursor: pointer;
-  transition: background-color 0.2s ease;
-  flex-shrink: 0;
-}
-
-.toggle-switch.active {
-  background-color: var(--accent-color);
-}
-
-.toggle-switch::after {
-  content: '';
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 20px;
-  height: 20px;
-  background-color: white;
-  border-radius: 50%;
-  transition: transform 0.2s ease;
-}
-
-.toggle-switch.active::after {
-  transform: translateX(20px);
-}
-
-/* =============================================================================
-   Settings Form Elements
-   ============================================================================= */
-
-.settings-description {
-  font-size: 13px;
-  color: var(--text-muted);
-  margin: 0 0 16px;
-  line-height: 1.5;
-}
-
-.toggle-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 12px;
-}
-
-.toggle-row label {
-  font-size: 14px;
-  color: var(--text-color);
-}
-
-.remote-keyboard-fields,
-.artnet-fields {
-  margin-top: 16px;
-  padding: 16px;
-  background: rgba(0, 0, 0, 0.15);
-  border-radius: 8px;
-}
-
-.remote-keyboard-fields.hidden,
-.artnet-fields.hidden {
-  display: none;
-}
-
-.input-row {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 12px;
-}
-
-.input-row:last-child {
-  margin-bottom: 0;
-}
-
-.input-row label {
-  font-size: 12px;
-  color: var(--text-muted);
-  font-weight: 500;
-}
-
-.input-row input[type="text"],
-.input-row input[type="password"],
-.input-row select {
-  padding: 10px 12px;
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 6px;
-  color: var(--text-color);
-  font-size: 14px;
-  outline: none;
-  transition: border-color 0.15s, box-shadow 0.15s;
-}
-
-.input-row input[type="text"]:focus,
-.input-row input[type="password"]:focus,
-.input-row select:focus {
-  border-color: var(--accent-color);
-  box-shadow: 0 0 0 3px rgba(130, 180, 255, 0.2);
-}
-
-.input-row input[type="text"]::placeholder,
-.input-row input[type="password"]::placeholder {
-  color: var(--text-muted);
-  opacity: 0.6;
-}
-
-.artnet-saver-list {
-  max-height: 260px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding-right: 4px;
-}
-
-.artnet-saver-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.artnet-saver-row .artnet-saver-name {
-  flex: 1;
-  min-width: 0;
-  font-size: 13px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.artnet-saver-row select {
-  flex: 0 0 190px;
-  padding: 6px 8px;
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 6px;
-  color: var(--text-color);
-  font-size: 12px;
-  outline: none;
-}
-
-.artnet-saver-row select:focus {
-  border-color: var(--accent-color);
 }
 
 /* =============================================================================
@@ -1924,311 +1277,564 @@ kbd {
 }
 
 /* =============================================================================
-   Setup Wizard Modal
+   Settings modal
    ============================================================================= */
 
 .modal {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.9);
+  inset: 0;
+  z-index: 300;
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  background-color: rgba(2, 12, 23, 0.72);
   -webkit-app-region: no-drag;
 }
 
-.modal.hidden {
-  display: none;
+.modal,
+.modal * {
+  cursor: default;
 }
 
-.modal-content {
-  background-color: var(--panel-bg);
-  border-radius: 12px;
-  padding: 40px;
-  max-width: 700px;
-  width: 90%;
-  max-height: 90vh;
+/* 920x680, shrunk to fit a small laptop window. */
+.settings-modal-content {
+  width: min(920px, calc(100vw - 32px));
+  height: min(680px, calc(100vh - 32px));
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  background-color: var(--surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-container);
+  overflow: hidden;
+  animation: modalIn var(--motion-ms) var(--ease);
+}
+
+@keyframes modalIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-modal-content { animation: none; }
+}
+
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 24px 12px 16px;
+  background-color: var(--well);
+  border-right: 1px solid var(--hairline);
+  min-height: 0;
   overflow-y: auto;
 }
 
-.modal-content h2 {
-  margin-bottom: 16px;
-  font-size: 28px;
+.settings-nav h2 {
+  padding: 0 12px 16px;
+  font: 800 22px/1.2 var(--font-sans);
+  letter-spacing: -0.03em;
 }
 
-.wizard-instructions {
-  color: var(--text-muted);
-  margin-bottom: 30px;
-  line-height: 1.6;
-}
-
-.wizard-steps {
-  margin-bottom: 30px;
-}
-
-.wizard-step {
-  display: flex;
-  gap: 20px;
-  margin-bottom: 30px;
-}
-
-.step-number {
-  flex-shrink: 0;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background-color: var(--accent-color);
+.settings-nav-item {
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-weight: bold;
-  font-size: 18px;
-}
-
-.step-content {
-  flex: 1;
-}
-
-.step-content h3 {
-  margin-bottom: 8px;
-  font-size: 18px;
-}
-
-.step-content p {
-  color: var(--text-muted);
-  line-height: 1.5;
-}
-
-.wizard-input-select {
-  display: flex;
-  gap: 20px;
-  margin-top: 12px;
-}
-
-.wizard-input-select label {
-  display: flex;
-  align-items: center;
+  justify-content: space-between;
   gap: 8px;
-  cursor: pointer;
-  padding: 10px 16px;
-  background-color: rgba(255, 255, 255, 0.05);
-  border-radius: 6px;
-  transition: background-color 0.2s;
-}
-
-.wizard-input-select label:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-}
-
-.wizard-input-select input[type="radio"] {
-  cursor: pointer;
-}
-
-.wizard-preview {
-  margin-top: 12px;
-  border: 2px solid var(--panel-border);
-  border-radius: 8px;
-  overflow: hidden;
-  background-color: #000;
-}
-
-#wizard-preview-canvas {
-  display: block;
-  width: 100%;
-  height: auto;
-  max-height: 300px;
-  object-fit: contain;
-}
-
-.preview-status {
-  padding: 12px;
-  text-align: center;
-  background-color: rgba(0, 0, 0, 0.5);
-  font-size: 14px;
-  color: var(--text-muted);
-}
-
-.wizard-actions {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 20px;
-}
-
-.btn-primary, .btn-secondary {
-  flex: 1;
-  padding: 14px 24px;
-  border: none;
-  border-radius: 8px;
-  font-size: 16px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-primary {
-  background-color: var(--accent-color);
-  color: white;
-}
-
-.btn-primary:hover {
-  background-color: #0052cc;
-  transform: translateY(-1px);
-}
-
-.btn-primary:active {
-  transform: translateY(0);
-}
-
-.btn-secondary {
-  background-color: rgba(255, 255, 255, 0.1);
-  color: var(--text-color);
-}
-
-.btn-secondary:hover {
-  background-color: rgba(255, 255, 255, 0.15);
-}
-
-.wizard-footer {
-  text-align: center;
-  color: var(--text-muted);
-  font-size: 13px;
-}
-
-.setup-btn {
-  width: 100%;
-  padding: 12px;
-  background-color: rgba(0, 102, 255, 0.2);
-  border: 1px solid var(--accent-color);
-  border-radius: 6px;
-  color: var(--text-color);
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.setup-btn:hover {
-  background-color: rgba(0, 102, 255, 0.3);
-}
-
-/* =============================================================================
-   No-signal reference manager (#161, #160)
-
-   A device with no reference is silently inert -- detection returns "has
-   signal" unconditionally and logs nothing -- so the row badge exists to make
-   that state visible rather than leaving it to a console command.
-   ============================================================================= */
-
-.input-name-row .ref-toggle-btn {
-  padding: 8px 12px;
+  min-height: 44px;
+  padding: 0 12px 0 14px;
+  border: 0;
+  border-radius: var(--radius-pill);
   background: transparent;
-  border: 1px solid var(--panel-border);
-  border-radius: 6px;
   color: var(--text-muted);
-  font-size: 11px;
+  font: 700 14px/1.2 var(--font-sans);
+  letter-spacing: -0.02em;
+  text-align: left;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background-color var(--motion), color var(--motion);
+}
+
+.settings-nav-item:hover {
+  color: var(--text-color);
+}
+
+.settings-nav-item.active {
+  background-color: var(--raised);
+  color: var(--text-color);
+}
+
+.nav-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: 400 12px/1 var(--font-mono);
+  color: var(--text-muted);
   white-space: nowrap;
 }
 
-.input-name-row .ref-toggle-btn:hover {
-  background: var(--hover-color);
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background-color: rgba(255, 255, 255, 0.3);
 }
 
-/* Amber rather than red: an input with no reference is unconfigured, not
-   broken, and several inputs legitimately never need one. */
-.input-name-row .ref-toggle-btn.warn {
-  border-color: rgba(245, 158, 11, 0.5);
-  color: rgb(245, 158, 11);
+.status-dot.ok { background-color: var(--signal-green); }
+.status-dot.warn { background-color: var(--signal-orange); }
+
+.nav-count {
+  min-width: 22px;
+  padding: 3px 7px;
+  border-radius: var(--radius-pill);
+  background-color: var(--signal-orange);
+  color: var(--well);
+  font-weight: 700;
+  text-align: center;
+}
+
+.modal-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: auto;
+  padding: 16px 12px 0;
+  font: 400 12px/1.4 var(--font-mono);
+  color: var(--text-muted);
+}
+
+.settings-body {
+  position: relative;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 28px 32px 32px;
+}
+
+.settings-body > .close-btn {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 1;
+}
+
+.settings-section h3 {
+  margin: 4px 56px 20px 0;
+  font: 800 22px/1.2 var(--font-sans);
+  letter-spacing: -0.03em;
+}
+
+.settings-description {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+.field-hint {
+  margin-left: 6px;
+  font: 400 12px/1 var(--font-mono);
+  color: var(--text-muted);
+}
+
+/* Toggle switch: a button with role="switch". The track is drawn by ::before and
+   the knob by ::after so the button itself can stay a full 44px hit target. */
+.toggle-switch {
+  position: relative;
+  flex-shrink: 0;
+  width: 56px;
+  height: 44px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+
+.toggle-switch::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 8px;
+  width: 48px;
+  height: 28px;
+  border-radius: var(--radius-pill);
+  background-color: rgba(255, 255, 255, 0.18);
+  transition: background-color var(--motion);
+}
+
+.toggle-switch::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 12px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background-color: var(--text-color);
+  transition: transform var(--motion);
+}
+
+.toggle-switch.active::before {
+  background-color: var(--sbp-blue);
+}
+
+.toggle-switch.active::after {
+  transform: translateX(20px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toggle-switch::after { transition: none; }
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 44px;
+  margin-bottom: 12px;
+}
+
+.toggle-row label {
+  font: 700 14px/1.3 var(--font-sans);
+  letter-spacing: -0.02em;
+}
+
+.toggle-row-described {
+  align-items: flex-start;
+  padding: 14px 16px;
+  border-radius: var(--radius-container);
+  background-color: var(--raised);
+}
+
+.toggle-row-described .settings-description {
+  margin: 4px 0 0;
+}
+
+.input-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.input-row > label,
+.slider-row > label {
+  font: 700 13px/1.3 var(--font-sans);
+  letter-spacing: -0.02em;
+}
+
+.settings-body input[type="text"],
+.settings-body input[type="password"],
+.settings-body select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  background-color: var(--well);
+  color: var(--text-color);
+  font: 400 14px/1.2 var(--font-sans);
+  -webkit-app-region: no-drag;
+}
+
+.settings-body input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.settings-body input:focus,
+.settings-body select:focus {
+  outline: none;
+  border-color: var(--sbp-blue);
+}
+
+.input-with-button {
+  display: flex;
+  gap: 8px;
+}
+
+.slider-row {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.status-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+  margin: -4px 0 14px;
+  font: 400 12px/1.4 var(--font-mono);
+  color: var(--text-muted);
+}
+
+.status-line:empty {
+  display: none;
+}
+
+.remote-keyboard-fields,
+.artnet-fields {
+  padding-top: 4px;
+}
+
+/* =============================================================================
+   Settings: Inputs table
+   ============================================================================= */
+
+.input-name-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 16px;
+}
+
+/* Key, On, Name, Startup, No-signal. */
+.input-name-row,
+.input-table-head {
+  display: grid;
+  grid-template-columns: 40px 56px minmax(0, 1fr) 96px 132px;
+  align-items: center;
+  gap: 10px;
+}
+
+.input-table-head {
+  padding: 0 8px 6px;
+  font: 400 12px/1 var(--font-mono);
+  color: var(--text-muted);
+}
+
+.input-name-row {
+  padding: 4px 8px;
+  border-radius: 10px;
+}
+
+.input-name-row:hover {
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+.input-key {
+  font: 400 14px/1 var(--font-mono);
+  text-align: center;
+  color: var(--text-color);
+}
+
+.input-name-row.disabled .input-key,
+.input-name-row.disabled .input-name-field {
+  color: var(--text-muted);
+}
+
+.startup-pill {
+  width: 100%;
+}
+
+.startup-pill[aria-checked="true"] {
+  background-color: var(--sbp-blue);
+  border-color: var(--sbp-blue);
+}
+
+.ref-toggle-btn {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-weight: 400;
+  font-size: 12px;
+  letter-spacing: 0;
+}
+
+.ref-toggle-btn.warn {
+  border-color: var(--signal-orange);
+  color: var(--signal-orange);
+}
+
+.input-row-note {
+  grid-column: 3 / -1;
+  font: 400 12px/1.3 var(--font-mono);
+  color: var(--signal-orange);
 }
 
 .ref-panel {
-  padding: 10px 12px 14px;
-  margin: -4px 0 8px;
-  border-left: 2px solid var(--panel-border);
-}
-
-.ref-panel.hidden {
-  display: none;
+  margin: 4px 8px 10px 114px;
+  padding: 14px 16px;
+  border-radius: var(--radius-container);
+  background-color: var(--well);
+  border: 1px solid var(--hairline);
 }
 
 .ref-grid {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+  margin-bottom: 10px;
 }
 
 .ref-item {
   position: relative;
 }
 
-/* Thumbnails are the stored ImageData drawn directly, so they are already at
-   the detect resolution -- no second copy is kept for the UI. */
 .ref-thumb {
-  width: 128px;
-  height: auto;
   display: block;
-  border: 1px solid var(--panel-border);
-  border-radius: 4px;
+  width: 128px;
+  height: 72px;
+  border-radius: 6px;
+  object-fit: cover;
+  background-color: #000;
 }
 
 .ref-delete {
   position: absolute;
-  top: -6px;
-  right: -6px;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  line-height: 18px;
-  text-align: center;
-  border: 1px solid var(--panel-border);
+  top: -10px;
+  right: -10px;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--hairline);
   border-radius: 50%;
-  background: var(--panel-bg, #1a1a1a);
-  color: var(--text-muted);
-  font-size: 14px;
+  background-color: var(--raised);
+  color: var(--text-color);
+  font-size: 16px;
+  line-height: 1;
   cursor: pointer;
-}
-
-.ref-delete:hover {
-  border-color: rgba(239, 68, 68, 0.6);
-  color: rgb(239, 68, 68);
 }
 
 .ref-empty,
 .ref-note {
-  margin: 6px 0 0;
-  font-size: 11px;
-  color: var(--text-muted);
+  font-size: 13px;
   line-height: 1.5;
+  color: var(--text-muted);
+  margin-bottom: 12px;
 }
+
+.ref-capture-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.ref-capture-msg {
+  font: 400 12px/1.4 var(--font-mono);
+  color: var(--text-muted);
+}
+
+.ref-capture-msg.ok { color: var(--signal-green); }
+.ref-capture-msg.error { color: var(--signal-orange); }
 
 .ref-orphans {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  margin-bottom: 10px;
-  border: 1px solid rgba(245, 158, 11, 0.4);
-  border-radius: 6px;
-  font-size: 11px;
-  color: var(--text-muted);
+  gap: 16px;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+  border: 1px solid var(--signal-orange);
+  border-radius: var(--radius-container);
+  font-size: 13px;
   line-height: 1.5;
 }
 
-.ref-prune-btn {
-  padding: 6px 10px;
-  background: transparent;
-  border: 1px solid var(--panel-border);
-  border-radius: 6px;
-  color: var(--text-muted);
-  font-size: 11px;
-  cursor: pointer;
-  white-space: nowrap;
+.ref-orphans-text {
+  flex: 1;
 }
 
-.ref-prune-btn:hover {
-  background: var(--hover-color);
+.ref-orphans-text span {
+  display: block;
+  color: var(--text-muted);
+}
+
+/* =============================================================================
+   Settings: Layout diagram
+   ============================================================================= */
+
+/* The 5:1 wall drawn flat and to scale: side borders, the two halves and the
+   centre gap, with what is on each half. Widths are flex-grow ratios set from JS
+   in screen pixels, so the drawing is proportional whatever the window size. */
+.layout-diagram {
+  display: flex;
+  aspect-ratio: 5 / 1;
+  width: 100%;
+  margin-bottom: 20px;
+  padding: 6px;
+  border-radius: var(--radius-container);
+  background-color: var(--well);
+  border: 1px solid var(--hairline);
+}
+
+.layout-diagram > div {
+  min-width: 0;
+}
+
+.layout-half {
+  display: flex;
+  align-items: flex-end;
+  padding: 8px 10px;
+  border-radius: 4px;
+  background-color: var(--sbp-blue);
+  font: 700 12px/1.2 var(--font-sans);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.layout-gap,
+.layout-border {
+  background: repeating-linear-gradient(135deg,
+    rgba(255, 255, 255, 0.10) 0 2px, transparent 2px 6px);
+}
+
+/* =============================================================================
+   Settings: Art-Net per-screensaver grid
+   ============================================================================= */
+
+.artnet-saver-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 16px;
+}
+
+.artnet-saver-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.artnet-saver-row .artnet-saver-name {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.artnet-saver-row.customised .artnet-saver-name {
+  color: var(--turquoise);
+}
+
+.settings-body .artnet-saver-row select {
+  min-height: 40px;
+  font-size: 13px;
+  padding: 0 10px;
+}
+
+/* A narrow window: stack the table cells that would otherwise squeeze the name. */
+@media (max-width: 760px) {
+  .settings-modal-content {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .settings-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    border-right: 0;
+    border-bottom: 1px solid var(--hairline);
+  }
+
+  .settings-nav .modal-footer { display: none; }
+  .artnet-saver-list { grid-template-columns: 1fr; }
+  .ref-panel { margin-left: 8px; }
+}
+
+/* The legend tab sits where the Close pill goes; hide it while the controls are
+   open, and close the legend itself (openDropdown does). */
+body:has(#dropdown-panel.touch-open) #legend-trigger {
+  display: none;
 }

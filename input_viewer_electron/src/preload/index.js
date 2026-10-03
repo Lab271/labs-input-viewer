@@ -45,6 +45,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // LAN-mutating capability out of the renderer.
   artnetSend: (request) => ipcRenderer.invoke('artnet-send', request),
 
+  // Remote keyboard presses, through main for the same CORS reason.
+  remoteKeySend: (request) => ipcRenderer.invoke('remote-key-send', request),
+
   // Updater events
   onUpdaterProgress: (callback) => {
     ipcRenderer.on('updater-progress', (event, percent) => callback(percent))

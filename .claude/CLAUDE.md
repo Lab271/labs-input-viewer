@@ -114,14 +114,56 @@ Four things worth not re-learning:
   selection change, which can happen mid-sweep, so a held node reference goes stale where a
   cache entry does not. Re-opening shows the previous still immediately while a fresh sweep
   replaces it, rather than flashing back to placeholders.
-- **The tile is a fixed 128x72, not the row width.** A first pass used `width: 100%` with
-  `aspect-ratio`, which measured 292x164 tiles and 218px rows in the single list — 1166px of
-  content in a 640px panel, so a four-input picker scrolled. At a fixed size the name fits
-  *beside* the tile in the single list (~322px rows) and *below* it in a dual column
-  (~149px). Two rules, each matching its width.
-- **Both open paths trigger it.** Hover (`mouseenter` on the trigger, which already existed
-  for the cursor) and touch (`toggleDropdown`). The panel's visibility is pure CSS, so that
-  listener is the only JS signal that a hover-open happened.
+- **The tile is a fixed 128x72, not the strip width.** A first pass used `width: 100%` with
+  `aspect-ratio`, which measured 292x164 tiles. The name sits under the tile, and the strip
+  scrolls sideways when the inputs don't fit.
+- **Both open paths go through `openDropdown()`.** Hover (`mouseenter` on the trigger) and
+  touch (`toggleDropdown`). That is where the sweep and the volume poll start.
+
+### The dropdown is laid over the wall (dropdown 2b)
+
+There is no panel. Opening it (`openDropdown`) fills `#wall-pickers` with one picker per
+half — the current input, a strip of 128x72 tiles, and that half's volume — plus a capsule
+at the top (Dual/Single, Output volume, Settings) and a Close pill at the bottom.
+`renderDropdownInputLists()` kept its name so every existing caller (device change, input
+switch by click or key, rename, enable/disable, layout) still refreshes it.
+
+| View | Multi-view | Pickers | Tap sets | Key chips |
+|---|---|---|---|---|
+| dual | on | Left half, Right half | that half | none (1-4 set both) |
+| dual | off | Both halves | both | 1-4 |
+| single | on | Whole wall | left | 1-4 |
+| single | off | Whole wall | both | 1-4 |
+
+`pickerPlan()` is that table in code. Things worth not re-learning:
+
+- **It stays open when the pointer leaves**, since it covers the wall and there is no
+  "outside". It closes with the Close pill, Esc, or after 30s with no pointer, touch or key
+  activity (`DROPDOWN_IDLE_MS`) so it can never sit over an unattended wall.
+- **`multiView` (default true) is new.** Off means the halves always carry the same input:
+  `setMultiView(false)` brings the right half in line, and `openInitialStreams` enforces it
+  at startup.
+- **Volume belongs to a side, not an input.** A "Both halves" picker sets both sides.
+- **The input-name toast is suppressed while it is open.** The pickers already name what is
+  on each half, and the toast would only be hidden underneath them.
+
+### Settings is a side-nav modal
+
+Four panes: Inputs, Layout, Remote keyboard, Art-Net lighting. The shortcut table and the
+separate No-Signal Detection section are gone: the legend has the shortcuts, and capture
+moved into each input's No-signal panel ("Capture from left/right half", for whichever half
+the device is on). Pure status logic (nav dots, status lines, the Key column,
+`remoteKeyUrl`) is in `src/renderer/settings-status.js`.
+
+- **Remote-keyboard presses go through main (`remote-key-send`)**, like Art-Net and for the
+  same CORS reason: a renderer `fetch` from `file://` with `X-API-Key` needs a preflight the
+  device does not answer.
+- **Shortcuts ignore every form control**, not just `<input>`: with a `<select>` focused, Q
+  used to quit. Escape still gets through.
+- **Esc does one thing per press**: with any panel open it closes panels and stops. Only
+  with nothing open does it unfreeze and leave fullscreen.
+- **The visual language is system fonts only.** The handoff's TT Interphases is licensed for
+  internal SBP use and this repo and its installers are public.
 
 ### Keyboard shortcuts live in one list (#258)
 
@@ -134,15 +176,15 @@ Four consumers read from it, and none of them keeps its own copy:
 | Consumer | How |
 |---|---|
 | the keydown handler | `SHORTCUTS_BY_KEY.get(event.key.toLowerCase())`, then `SHORTCUT_ACTIONS[id]` |
-| the dropdown | `renderShortcutHints()` labels Dual/Single; the **single-view** input rows get `inputKeyFor(index)` |
-| the Settings table | `renderShortcutHints()` fills `#shortcuts-table`, which ships empty |
-| the legend (dropup) | `renderShortcutLegend()` fills `#legend-grid`, which also ships empty |
+| the dropdown | `renderShortcutHints()` labels Dual/Single; tiles in pickers where a tap sets the whole wall get `inputKeyFor(index)` |
+| the legend (dropup) | `renderShortcutLegend()` fills `#legend-grid`, which ships empty |
 | `README.md` and `docs/USER_GUIDE.md` | still hand-written, but a test asserts every chip appears in both |
 
 The legend is the mirror of the dropdown, on the bottom edge: same hover-to-reveal, same
 slide, same `touch-open` class. It shows the **same rows** as the Settings table rather than a
-shortened "important ones" set -- that would be a fourth hand-maintained list, which is what
-this whole arrangement exists to remove. A test asserts the two carry identical chips.
+shortened "important ones" set -- that would be another hand-maintained list, which is what
+this whole arrangement exists to remove. Since the Settings table was dropped in the
+dropdown 2b redesign, the legend is the only rendered copy.
 
 Two things about it that measuring caught, both worth not repeating:
 
@@ -156,8 +198,7 @@ Two things about it that measuring caught, both worth not repeating:
   rows mean anything. Uneven row heights are the cheaper cost.
 
 Adding a key means adding one entry and one action. The entry alone gets you a
-row in the table and a hint in the dropdown with a key that does nothing, and a
-test fails for exactly that.
+row in the legend with a key that does nothing, and a test fails for exactly that.
 
 **Why this is worth the indirection.** There were four lists before, and three had
 drifted. The Settings table was missing `Q`, `V`, `+`/`-` and `F11`; README was
@@ -169,7 +210,7 @@ Two things about the UI side worth not re-learning:
 - The chips are sized off this UI's 12px floor, not shrunk until they stopped
   competing. A first pass at 10px / opacity 0.55 read fine on a laptop and was
   invisible on the wall -- 6000x1200 in a lit room. A test pins the floor.
-- The dropdown rows put the device name in a `<span>` with `min-width: 0`. Without
+- The dropdown tiles put the device name in a `<span>` with `min-width: 0`. Without
   it the flex default of `min-width: auto` holds a long capture-card label at full
   width and pushes the chip out of the row instead of ellipsising.
 
@@ -177,25 +218,16 @@ Past the fourth input row `inputKeyFor()` returns null and no chip is drawn. The
 wall can have more capture devices than there are number keys, and labelling a
 fifth row `5` would promise a binding that does not exist.
 
-**The dual columns carry no chip, and that is about correctness, not space.**
+**Per-half pickers carry no chip, and that is about correctness, not space.**
 `1`-`4` call `selectInput()` with the default `side='both'` and set BOTH feeds;
-clicking a row in the Left column calls `selectInputForSide(id, 'left')` and sets
-one. A chip on a per-side row documents a key that does something different from
-the control beside it. In single view one feed is shown, so setting both and
-setting that one are the same thing to the operator, and the chip is honest.
+a tap in the Left half picker calls `selectInputForSide(id, 'left')` and sets one.
+A chip there would document a key that does something different from the control
+beside it. Where a tap sets the whole wall (single view, or dual without
+Multi-view) the chip is honest, so it is shown.
 
-It was reported as a fit bug in dual view, and it was that as well. Two things had
-to be fixed:
-
-- `.column-layout` needed `minmax(0, 1fr)`, not `1fr`. A bare `1fr` is
-  `minmax(auto, 1fr)` and the auto minimum is the item's **min-content** size, so a
-  `white-space: nowrap` name pinned the tracks open: they computed to 339.758px
-  each inside a 358px panel and spilled ~320px out of the dropdown. Same trap as
-  flex `min-width: auto`, one level up — and the flex one was already fixed in this
-  file, which is how the grid one got missed.
-- Name truncation is scoped to `.single-input-option .input-option-name`, the only
-  list with a chip. A ~173px column has no room to both truncate and stay
-  readable, so dual-column names wrap as they did before the chips existed.
+The grid trap from the old dual columns still applies to the pickers' columns:
+`#wall-pickers` uses `minmax(0, 1fr)`, never a bare `1fr`, because `1fr` is
+`minmax(auto, 1fr)` and a `nowrap` name's min-content would pin the track open.
 
 ### Black-bar cropping and the 3840x768 hint
 

@@ -43,6 +43,11 @@ const {
   renderShortcutLegend, toggleLegend, closeLegend,
 } = await import('../src/renderer/renderer.js')
 
+/** The pickers currently rendered over the wall, and helpers to read them. */
+const pickers = () => [...elements.wallPickers.querySelectorAll('.wall-picker')]
+const tiles = (picker) => [...picker.querySelectorAll('.input-option')]
+const label = (picker) => picker.querySelector('.picker-label').textContent
+
 function reset(devices = []) {
   state.settings = { ...getDefaultSettings(), inputs: {} }
   state.devices = devices
@@ -58,51 +63,6 @@ function reset(devices = []) {
 beforeEach(() => {
   vi.clearAllMocks()
   reset()
-})
-
-describe('the Settings table', () => {
-  it('renders one row per shortcut, in list order', () => {
-    renderShortcutHints()
-    const rows = [...elements.shortcutsTable.querySelectorAll('tr')]
-    expect(rows).toHaveLength(SHORTCUTS.length)
-    expect(rows.map(r => r.children[1].textContent.split(' (')[0]))
-      .toEqual(SHORTCUTS.map(s => s.label))
-  })
-
-  it('prints each shortcut\'s keys as kbd chips', () => {
-    renderShortcutHints()
-    const rows = [...elements.shortcutsTable.querySelectorAll('tr')]
-    rows.forEach((row, i) => {
-      const chips = [...row.querySelectorAll('kbd')].map(k => k.textContent)
-      expect(chips, SHORTCUTS[i].id).toEqual(SHORTCUTS[i].chips)
-    })
-  })
-
-  it('shows the keys the old hardcoded table was missing', () => {
-    // The drift #258 was filed about: Q, V, +/- and F11 were bound but absent
-    // from the only place that listed the shortcuts.
-    renderShortcutHints()
-    const chips = [...elements.shortcutsTable.querySelectorAll('kbd')]
-      .map(k => k.textContent)
-    for (const key of ['Q', 'V', '+', '-', 'F11']) {
-      expect(chips, `missing ${key}`).toContain(key)
-    }
-  })
-
-  it('renders the caveat on the remote-keyboard rows', () => {
-    renderShortcutHints()
-    const notes = [...elements.shortcutsTable.querySelectorAll('.shortcut-note')]
-    expect(notes).toHaveLength(
-      SHORTCUTS.filter(s => s.note).length)
-    expect(notes[0].textContent).toContain('remote keyboard')
-  })
-
-  it('replaces its rows rather than appending on a re-render', () => {
-    renderShortcutHints()
-    renderShortcutHints()
-    expect(elements.shortcutsTable.querySelectorAll('tr'))
-      .toHaveLength(SHORTCUTS.length)
-  })
 })
 
 describe('the view-mode buttons', () => {
@@ -124,106 +84,128 @@ describe('the view-mode buttons', () => {
   })
 })
 
-describe('the dropdown input rows', () => {
-  // Chips go on the SINGLE-view list only.
+describe('the pickers over the wall (dropdown 2b)', () => {
+  // Chips go only where a tap does what the key does.
   //
-  // Not a layout compromise -- a correctness one. `1`-`4` call selectInput() with
-  // the default side='both' and set BOTH feeds; clicking a row in the Left column
-  // calls selectInputForSide(id, 'left') and sets one. A chip on a per-side row
-  // would document a key that does something different from the control beside it.
-  // In single view one feed is shown, so setting both and setting that one are the
-  // same thing to the operator.
-  //
-  // It was reported as a fit bug in dual view, and it was that too: a dual column
-  // is ~173px against the single list's ~358px.
+  // `1`-`4` call selectInput() with the default side='both' and set BOTH halves.
+  // A tap on a per-half picker sets one, so a chip there would document a
+  // different action. In single view, and in dual view without Multi-view, a tap
+  // sets the whole wall, so the chip is honest.
 
-  it('labels the first four rows of the single-view list with 1-4', () => {
-    reset([device('a', 'Cam A'), device('b', 'Cam B'), device('c', 'Cam C'),
-      device('d', 'Cam D')])
-    renderDropdownInputLists()
-    const chips = [...elements.singleInputList.querySelectorAll('kbd')]
-      .map(k => k.textContent)
-    expect(chips).toEqual(['1', '2', '3', '4'])
-  })
+  const four = () => [device('a', 'Cam A'), device('b', 'Cam B'), device('c', 'Cam C'),
+    device('d', 'Cam D')]
 
-  it('puts no chip on the dual columns, where the key means something else', () => {
-    reset([device('a', 'Cam A'), device('b', 'Cam B')])
+  it('puts one picker on each half in dual view, without chips', () => {
+    reset(four())
     renderDropdownInputLists()
-    expect(elements.leftInputList.querySelectorAll('kbd')).toHaveLength(0)
-    expect(elements.rightInputList.querySelectorAll('kbd')).toHaveLength(0)
+    const ps = pickers()
+    expect(ps.map(label)).toEqual(['Left half', 'Right half'])
+    expect(elements.wallPickers.querySelectorAll('kbd')).toHaveLength(0)
     // The rows themselves are still there and still named.
-    expect([...elements.leftInputList.children].map(r => r.textContent))
-      .toEqual(['Cam A', 'Cam B'])
+    expect(tiles(ps[0]).map(t => t.textContent)).toEqual(['Cam A', 'Cam B', 'Cam C', 'Cam D'])
   })
 
-  it('leaves a fifth row unlabelled rather than promising a key', () => {
-    reset(['a', 'b', 'c', 'd', 'e'].map(id => device(id, `Cam ${id}`)))
+  it('labels the first four tiles 1-4 in single view', () => {
+    reset(four())
+    state.layoutMode = 'single'
     renderDropdownInputLists()
-    const rows = [...elements.singleInputList.children]
-    expect(rows).toHaveLength(5)
-    expect(rows[4].querySelector('kbd')).toBeNull()
-    expect(rows[3].querySelector('kbd').textContent).toBe('4')
+    const ps = pickers()
+    expect(ps.map(label)).toEqual(['Whole wall'])
+    expect([...ps[0].querySelectorAll('kbd')].map(k => k.textContent))
+      .toEqual(['1', '2', '3', '4'])
+  })
+
+  it('has one picker for both halves, with chips, when Multi-view is off', () => {
+    reset(four())
+    state.settings.multiView = false
+    renderDropdownInputLists()
+    const ps = pickers()
+    expect(ps.map(label)).toEqual(['Both halves'])
+    expect(ps[0].querySelectorAll('kbd')).toHaveLength(4)
+  })
+
+  it('leaves a fifth tile unlabelled rather than promising a key', () => {
+    reset(['a', 'b', 'c', 'd', 'e'].map(id => device(id, `Cam ${id}`)))
+    state.layoutMode = 'single'
+    renderDropdownInputLists()
+    const ts = tiles(pickers()[0])
+    expect(ts).toHaveLength(5)
+    expect(ts[4].querySelector('kbd')).toBeNull()
+    expect(ts[3].querySelector('kbd').textContent).toBe('4')
   })
 
   it('skips disabled inputs, so the numbering matches what is shown', () => {
     // selectInput indexes the enabled list, so a hidden disabled device must not
     // consume a number.
-    state.settings = {
-      ...getDefaultSettings(),
-      inputs: { b: { name: null, enabled: false } },
-    }
-    state.devices = [device('a', 'Cam A'), device('b', 'Cam B'),
-      device('c', 'Cam C')]
+    reset([device('a', 'Cam A'), device('b', 'Cam B'), device('c', 'Cam C')])
+    state.settings.inputs = { b: { name: null, enabled: false } }
+    state.layoutMode = 'single'
     renderDropdownInputLists()
-    const rows = [...elements.singleInputList.children]
-    expect(rows).toHaveLength(2)
-    expect(rows.map(r => r.querySelector('kbd').textContent)).toEqual(['1', '2'])
-    expect(rows[1].textContent).toContain('Cam C')
+    const ts = tiles(pickers()[0])
+    expect(ts).toHaveLength(2)
+    expect(ts.map(t => t.querySelector('kbd').textContent)).toEqual(['1', '2'])
+    expect(ts[1].textContent).toContain('Cam C')
   })
 
-  it('tags each row with its device id, which the sweep finds rows by', () => {
+  it('marks the input each half is showing', () => {
+    reset([device('a', 'Cam A'), device('b', 'Cam B')])
+    renderDropdownInputLists()
+    const [left, right] = pickers()
+    const pressed = (p) => tiles(p).filter(t => t.getAttribute('aria-pressed') === 'true')
+      .map(t => t.dataset.deviceId)
+    expect(pressed(left)).toEqual(['a'])
+    expect(pressed(right)).toEqual(['b'])
+    expect(left.querySelector('.picker-current').textContent).toBe('Cam A')
+    expect(right.querySelector('.picker-current').textContent).toBe('Cam B')
+  })
+
+  it('tags each tile with its device id, which the sweep finds tiles by', () => {
     // paintThumbnail() queries [data-device-id] fresh rather than holding node
-    // references, because rows are rebuilt on any device or selection change --
+    // references, because tiles are rebuilt on any device or selection change --
     // which can happen while a snapshot sweep is still running (#242).
     reset([device('a', 'Cam A'), device('b', 'Cam B')])
     renderDropdownInputLists()
-    for (const list of [elements.leftInputList, elements.rightInputList,
-      elements.singleInputList]) {
-      expect([...list.children].map(r => r.dataset.deviceId)).toEqual(['a', 'b'])
+    for (const p of pickers()) {
+      expect(tiles(p).map(t => t.dataset.deviceId)).toEqual(['a', 'b'])
     }
   })
 
   it('renders the snapshot tile before any snapshot exists', () => {
-    // The tile is its own placeholder, so a row does not change height when a
-    // still lands.
     reset([device('a', 'Cam A')])
     renderDropdownInputLists()
-    const tile = elements.leftInputList.querySelector('.input-thumb')
+    const tile = elements.wallPickers.querySelector('.input-thumb')
     expect(tile).not.toBeNull()
     expect(tile.classList.contains('has-thumb')).toBe(false)
   })
 
   it('renders a device label as text, never as markup', () => {
-    // Labels come from capture hardware or a user rename. The row is built from
-    // elements with textContent for exactly this reason.
+    // Labels come from capture hardware or a user rename.
     reset([device('a', '<img src=x onerror=alert(1)>')])
+    state.rightDeviceId = 'a'
     renderDropdownInputLists()
-    for (const list of [elements.leftInputList, elements.singleInputList]) {
-      const row = list.children[0]
-      expect(row.querySelector('img')).toBeNull()
-      expect(row.textContent).toContain('<img src=x onerror=alert(1)>')
+    for (const p of pickers()) {
+      expect(p.querySelector('img')).toBeNull()
+      expect(p.querySelector('.picker-current').textContent)
+        .toBe('<img src=x onerror=alert(1)>')
+      expect(p.querySelector('.input-option-name').textContent)
+        .toBe('<img src=x onerror=alert(1)>')
     }
+  })
+
+  it('re-renders after a number key, not only after a click', async () => {
+    reset([device('a', 'Cam A'), device('b', 'Cam B')])
+    renderDropdownInputLists()
+    handleKeyDown({ key: '2', target: document.body, preventDefault: vi.fn() })
+    // selectInput sets both halves, once the streams have been asked for.
+    await vi.waitFor(() => {
+      const current = pickers().map(p => p.querySelector('.picker-current').textContent)
+      expect(current).toEqual(['Cam B', 'Cam B'])
+    })
   })
 })
 
-describe('the dual columns cannot overflow the dropdown', () => {
-  // The reported bug: with a chip forcing `white-space: nowrap` on the name, the
-  // grid's `1fr` tracks -- which are minmax(auto, 1fr), and whose auto minimum is
-  // the item's MIN-CONTENT size -- computed to 339.758px each inside a 358px
-  // panel. The columns spilled ~320px out of the dropdown.
-  //
-  // jsdom does no layout, so this asserts the declaration rather than measuring.
-  // Both halves of the fix are pinned, because either alone would have hidden it.
+describe('the pickers cannot overflow their half', () => {
+  // jsdom does no layout, so this asserts the declarations that matter.
   const CSS = readFileSync(
     path.resolve(projectRoot, 'src/renderer/styles.css'), 'utf8')
 
@@ -235,19 +217,22 @@ describe('the dual columns cannot overflow the dropdown', () => {
     return bodies.join('\n')
   }
 
-  it('uses minmax(0, 1fr) so a track can shrink below its content', () => {
-    const body = ruleBody('.column-layout')
-    expect(body).toMatch(/grid-template-columns:\s*minmax\(\s*0\s*,\s*1fr\s*\)/)
-    // A bare `1fr` is the bug.
-    expect(body).not.toMatch(/grid-template-columns:\s*1fr\s+1fr/)
+  it('scrolls the strip sideways instead of widening the half', () => {
+    expect(ruleBody('.picker-strip')).toMatch(/overflow-x:\s*auto/)
+    expect(ruleBody('.wall-picker')).toMatch(/min-width:\s*0/)
   })
 
-  it('scopes name truncation to the list that actually has a chip', () => {
-    // Applying nowrap to the dual columns is what pinned the tracks open. Their
-    // names wrap, as they did before the chips existed.
-    expect(ruleBody('.single-input-option .input-option-name'))
-      .toMatch(/white-space:\s*nowrap/)
-    expect(CSS).not.toMatch(/^\.input-option-name,/m)
+  it('ellipsises a long name on one line', () => {
+    expect(ruleBody('.picker-current')).toMatch(/text-overflow:\s*ellipsis/)
+    expect(ruleBody('.input-option-name')).toMatch(/text-overflow:\s*ellipsis/)
+  })
+
+  it('splits the halves with minmax(0, 1fr), never a bare 1fr', () => {
+    // A bare 1fr is minmax(auto, 1fr), whose auto minimum is the item's
+    // min-content: a nowrap name pinned the old dropdown's tracks open.
+    const src = readFileSync(
+      path.resolve(projectRoot, 'src/renderer/renderer.js'), 'utf8')
+    expect(src).toContain("'minmax(0, 1fr) var(--center-gap, 60px) minmax(0, 1fr)'")
   })
 })
 
@@ -396,13 +381,10 @@ describe('the shortcut legend (dropup)', () => {
     expect(elements.legendGrid.children).toHaveLength(SHORTCUTS.length)
   })
 
-  it('shows every key the Settings table shows', () => {
-    // The two are the same list; if they ever diverge, one of them is a second
-    // source of truth again.
-    renderShortcutHints()
+  it('shows every key in the list, now that it is the only rendered copy', () => {
     renderShortcutLegend()
-    const chips = (root) => [...root.querySelectorAll('kbd')].map(k => k.textContent).sort()
-    expect(chips(elements.legendGrid)).toEqual(chips(elements.shortcutsTable))
+    const chips = [...elements.legendGrid.querySelectorAll('kbd')].map(k => k.textContent).sort()
+    expect(chips).toEqual(SHORTCUTS.flatMap(s => s.chips).sort())
   })
 })
 
