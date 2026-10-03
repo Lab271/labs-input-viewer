@@ -9,6 +9,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Electron Version (v3.x)
 
+### [3.4.0] - 2026-10-03
+
+The input controls are laid over the wall itself, and Settings is rebuilt.
+
+#### Added
+
+- **The input controls sit on the wall, not in a panel.** Hovering or tapping the
+  top tab lays a picker over each half: what it is showing, a strip of input
+  snapshots to choose from, and that half's volume. A capsule at the top holds
+  Dual/Single, the output volume and Settings. The controls stay open while you
+  change both halves, and close when the pointer goes below them, a tap there on
+  touch, Esc, or after 30 seconds untouched
+- **Multi-view** (Settings > Inputs, on by default). Off makes dual view show one
+  input on both halves, with a single strip that sets both, as the number keys
+  always have
+- **Settings has a side menu**: Inputs, Layout, Remote keyboard and Art-Net
+  lighting, each showing what needs attention. Inputs gets a Key column, the
+  hardware name as the placeholder for a rename, a Startup choice that can be
+  cleared, and no-signal capture in each input's own row, with a message when it
+  fails. Layout draws the wall to scale. Remote keyboard and Art-Net say whether
+  they are working; before, that was only in the log file
+- **A speaker beside the volume sliders** gains a wave per third of volume, with
+  a cross when muted
+
+#### Changed
+
+- The shortcut table left Settings; the legend at the bottom edge has the same
+  rows, restyled to match. The separate No-Signal Detection section is gone too:
+  capture is in each input's row
+- Range sliders fill blue up to the thumb
+
+#### Fixed
+
+- **Freezing in dual view showed a black screen.** The frozen frame now keeps the
+  centre gap, exactly as the live picture (#332)
+- **Remote keyboard ignored a bare hostname.** `space_keyboard` never became
+  `space_keyboard.local`, as the user guide says it does. Presses also go through
+  the main process now, so the browser's CORS check cannot block them
+- **Q quit the app with a Settings dropdown focused**, and D/S switched the layout
+  behind it. Keys no longer act while any form control has focus
+- **One Esc closed Settings and left fullscreen.** It now does one thing per press
+- Input names containing `"` or `<` broke their Settings row
+- The orphaned-reference banner said "1 reference belong"
+- The presenter debug overlay stayed up after Remote Keyboard was turned off
+
 ### [3.3.5] - 2026-10-03
 
 #### Fixed
