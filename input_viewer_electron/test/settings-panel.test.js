@@ -257,6 +257,29 @@ describe('Multi-view', () => {
   })
 })
 
+describe('range sliders', () => {
+  it('fill blue up to their value: a picker volume at 40% paints 40%', () => {
+    reset([device('a', 'Cam A'), device('b', 'Cam B')])
+    state.leftVolume = 0.4
+    R.renderDropdownInputLists()
+    const slider = elements.wallPickers.querySelector('input[type="range"]')
+    expect(slider.style.getPropertyValue('--fill')).toBe('40%')
+  })
+
+  it('keep the fill in step while dragged', () => {
+    const slider = elements.settingsCenterGap
+    slider.value = '110' // range 20..200, so halfway
+    slider.dispatchEvent(new Event('input', { bubbles: true }))
+    expect(slider.style.getPropertyValue('--fill')).toBe('50%')
+  })
+
+  it('paint the Settings sliders when Settings opens', () => {
+    elements.settingsBorderWidth.value = '50' // range 0..200
+    R.showSettingsModal()
+    expect(elements.settingsBorderWidth.style.getPropertyValue('--fill')).toBe('25%')
+  })
+})
+
 describe('the dropdown over the wall', () => {
   it('opens and closes with matching ARIA state', () => {
     R.openDropdown()

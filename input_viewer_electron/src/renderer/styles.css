@@ -706,10 +706,15 @@ input[type="range"] {
   -webkit-app-region: no-drag;
 }
 
+/* Blue up to the thumb, grey after it. --fill is the value as a percentage,
+   written by paintRangeFill() in renderer.js: Chromium has no pseudo-element
+   for the filled part of a range track. */
 input[type="range"]::-webkit-slider-runnable-track {
   height: 4px;
   border-radius: var(--radius-pill);
-  background-color: rgba(255, 255, 255, 0.22);
+  background: linear-gradient(to right,
+    var(--sbp-blue) 0 var(--fill, 0%),
+    rgba(255, 255, 255, 0.22) var(--fill, 0%) 100%);
 }
 
 input[type="range"]::-webkit-slider-thumb {

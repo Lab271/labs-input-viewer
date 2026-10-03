@@ -470,6 +470,23 @@ function updateMultiViewUI() {
   setSwitch(elements.multiViewToggle, isMultiView())
 }
 
+/**
+ * Write a range slider's value into --fill, which the track's gradient reads to
+ * paint the part left of the thumb blue. Chromium has no pseudo-element for that
+ * part, so it has to come from here. Programmatic `value =` fires no input event,
+ * so code that sets a value also calls this (paintAllRangeFills after a render).
+ */
+function paintRangeFill(el) {
+  const min = Number(el.min) || 0
+  const max = el.max === '' ? 100 : Number(el.max)
+  const pct = max > min ? ((Number(el.value) - min) / (max - min)) * 100 : 0
+  el.style.setProperty('--fill', `${Math.max(0, Math.min(100, pct))}%`)
+}
+
+function paintAllRangeFills(root = document) {
+  for (const el of root.querySelectorAll('input[type="range"]')) paintRangeFill(el)
+}
+
 /** Reflect a boolean on a role="switch" button (the class is what CSS styles). */
 function setSwitch(el, on) {
   if (!el) return
@@ -1439,6 +1456,7 @@ async function syncSystemVolume() {
     elements.dropdownSystemVolume.value = volume
     elements.dropdownSystemVolumeValue.textContent = `${volume}%`
   }
+  if (elements.dropdownSystemVolume) paintRangeFill(elements.dropdownSystemVolume)
 }
 
 /**
@@ -2731,6 +2749,7 @@ function renderDropdownInputLists() {
     }
     host.appendChild(buildPicker(side, label, showKeys, enabledDevices))
   })
+  paintAllRangeFills(host)
 }
 
 function buildPicker(side, labelText, showKeys, enabledDevices) {
@@ -3230,6 +3249,7 @@ function showSettingsModal() {
   updatePresenterDebugUI()
   updateArtnetUI()
   showSettingsSection(state.settingsSection)
+  paintAllRangeFills(elements.settingsModal)
   startSettingsStatusRefresh()
   showCursor()
 }
@@ -3556,6 +3576,8 @@ function updateArtnetUI() {
   elements.artnetSpotDepthValue.textContent = `${Math.round(spotDepth * 100)}%`
   // Depth only means anything for the spot; every other target ignores it.
   elements.artnetSpotDepthRow.classList.toggle('hidden', target !== 'effect:spot')
+  paintRangeFill(elements.artnetMaxBrightness)
+  paintRangeFill(elements.artnetSpotDepth)
 
   renderArtnetSaverList()
 }
@@ -4031,6 +4053,11 @@ function setupEventListeners() {
 
   // Keyboard shortcuts
   document.addEventListener('keydown', handleKeyDown)
+
+  // Every range slider keeps its blue fill in step while it is dragged.
+  document.addEventListener('input', (e) => {
+    if (e.target?.type === 'range') paintRangeFill(e.target)
+  }, true)
 
   // Hover path into the controls: the tab at the top edge. They stay open once
   // the pointer moves on -- the pickers cover the wall, so "leaving" means
