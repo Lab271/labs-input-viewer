@@ -150,9 +150,10 @@ describe('nothing polls it unconditionally any more', () => {
   })
 
   it('is wired to every way it closes', () => {
-    // Close pill, Esc and the idle timeout all call closeDropdown.
+    // Pointer below the pickers, Esc and the idle timeout all call closeDropdown.
     const close = RENDERER.slice(RENDERER.indexOf('function closeDropdown()'))
     expect(close.slice(0, 300)).toContain('stopVolumePolling()')
-    expect(RENDERER).toMatch(/wallCloseBtn\?\.addEventListener\('click',\s*\(\)\s*=>\s*closeDropdown\(\)\)/)
+    const below = RENDERER.slice(RENDERER.indexOf('function closeDropdownIfBelow('))
+    expect(below.slice(0, 300)).toContain('closeDropdown()')
   })
 })

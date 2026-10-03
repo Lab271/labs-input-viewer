@@ -93,8 +93,8 @@
 
   <!-- Dropdown 2b, "over the wall". There is no panel: opening it lays a picker
        over each half of the wall (rendered into #wall-pickers by
-       renderDropdownInputLists), a small capsule at the top and a Close pill at
-       the bottom. The id stays #dropdown-panel because the open/close state,
+       renderDropdownInputLists) and a small capsule at the top. Moving the
+       pointer below the pickers closes it (closeDropdownIfBelow). The id stays #dropdown-panel because the open/close state,
        the thumbnail sweep and the volume poll all key off it. -->
   <div id="dropdown-panel" aria-hidden="true">
     <div id="wall-pickers"></div>
@@ -113,11 +113,6 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.31 9.91 L21.82 10.09 L21.82 13.91 L19.31 14.09 L18.65 15.68 L20.29 17.59 L17.59 20.29 L15.68 18.65 L14.09 19.31 L13.91 21.82 L10.09 21.82 L9.91 19.31 L8.32 18.65 L6.41 20.29 L3.71 17.59 L5.35 15.68 L4.69 14.09 L2.18 13.91 L2.18 10.09 L4.69 9.91 L5.35 8.32 L3.71 6.41 L6.41 3.71 L8.32 5.35 L9.91 4.69 L10.09 2.18 L13.91 2.18 L14.09 4.69 L15.68 5.35 L17.59 3.71 L20.29 6.41 L18.65 8.32 Z"/><circle cx="12" cy="12" r="3.2"/></svg>
       </button>
     </div>
-
-    <button id="wall-close-btn" class="pill-btn wall-close">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
-      Close
-    </button>
   </div>
 
   <!-- Shortcut legend, a dropup at the bottom edge (mirrors the dropdown above).

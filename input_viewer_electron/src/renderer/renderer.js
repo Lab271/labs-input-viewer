@@ -211,9 +211,8 @@ const elements = {
   dropdownPanel: document.getElementById('dropdown-panel'),
   updateNotification: document.getElementById('update-notification'),
   updateMessage: document.getElementById('update-message'),
-  // Dropdown 2b: pickers over the wall, the capsule and the Close pill
+  // Dropdown 2b: pickers over the wall and the capsule
   wallPickers: document.getElementById('wall-pickers'),
-  wallCloseBtn: document.getElementById('wall-close-btn'),
   legendTrigger: document.getElementById('legend-trigger'),
   legendPanel: document.getElementById('legend-panel'),
   legendGrid: document.getElementById('legend-grid'),
@@ -3774,6 +3773,33 @@ function closeDropdown() {
 }
 
 /**
+ * Close the controls when the pointer goes below them.
+ *
+ * "Below" is past the lowest picker row -- the volume slider, not the
+ * thumbnails, or reaching for the slider would close everything -- plus a
+ * margin, so overshooting the slider a little does not. The same line serves a
+ * tap on touch, which has no hover to leave with. Returns whether it closed.
+ */
+const CLOSE_BELOW_MARGIN_PX = 48
+
+function dropdownCloseLine() {
+  let bottom = 0
+  for (const row of elements.wallPickers?.querySelectorAll('.picker-strip, .picker-volume') ?? []) {
+    bottom = Math.max(bottom, row.getBoundingClientRect().bottom)
+  }
+  // Nothing measured (not laid out yet): never treat a position as below.
+  return bottom > 0 ? bottom + CLOSE_BELOW_MARGIN_PX : null
+}
+
+function closeDropdownIfBelow(clientY) {
+  if (!state.dropdownOpen) return false
+  const line = dropdownCloseLine()
+  if (line === null || clientY <= line) return false
+  closeDropdown()
+  return true
+}
+
+/**
  * The controls cover the picture, so they must not stay up on an unattended
  * wall: close them after a stretch with no pointer, touch or key activity.
  */
@@ -3923,7 +3949,7 @@ function resetShakeDetection() {
  */
 function handleMouseMove(event) {
   showCursor()
-  if (state.dropdownOpen) armDropdownIdleClose()
+  if (state.dropdownOpen && !closeDropdownIfBelow(event.clientY)) armDropdownIdleClose()
 
   // Only check for shake when screensaver is active
   if (isScreensaverRunning()) {
@@ -4097,9 +4123,8 @@ function setupEventListeners() {
     if (e.target?.type === 'range') paintRangeFill(e.target)
   }, true)
 
-  // Hover path into the controls: the tab at the top edge. They stay open once
-  // the pointer moves on -- the pickers cover the wall, so "leaving" means
-  // nothing -- and close with the Close pill, Esc, or after a quiet stretch.
+  // Hover path into the controls: the tab at the top edge. They close when the
+  // pointer goes below the pickers, with Esc, or after a quiet stretch.
   elements.dropdownTrigger.addEventListener('mouseenter', () => openDropdown())
 
   // Keyboard path to the same tab.
@@ -4111,10 +4136,11 @@ function setupEventListeners() {
     }
   })
 
-  elements.wallCloseBtn?.addEventListener('click', () => closeDropdown())
-
-  // Any touch on the open controls counts as activity.
-  elements.dropdownPanel.addEventListener('pointerdown', () => armDropdownIdleClose())
+  // A tap below the pickers closes them (touch has no hover to leave with); any
+  // other touch on the open controls counts as activity.
+  elements.dropdownPanel.addEventListener('pointerdown', (e) => {
+    if (!closeDropdownIfBelow(e.clientY)) armDropdownIdleClose()
+  })
 
   // View mode buttons in the capsule
   elements.viewModeDual.addEventListener('click', () => setLayout('dual'))
@@ -4242,8 +4268,8 @@ function setupEventListeners() {
     }
   }, { passive: true })
 
-  // Touch support for the controls. There is no "outside" to tap any more --
-  // they cover the wall -- so they close with the Close pill.
+  // Touch support for the controls. They cover the wall, so there is no
+  // "outside" to tap: a tap below the pickers closes them instead.
   elements.dropdownTrigger.addEventListener('touchstart', (e) => {
     e.preventDefault() // Prevent mouse events from firing
     toggleDropdown()
@@ -5155,6 +5181,7 @@ export {
   pickerPlan,
   openDropdown,
   closeDropdown,
+  closeDropdownIfBelow,
   toggleDropdown,
   setMultiView,
   isMultiView,

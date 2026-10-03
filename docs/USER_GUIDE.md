@@ -37,7 +37,7 @@ The app auto-updates when new versions are available.
 2. They appear **over the wall itself**: each half shows what it is playing and a strip of
    inputs to choose from. Tap an input to put it on that half. The controls stay open, so
    you can change both halves in one go
-3. Press **Close** at the bottom (or `Esc`) when you are done. They also close by themselves
+3. Move the pointer down past the controls (or press `Esc`) when you are done. They also close by themselves
    after 30 seconds without anything being touched, so they never cover an unattended wall
 
 In **Single** view there is one strip, for the whole wall, and its inputs carry the number
@@ -197,7 +197,7 @@ The app listens for multiple key types to support different clickers:
 For touch screen setups:
 
 - **Tap** the tab at the top edge to bring up the input controls
-- **Tap Close** at the bottom to put them away
+- **Tap** anywhere below the controls to put them away
 
 ## Screensavers
 

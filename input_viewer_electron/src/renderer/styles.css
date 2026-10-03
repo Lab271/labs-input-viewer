@@ -1024,17 +1024,6 @@ body #dropdown-trigger.touch-open {
   color: var(--text-muted);
 }
 
-.wall-close {
-  position: absolute;
-  bottom: 24px;
-  left: 50%;
-  transform: translateX(-50%);
-  min-height: 56px;
-  padding: 0 28px;
-  background-color: var(--surface);
-  font-size: 16px;
-}
-
 /* =============================================================================
    Shortcut hints (#258)
    ============================================================================= */
@@ -1849,13 +1838,6 @@ body:has(#legend-panel:hover) * {
   .artnet-saver-list { grid-template-columns: 1fr; }
   .ref-panel { margin-left: 8px; }
 }
-
-/* The legend tab sits where the Close pill goes; hide it while the controls are
-   open, and close the legend itself (openDropdown does). */
-body:has(#dropdown-panel.touch-open) #legend-trigger {
-  display: none;
-}
-
 
 /* =============================================================================
    Volume icon

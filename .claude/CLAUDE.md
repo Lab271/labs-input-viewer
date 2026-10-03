@@ -124,7 +124,7 @@ Four things worth not re-learning:
 
 There is no panel. Opening it (`openDropdown`) fills `#wall-pickers` with one picker per
 half — the current input, a strip of 128x72 tiles, and that half's volume — plus a capsule
-at the top (Dual/Single, Output volume, Settings) and a Close pill at the bottom.
+at the top (Dual/Single, Output volume, Settings). There is no close button.
 `renderDropdownInputLists()` kept its name so every existing caller (device change, input
 switch by click or key, rename, enable/disable, layout) still refreshes it.
 
@@ -137,9 +137,11 @@ switch by click or key, rename, enable/disable, layout) still refreshes it.
 
 `pickerPlan()` is that table in code. Things worth not re-learning:
 
-- **It stays open when the pointer leaves**, since it covers the wall and there is no
-  "outside". It closes with the Close pill, Esc, or after 30s with no pointer, touch or key
-  activity (`DROPDOWN_IDLE_MS`) so it can never sit over an unattended wall.
+- **It closes when the pointer goes below the pickers** (`closeDropdownIfBelow`): past
+  the lowest picker row plus 48px. The lowest row is the volume slider, not the
+  thumbnails, or reaching for the slider would close it. A tap there closes it on touch.
+  It also closes with Esc, or after 30s with no pointer, touch or key activity
+  (`DROPDOWN_IDLE_MS`), so it can never sit over an unattended wall.
 - **`multiView` (default true) is new.** Off means the halves always carry the same input:
   `setMultiView(false)` brings the right half in line, and `openInitialStreams` enforces it
   at startup.

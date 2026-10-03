@@ -316,9 +316,52 @@ describe('the dropdown over the wall', () => {
     expect(elements.dropdownPanel.classList.contains('touch-open')).toBe(true)
     expect(elements.dropdownPanel.getAttribute('aria-hidden')).toBe('false')
     expect(elements.dropdownTrigger.getAttribute('aria-expanded')).toBe('true')
-    elements.wallCloseBtn.click()
+    R.closeDropdown()
     expect(state.dropdownOpen).toBe(false)
     expect(elements.dropdownPanel.getAttribute('aria-hidden')).toBe('true')
+  })
+
+  describe('closing when the pointer goes below the pickers', () => {
+    // jsdom does no layout, so give the lowest picker row a position: the
+    // volume slider ending at y=300 puts the close line at 300 + 48.
+    const placeRows = () => {
+      for (const row of elements.wallPickers.querySelectorAll('.picker-strip, .picker-volume')) {
+        const bottom = row.classList.contains('picker-volume') ? 300 : 250
+        row.getBoundingClientRect = () => ({ top: bottom - 40, bottom, left: 0, right: 100, width: 100, height: 40 })
+      }
+    }
+    const move = (clientY) => document.dispatchEvent(new MouseEvent('mousemove', { clientX: 400, clientY }))
+
+    beforeEach(() => {
+      reset([device('a', 'Cam A'), device('b', 'Cam B')])
+      R.openDropdown()
+      placeRows()
+    })
+
+    it('stays open over the thumbnails, the slider, and a little below it', () => {
+      move(240)
+      move(300)
+      move(340)
+      expect(state.dropdownOpen).toBe(true)
+    })
+
+    it('closes once the pointer is clearly below them', () => {
+      move(360)
+      expect(state.dropdownOpen).toBe(false)
+    })
+
+    it('closes on a tap there, for touch', () => {
+      elements.dropdownPanel.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, clientY: 500 }))
+      expect(state.dropdownOpen).toBe(false)
+    })
+
+    it('never closes before anything has been laid out', () => {
+      for (const row of elements.wallPickers.querySelectorAll('.picker-strip, .picker-volume')) {
+        row.getBoundingClientRect = () => ({ top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0 })
+      }
+      move(900)
+      expect(state.dropdownOpen).toBe(true)
+    })
   })
 
   it('closes itself when Settings opens from the capsule', () => {
