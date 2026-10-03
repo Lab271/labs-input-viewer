@@ -479,8 +479,46 @@ function updateMultiViewUI() {
 function paintRangeFill(el) {
   const min = Number(el.min) || 0
   const max = el.max === '' ? 100 : Number(el.max)
-  const pct = max > min ? ((Number(el.value) - min) / (max - min)) * 100 : 0
-  el.style.setProperty('--fill', `${Math.max(0, Math.min(100, pct))}%`)
+  const pct = Math.max(0, Math.min(100, max > min ? ((Number(el.value) - min) / (max - min)) * 100 : 0))
+  el.style.setProperty('--fill', `${pct}%`)
+
+  // Volume sliders also drive the speaker icon beside them.
+  const volumeRow = el.closest?.('.picker-volume, .capsule-volume')
+  if (volumeRow) ensureVolumeIcon(volumeRow, el).dataset.level = String(volumeLevel(pct))
+}
+
+/**
+ * How many sound waves the speaker shows: 0 is muted, then one, two or three
+ * as the volume passes a third and two thirds. Exported for tests.
+ */
+function volumeLevel(percent) {
+  if (percent <= 0) return 0
+  if (percent <= 33) return 1
+  if (percent <= 66) return 2
+  return 3
+}
+
+// Speaker, three waves and a mute cross. The waves are arcs around the speaker's
+// mouth; pathLength="1" lets the CSS draw each one in with a single dash value.
+const VOLUME_ICON_SVG =
+  '<svg class="vol-icon" viewBox="0 0 24 24" aria-hidden="true" data-level="3">' +
+  '<path class="vol-speaker" d="M3.5 9.5h3.2L11 6v12l-4.3-3.5H3.5z"/>' +
+  '<path class="vol-wave w1" pathLength="1" d="M14.1 9.9a3 3 0 0 1 0 4.2"/>' +
+  '<path class="vol-wave w2" pathLength="1" d="M16.1 7.9a5.8 5.8 0 0 1 0 8.2"/>' +
+  '<path class="vol-wave w3" pathLength="1" d="M18.1 5.9a8.6 8.6 0 0 1 0 12.2"/>' +
+  '<path class="vol-mute" d="M14.5 9.5l5 5M19.5 9.5l-5 5"/>' +
+  '</svg>'
+
+/** The speaker icon in a volume row, created in front of the slider if missing. */
+function ensureVolumeIcon(row, slider) {
+  let icon = row.querySelector('.vol-icon')
+  if (!icon) {
+    const holder = document.createElement('span')
+    holder.innerHTML = VOLUME_ICON_SVG
+    icon = holder.firstChild
+    row.insertBefore(icon, slider)
+  }
+  return icon
 }
 
 function paintAllRangeFills(root = document) {
@@ -5127,6 +5165,7 @@ export {
   renderSettingsInputList,
   renderLayoutDiagram,
   setDefaultInput,
+  volumeLevel,
   captureNoSignalForSide,
   sendRemoteKeypress,
   selectInputForSide,

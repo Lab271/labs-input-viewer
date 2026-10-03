@@ -1016,7 +1016,7 @@ body #dropdown-trigger.touch-open {
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 220px;
+  width: 250px;
   min-width: 0;
 }
 
@@ -1854,4 +1854,73 @@ body:has(#legend-panel:hover) * {
    open, and close the legend itself (openDropdown does). */
 body:has(#dropdown-panel.touch-open) #legend-trigger {
   display: none;
+}
+
+
+/* =============================================================================
+   Volume icon
+   ============================================================================= */
+
+/* A speaker beside each volume slider that gains a wave per third of volume
+   (data-level 0-3, set by paintRangeFill). A wave arriving draws itself in from
+   the speaker outwards; one leaving fades. Muted swaps the waves for a cross. */
+.vol-icon {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  color: var(--text-color);
+  overflow: visible;
+}
+
+.vol-icon .vol-speaker {
+  fill: currentColor;
+  stroke-width: 1.2;
+}
+
+.vol-icon .vol-wave {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  opacity: 0;
+  transition:
+    stroke-dashoffset 240ms var(--ease),
+    opacity 160ms var(--ease);
+}
+
+.vol-icon[data-level="1"] .w1,
+.vol-icon[data-level="2"] .w1,
+.vol-icon[data-level="2"] .w2,
+.vol-icon[data-level="3"] .vol-wave {
+  stroke-dashoffset: 0;
+  opacity: 1;
+}
+
+/* Outer waves follow the inner ones, so a jump from silent to loud ripples out
+   rather than appearing all at once. */
+.vol-icon .w2 { transition-delay: 40ms; }
+.vol-icon .w3 { transition-delay: 80ms; }
+
+.vol-icon .vol-mute {
+  opacity: 0;
+  stroke: var(--signal-orange);
+  transition: opacity 160ms var(--ease);
+}
+
+.vol-icon[data-level="0"] .vol-mute {
+  opacity: 1;
+}
+
+.vol-icon[data-level="0"] .vol-speaker {
+  opacity: 0.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vol-icon .vol-wave,
+  .vol-icon .vol-mute {
+    transition: none;
+  }
 }

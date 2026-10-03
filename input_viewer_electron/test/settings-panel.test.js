@@ -280,6 +280,36 @@ describe('range sliders', () => {
   })
 })
 
+describe('the volume icon', () => {
+  it('gains a wave per third of volume, none when muted', () => {
+    expect([0, 1, 33, 34, 66, 67, 100].map(R.volumeLevel)).toEqual([0, 1, 1, 2, 2, 3, 3])
+  })
+
+  it('sits beside each picker slider and follows it while dragged', () => {
+    reset([device('a', 'Cam A'), device('b', 'Cam B')])
+    state.leftVolume = 0.5
+    R.renderDropdownInputLists()
+    const row = elements.wallPickers.querySelector('.picker-volume')
+    const icon = row.querySelector('.vol-icon')
+    expect(icon.dataset.level).toBe('2')
+    const slider = row.querySelector('input[type="range"]')
+    slider.value = '0'
+    slider.dispatchEvent(new Event('input', { bubbles: true }))
+    expect(icon.dataset.level).toBe('0')
+    // Only one icon, however often it is repainted.
+    expect(row.querySelectorAll('.vol-icon')).toHaveLength(1)
+  })
+
+  it('is on the Output slider too, but not on the Settings sliders', () => {
+    const output = elements.dropdownSystemVolume
+    output.value = '80'
+    output.dispatchEvent(new Event('input', { bubbles: true }))
+    expect(output.parentElement.querySelector('.vol-icon').dataset.level).toBe('3')
+    R.showSettingsModal()
+    expect(elements.settingsModal.querySelector('.vol-icon')).toBeNull()
+  })
+})
+
 describe('the dropdown over the wall', () => {
   it('opens and closes with matching ARIA state', () => {
     R.openDropdown()
