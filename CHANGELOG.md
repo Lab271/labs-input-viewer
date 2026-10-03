@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Electron Version (v3.x)
 
+### [3.4.1] - 2026-10-03
+
+Electron 44, and dependency updates. No change to how the app behaves.
+
+#### Changed
+
+- **Electron 44** (44.4.5, Chromium 152), up from 43 (#310). Nothing this app
+  uses is among its breaking changes: it drops 32-bit Windows and macOS 12, and
+  the wall's build is 64-bit Windows. WebGL2, the capture path and the
+  screensavers were checked on it before merging
+- Development dependencies updated: eslint 10.10, vite 8.2.2, globals 17.12 and
+  fast-uri 3.1.7; the release workflow's `action-gh-release` to 3.0.3, still
+  pinned to a full commit SHA (#301, #303, #304, #308, #309)
+
 ### [3.4.0] - 2026-10-03
 
 The input controls are laid over the wall itself, and Settings is rebuilt.
@@ -53,6 +67,11 @@ The input controls are laid over the wall itself, and Settings is rebuilt.
 - Input names containing `"` or `<` broke their Settings row
 - The orphaned-reference banner said "1 reference belong"
 - The presenter debug overlay stayed up after Remote Keyboard was turned off
+- **A dev window could run another checkout's code.** `npm run dev` always loaded
+  the renderer from port 5173, so when another checkout's dev server held that
+  port, the window showed that checkout's code without any warning. It now loads
+  from the port Vite actually used, and logs it. Packaged builds are unaffected
+  (#333)
 
 ### [3.3.5] - 2026-10-03
 
