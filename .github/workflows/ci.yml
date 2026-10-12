@@ -59,3 +59,24 @@ jobs:
 
       - name: Build app
         run: npm run build
+
+  # ===========================================================================
+  # egui prototype (input_viewer_egui). macOS rather than Linux: the camera and
+  # windowing crates need system packages on Linux, and macOS is where the
+  # GPU path is developed.
+  # ===========================================================================
+  egui:
+    name: egui test & build
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: input_viewer_egui
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+
+      - name: Unit tests
+        run: cargo test --locked
+
+      - name: Build
+        run: cargo build --release --locked
+
