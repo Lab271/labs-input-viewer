@@ -328,15 +328,38 @@ mod camera {
         let format = RequestedFormat::new::<RgbAFormat>(RequestedFormatType::AbsoluteHighestResolution);
         let mut cam = nokhwa::Camera::new(index, format).map_err(|e| e.to_string())?;
         cam.open_stream().map_err(|e| e.to_string())?;
-        let res = cam.resolution();
-        log_info!("[Video] {} stream: {}x{}", d.label, res.width_x, res.height_y);
+        // The negotiated format, pixel format and rate included: the wall's
+        // ~13 fps came down to which native format nokhwa had picked, and
+        // only "3840x2160" was logged.
+        let f = cam.camera_format();
+        log_info!("[Video] {} stream: {}x{} {:?} @ {}fps", d.label, f.resolution().width_x,
+            f.resolution().height_y, f.format(), f.frame_rate());
         let mut seq = 0;
+        // Where a frame's time goes, once per 120 frames: waiting for the
+        // card, or converting to RGBA on this one thread.
+        let (mut read_time, mut convert_time, mut n) = (Duration::ZERO, Duration::ZERO, 0u32);
+        let mut window = Instant::now();
         while !stop.load(Ordering::Relaxed) {
+            let t0 = Instant::now();
             let buf = cam.frame().map_err(|e| e.to_string())?;
+            let t1 = Instant::now();
             let img = buf.decode_image::<RgbAFormat>().map_err(|e| e.to_string())?;
+            let t2 = Instant::now();
             seq += 1;
             let (w, h) = (img.width() as usize, img.height() as usize);
             publish(shared, Frame::new(w, h, pixels_from_rgba(img.into_raw()), seq), ctx);
+            read_time += t1 - t0;
+            convert_time += t2 - t1;
+            n += 1;
+            if n == 120 {
+                let secs = window.elapsed().as_secs_f64();
+                log_info!("[Video] {}: {:.1} fps delivered; per frame {:.1} ms waiting for the card, {:.1} ms converting",
+                    d.label, f64::from(n) / secs,
+                    read_time.as_secs_f64() * 1000.0 / f64::from(n),
+                    convert_time.as_secs_f64() * 1000.0 / f64::from(n));
+                (read_time, convert_time, n) = (Duration::ZERO, Duration::ZERO, 0);
+                window = Instant::now();
+            }
         }
         let _ = cam.stop_stream();
         Ok(())

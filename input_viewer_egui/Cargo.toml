@@ -37,3 +37,10 @@ camera = ["dep:nokhwa"]
 # Frame conversion and detection loop over every pixel; unoptimised they are
 # slow enough to drop frames on a 4K capture card.
 opt-level = 2
+
+# nokhwa's Media Foundation bindings, patched: they threw away fractional
+# frame rates (59.94 = 60000/1001) and could set a format at a low step of the
+# driver's frame-rate ladder, so the wall's Elgato cards delivered ~13 fps
+# where Chromium gets 59.94. See vendor/nokhwa-bindings-windows/PATCHED.md.
+[patch.crates-io]
+nokhwa-bindings-windows = { path = "vendor/nokhwa-bindings-windows" }
