@@ -17,7 +17,10 @@ pub enum InputState {
     NotOnScreen,
     Opening,
     Live { width: usize, height: usize },
-    NoSignal,
+    /// Frames arriving, picture one flat colour: being retried slowly.
+    Dark,
+    /// Closed for a reopen, about to open again.
+    Reopening,
     Failed(String),
 }
 
@@ -39,8 +42,9 @@ pub fn input_status(enabled: bool, state: &InputState) -> (Tone, String) {
         InputState::NotOnScreen => (Tone::Off, "Not on screen.".into()),
         InputState::Opening => (Tone::Off, "Opening…".into()),
         InputState::Live { width, height } => (Tone::Ok, format!("Live, {width}x{height}.")),
-        InputState::NoSignal => (Tone::Warn, "On screen, no signal.".into()),
-        InputState::Failed(e) => (Tone::Warn, format!("Could not open: {e}")),
+        InputState::Dark => (Tone::Warn, "On screen, picture is one flat colour. Retrying.".into()),
+        InputState::Reopening => (Tone::Warn, "Reopening…".into()),
+        InputState::Failed(e) => (Tone::Warn, format!("{e}. Retrying.")),
     }
 }
 
@@ -49,7 +53,7 @@ pub fn input_status(enabled: bool, state: &InputState) -> (Tone, String) {
 pub fn inputs_nav(states: &[(bool, InputState)]) -> (String, Tone) {
     let enabled = states.iter().filter(|(e, _)| *e).count();
     let text = format!("{enabled} of {}", states.len());
-    let failing = states.iter().any(|(e, s)| *e && matches!(s, InputState::Failed(_) | InputState::NoSignal));
+    let failing = states.iter().any(|(e, s)| *e && matches!(s, InputState::Failed(_) | InputState::Dark));
     let tone = if states.is_empty() || enabled == 0 || failing { Tone::Warn } else { Tone::Ok };
     (text, tone)
 }

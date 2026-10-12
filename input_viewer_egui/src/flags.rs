@@ -12,6 +12,7 @@
 //! | `--screensaver=NAME` | Prototype only: pins the first saver picked (`plasma`, `starfield`, ...). |
 //! | `--test-pattern[=WxH@FPS]` | Prototype only: mock inputs carry a motion test pattern, 3840x2160@60 by default. Implies `--mock=2`, the wall's two cards. |
 //! | `--hud` | Prototype only: per-half frame-rate and latency overlay, and a `[render]` log line every 5s. |
+//! | `--mock-fault=dark\|stall\|fail` | Prototype only: the last mock input goes dark, stalls after 10 s, or fails to open -- to watch the health policy reopen it. |
 //!
 //! Unknown `--` arguments are collected rather than ignored, so a typo like
 //! `--nosignal` gets logged. A flag that silently does nothing means someone at
@@ -19,7 +20,7 @@
 
 use std::time::Duration;
 
-use crate::capture::PatternFormat;
+use crate::capture::{MockFault, PatternFormat};
 
 pub const DEFAULT_MOCK_COUNT: usize = 4;
 pub const MAX_MOCK_COUNT: usize = 8;
@@ -35,6 +36,7 @@ pub struct Flags {
     pub screensaver: Option<String>,
     pub test_pattern: Option<PatternFormat>,
     pub hud: bool,
+    pub mock_fault: Option<MockFault>,
     pub unrecognised: Vec<String>,
 }
 
@@ -47,6 +49,7 @@ impl Default for Flags {
             screensaver: None,
             test_pattern: None,
             hud: false,
+            mock_fault: None,
             unrecognised: Vec::new(),
         }
     }
@@ -85,11 +88,18 @@ where
                 None => flags.unrecognised.push(arg.to_owned()),
             },
             ("--hud", None) => flags.hud = true,
+            ("--mock-fault", Some(v)) => match v {
+                "dark" => flags.mock_fault = Some(MockFault::Dark),
+                "stall" => flags.mock_fault = Some(MockFault::Stall),
+                "fail" => flags.mock_fault = Some(MockFault::Fail),
+                _ => flags.unrecognised.push(arg.to_owned()),
+            },
             _ => flags.unrecognised.push(arg.to_owned()),
         }
     }
-    // A test pattern needs inputs to carry it: two, like the wall.
-    if flags.test_pattern.is_some() && flags.mock.is_none() {
+    // A test pattern needs inputs to carry it: two, like the wall. So does a
+    // fault, with a healthy input beside the broken one.
+    if (flags.test_pattern.is_some() || flags.mock_fault.is_some()) && flags.mock.is_none() {
         flags.mock = Some(2);
     }
     flags
@@ -172,6 +182,14 @@ mod tests {
         assert_eq!(parse_format("3840x2160@0"), None);
         assert_eq!(parse_format("huge"), None);
         assert_eq!(parse(["--test-pattern=nope"]).unrecognised, ["--test-pattern=nope"]);
+    }
+
+    #[test]
+    fn mock_fault_implies_two_mock_inputs() {
+        let f = parse(["--mock-fault=stall"]);
+        assert_eq!(f.mock_fault, Some(MockFault::Stall));
+        assert_eq!(f.mock, Some(2));
+        assert_eq!(parse(["--mock-fault=melt"]).unrecognised, ["--mock-fault=melt"]);
     }
 
     #[test]

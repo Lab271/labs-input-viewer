@@ -11,6 +11,7 @@ cargo run --release -- --no-signal --screensaver-delay=0
 cargo run --release -- --mock=1 --no-signal --screensaver-delay=0 --screensaver=plasma
 cargo run --release                           # real capture devices (nokhwa)
 cargo run --release -- --test-pattern --hud    # two 4K60 inputs, frame-rate overlay
+cargo run --release -- --mock-fault=stall      # input 2 stalls; watch [health] reopen it (also dark, fail)
 cargo test
 cargo run --release --example camera_probe   # can each camera deliver a frame?
 ```
@@ -26,7 +27,7 @@ writes settings.
 | Pickers over the top edge, closes 48px below or after 30s idle | dropdown 2b | `app.rs` |
 | Shortcut table as single source, legend on the bottom edge | `shortcuts.js` | `shortcuts.rs` |
 | Mock inputs as real frames through the capture path | `mock-capture.js` | `capture.rs` |
-| Stall / flat-frame health with reopen backoff | `stream-health.js` | `health.rs` |
+| Capture health and reopen backoff, ported with its tests | `stream-health.js` | `health.rs` |
 | Split-flap board, screensaver after delay, 10-min rotation, seeded + logged | `split-flap.js`, `registry.js` | `screensaver.rs` |
 | Plasma saver + bloom / ACES / dither chain, same GLSL | `plasma.js`, `post-fx.js` | `plasma.rs`, `shaders/` |
 | Freeze, fullscreen, Esc does one thing per press | `renderer.js` | `app.rs` |

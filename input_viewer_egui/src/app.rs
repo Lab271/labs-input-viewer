@@ -13,7 +13,7 @@ use eframe::egui::{
 };
 use crate::capture::{self, Device, Stream};
 use crate::flags::Flags;
-use crate::health::{self, Health, Status};
+use crate::health::{self, Sample, Status, StreamHealth, limits as health_limits};
 use crate::render_stats::RenderStats;
 use crate::review::Review;
 use crate::screensaver::{self, Rng, Screensaver};
@@ -38,8 +38,9 @@ const DEVICE_POLL: Duration = Duration::from_secs(10);
 /// fixes the moiré and keeps two 4K60 inputs at 60 fps with no skipped frames.
 const VIDEO_TEXTURE: TextureOptions = TextureOptions::LINEAR.with_mipmap_mode(Some(egui::TextureFilter::Linear));
 
-/// Reopen schedule for a failed or stalled stream (stream-health.js).
-const REOPEN_BACKOFF: [u64; 5] = [2, 5, 15, 30, 60];
+/// Thumbnail the health check judges flatness on: the size Electron's crop
+/// detection shares with it (#314), so a port of cropping can reuse it.
+const HEALTH_THUMB: (usize, usize) = (384, 216);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Side {
@@ -123,15 +124,43 @@ fn picker_plan(layout: Layout, multi_view: bool) -> (Vec<(&'static str, Side)>, 
     }
 }
 
+/// One open capture device, shared by every half that shows it (ADR 0008).
 struct Slot {
-    stream: Stream,
+    /// None between closing the device for a reopen and opening it again.
+    stream: Option<Stream>,
+    /// When to open again after a reopen's release gap (app clock, ms).
+    reopen_at: Option<f64>,
     texture: Option<TextureHandle>,
     shown_seq: u64,
-    health: Health,
-    status: Status,
-    failures: usize,
-    reopen_at: Option<Instant>,
+    /// Outlives the stream across reopens, so the backoff backs off.
+    health: StreamHealth,
+    next_sample: f64,
     stats: RenderStats,
+}
+
+impl Slot {
+    fn open(device: &Device, ctx: &egui::Context, now: f64) -> Self {
+        let mut slot = Self {
+            stream: None,
+            reopen_at: None,
+            texture: None,
+            shown_seq: 0,
+            health: StreamHealth::new(),
+            next_sample: 0.0,
+            stats: RenderStats::new(),
+        };
+        slot.attach(device, ctx, now);
+        slot
+    }
+
+    fn attach(&mut self, device: &Device, ctx: &egui::Context, now: f64) {
+        self.stream = Some(Stream::open(device, ctx.clone()));
+        self.reopen_at = None;
+        self.shown_seq = 0;
+        self.stats = RenderStats::new();
+        self.health.opened(now);
+        self.next_sample = now + health_limits::SAMPLE_MS;
+    }
 }
 
 pub struct InputViewer {
@@ -173,6 +202,8 @@ pub struct InputViewer {
     ui_fps: f32,
     ui_frames: (u32, Instant),
     report_count: u64,
+    /// Origin of the millisecond clock the health policy runs on.
+    epoch: Instant,
 }
 
 impl InputViewer {
@@ -218,13 +249,14 @@ impl InputViewer {
             ui_fps: 0.0,
             ui_frames: (0, Instant::now()),
             report_count: 0,
+            epoch: Instant::now(),
             flags,
         };
         if app.flags.mock.is_none() && app.review.is_none() {
             app.updater = Updater::start(cc.egui_ctx.clone());
         }
         if let Some(n) = app.flags.mock {
-            app.set_devices(capture::mock_devices(n, app.flags.test_pattern));
+            app.set_devices(capture::mock_devices(n, app.flags.test_pattern, app.flags.mock_fault));
         } else {
             let (tx, rx) = mpsc::channel();
             let ctx = cc.egui_ctx.clone();
@@ -312,8 +344,12 @@ impl InputViewer {
         }
     }
 
-    /// Open streams for what is on screen, release the rest, and retry the
-    /// ones that failed on the backoff schedule.
+    fn now_ms(&self) -> f64 {
+        self.epoch.elapsed().as_secs_f64() * 1000.0
+    }
+
+    /// Open a stream for each input on screen and release the rest. A device
+    /// closed for a reopen is opened again here once its release gap is over.
     fn sync_streams(&mut self, ctx: &egui::Context) {
         // A disabled input is never opened; its half shows no signal.
         let wanted: Vec<String> = self.visible_sides().iter()
@@ -321,29 +357,18 @@ impl InputViewer {
             .filter(|id| self.settings.is_enabled(id))
             .collect();
         self.slots.retain(|id, _| wanted.contains(id));
-        let now = Instant::now();
+        let now = self.now_ms();
         for id in wanted {
             let Some(device) = self.devices.iter().find(|d| d.id == id).cloned() else { continue };
-            let reopen = match self.slots.get(&id) {
-                None => true,
-                Some(s) => s.reopen_at.is_some_and(|t| now >= t),
-            };
-            if reopen {
-                let failures = self.slots.get(&id).map_or(0, |s| s.failures);
-                if failures > 0 {
-                    eprintln!("[health] reopening {} (attempt {failures})", device.label);
+            match self.slots.get_mut(&id) {
+                None => {
+                    self.slots.insert(id, Slot::open(&device, ctx, now));
                 }
-                // Replacing the slot drops the old Stream, which stops its thread.
-                self.slots.insert(id, Slot {
-                    stream: Stream::open(&device, ctx.clone()),
-                    texture: None,
-                    shown_seq: 0,
-                    health: Health::new(),
-                    status: Status::Waiting,
-                    failures,
-                    reopen_at: None,
-                    stats: RenderStats::new(),
-                });
+                Some(slot) if slot.stream.is_none() && slot.reopen_at.is_some_and(|t| now >= t) => {
+                    eprintln!("[health] {id}: reopened (attempt {})", slot.health.info().attempts);
+                    slot.attach(&device, ctx, now);
+                }
+                Some(_) => {}
             }
         }
     }
@@ -352,25 +377,10 @@ impl InputViewer {
         let now = Instant::now();
         let forced = self.flags.no_signal;
         for (id, slot) in &mut self.slots {
-            let frame = slot.stream.latest();
+            let Some(stream) = &slot.stream else { continue };
+            let frame = stream.latest();
             let fresh = frame.as_ref().filter(|f| f.seq != slot.shown_seq);
-            // Thumbnail every frame is cheap at 32x18, but only for new frames.
-            let thumb = fresh.map(|f| health::luma_thumbnail(f.rgba(), f.width(), f.height()));
-            let failed = slot.stream.error().is_some();
-            let status = slot.health.observe(now, frame.as_ref().map(|f| f.seq), thumb.as_ref().map(|t| &t[..]), failed);
-            if status != slot.status {
-                eprintln!("[health] {id}: {:?} -> {:?}", slot.status, status);
-                slot.status = status;
-            }
-            if matches!(status, Status::Failed | Status::Stalled) && slot.reopen_at.is_none() {
-                let wait = REOPEN_BACKOFF[slot.failures.min(REOPEN_BACKOFF.len() - 1)];
-                slot.failures += 1;
-                slot.reopen_at = Some(now + Duration::from_secs(wait));
-            }
-            if status == Status::Ok {
-                slot.failures = 0;
-            }
-            // While frozen, keep reading health but stop updating the picture.
+            // While frozen, keep sampling health but stop updating the picture.
             if let Some(f) = fresh.filter(|_| !self.frozen && !forced) {
                 // The Arc is handed over as is: no copy, no conversion here.
                 match &mut slot.texture {
@@ -396,14 +406,43 @@ impl InputViewer {
         }
     }
 
+    /// Health: every 2 s per device, never under --no-signal (it is not
+    /// started there in Electron either, rather than run and ignored).
+    fn sample_health(&mut self) {
+        if self.flags.no_signal {
+            return;
+        }
+        let now_ms = self.now_ms();
+        for (id, slot) in &mut self.slots {
+            let Some(stream) = &slot.stream else { continue };
+            // A failure is acted on at once, as Electron does on a rejected
+            // open or an ended track; everything else waits for the sample.
+            let new_failure = stream.error().is_some() && !slot.health.status().is_fault();
+            if now_ms < slot.next_sample && !new_failure {
+                continue;
+            }
+            let frame = stream.latest();
+            slot.next_sample = now_ms + health_limits::SAMPLE_MS;
+            check_health(id, slot, frame.as_deref(), now_ms);
+        }
+    }
+
+    /// Does this half show the NO SIGNAL board?
+    ///
+    /// As in Electron: forced, no input, a missing or disabled device, or a
+    /// device that cannot be opened. **Not** a dark, stalled or frameless
+    /// stream -- those are reopened by the health policy and stay black
+    /// meanwhile; only reference detection (ADR 0014, not ported) turns a
+    /// live-but-dark card into the board.
     fn side_no_signal(&self, i: usize) -> bool {
         if self.flags.no_signal {
             return true;
         }
-        match self.sides[i].as_ref().and_then(|id| self.slots.get(id)) {
-            Some(slot) => slot.status.is_no_signal(),
-            None => true,
+        let Some(id) = self.sides[i].as_ref() else { return true };
+        if !self.devices.iter().any(|d| &d.id == id) || !self.settings.is_enabled(id) {
+            return true;
         }
+        self.slots.get(id).is_some_and(|slot| slot.health.status() == Status::OpenFailed)
     }
 
     // ------------------------------------------------------------ screensaver
@@ -593,7 +632,7 @@ impl InputViewer {
         };
         for (i, half) in halves {
             let Some(slot) = self.sides[i].as_ref().and_then(|id| self.slots.get(id)) else { continue };
-            let size = slot.stream.latest().map_or((0, 0), |f| (f.width(), f.height()));
+            let size = slot.stream.as_ref().and_then(Stream::latest).map_or((0, 0), |f| (f.width(), f.height()));
             let stats = slot.stats.last.map_or_else(|| "measuring…".to_owned(), |r| r.line());
             let text = format!("{}x{} · {stats} · ui {:.0} fps", size.0, size.1, self.ui_fps);
             hud_line(painter, half.left_top() + vec2(12.0, 12.0), &text);
@@ -757,6 +796,51 @@ impl InputViewer {
     }
 }
 
+/// One health sample for a slot: feed the policy, log transitions, and close
+/// the device for a reopen when the policy says so.
+fn check_health(id: &str, slot: &mut Slot, frame: Option<&capture::Frame>, now: f64) {
+    let Some(stream) = &slot.stream else { return };
+    let before = slot.health.info();
+    match stream.error() {
+        // Failed before a single frame: it never opened.
+        Some(e) if frame.is_none() => {
+            if before.status != Status::OpenFailed {
+                slot.health.open_failed(now, &e);
+            }
+        }
+        Some(_) => {
+            slot.health.sample(Sample { frames: frame.map(|f| f.seq), ended: true, stats: None }, now);
+        }
+        None => {
+            let stats = frame.map(|f| {
+                let (tw, th) = HEALTH_THUMB;
+                health::luma_stats(&health::thumbnail(f.rgba(), f.width(), f.height(), tw, th))
+            });
+            slot.health.sample(Sample { frames: Some(frame.map_or(0, |f| f.seq)), ended: false, stats }, now);
+        }
+    }
+    let after = slot.health.info();
+    if after.status != before.status {
+        // One flat ASCII line, as the operators read them (ADR 0044).
+        let luma = after.luma.map_or_else(|| "-".to_owned(), |l| format!("{:.0} +/- {:.1}", l.mean, l.std));
+        let error = after.error.as_deref().map(|e| format!(", {e}")).unwrap_or_default();
+        eprintln!("[health] {id}: {} -> {} (fps {:.1}, luma {luma}{error})",
+            before.status.name(), after.status.name(), after.fps);
+    }
+    let decision = slot.health.decide(now);
+    if decision.reopen {
+        let reason = decision.reason.map_or("?", Status::name);
+        eprintln!("[health] {id}: closing for reopen ({reason}, attempt {})", after.attempts + 1);
+        slot.health.reopening(now);
+        // Dropping the stream closes the device; it is opened again after
+        // the release gap, "so the driver sees the device closed rather than
+        // a handover".
+        slot.stream = None;
+        slot.texture = None;
+        slot.reopen_at = Some(now + health_limits::REOPEN_RELEASE_MS);
+    }
+}
+
 fn panel_frame() -> egui::Frame {
     egui::Frame::NONE
         .fill(Color32::from_rgba_unmultiplied(16, 16, 20, 235))
@@ -815,6 +899,24 @@ fn tile(ui: &mut egui::Ui, label: &str, still: Option<&TextureHandle>, selected:
 }
 
 impl eframe::App for InputViewer {
+    /// Everything that must keep running when nobody can see the window.
+    ///
+    /// eframe skips `ui()` entirely while the window is hidden or covered, and
+    /// calls only this. Health, reopening and device polling lived in `ui()`
+    /// at first, and a covered window simply stopped recovering its cards --
+    /// found by `--mock-fault` with the window behind others. On the wall any
+    /// window over the app (an update prompt, say) would have done the same.
+    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.poll_devices(ctx);
+        self.sync_streams(ctx);
+        self.sample_health();
+        self.update_saver(Instant::now());
+        self.store.tick(&self.settings);
+        // Wake up on our own: with every input stalled or failed no frames
+        // arrive to request a repaint, and the reopen timers would never fire.
+        ctx.request_repaint_after(Duration::from_millis(500));
+    }
+
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         let now = Instant::now();
@@ -831,11 +933,8 @@ impl eframe::App for InputViewer {
         let dt = now.duration_since(self.last_frame).as_secs_f32().min(0.1);
         self.last_frame = now;
 
-        self.poll_devices(&ctx);
         self.handle_keys(&ctx);
-        self.sync_streams(&ctx);
         self.update_frames(&ctx);
-        self.update_saver(now);
 
         let rect = ui.max_rect();
         self.paint_wall(ui, rect, now, dt);
@@ -916,7 +1015,7 @@ mod tests {
     use super::*;
 
     fn devs(ids: &[&str]) -> Vec<Device> {
-        ids.iter().map(|id| Device { id: (*id).into(), label: id.to_uppercase(), index: None, test_pattern: None }).collect()
+        ids.iter().map(|id| Device { id: (*id).into(), label: id.to_uppercase(), index: None, test_pattern: None, mock_fault: None }).collect()
     }
 
     fn ids(sides: [Option<String>; 2]) -> [Option<&'static str>; 2] {

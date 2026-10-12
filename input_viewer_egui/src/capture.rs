@@ -34,7 +34,23 @@ pub struct Device {
     /// Mock inputs only: draw the motion test pattern at this size and rate
     /// instead of colour bars (`--test-pattern`).
     pub test_pattern: Option<PatternFormat>,
+    /// Mock inputs only: misbehave this way (`--mock-fault`).
+    pub mock_fault: Option<MockFault>,
 }
+
+/// How a mock input misbehaves, to drive the health policy without hardware.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MockFault {
+    /// Frames keep arriving, all one flat dark colour: a card with no source.
+    Dark,
+    /// Ten seconds of normal frames, then none: a hung card.
+    Stall,
+    /// The device cannot be opened.
+    Fail,
+}
+
+/// How long a `Stall` mock delivers before it stops.
+const MOCK_STALL_AFTER: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PatternFormat {
@@ -101,10 +117,12 @@ impl Stream {
                 let result = if let Some(n) = d.id.strip_prefix(MOCK_PREFIX) {
                     let n = n.parse().unwrap_or(1);
                     match d.test_pattern {
-                        Some(f) => run_test_pattern(n, f, &s, &st, &ctx),
-                        None => run_mock(n, &d.label, &s, &st, &ctx),
+                        Some(f) => {
+                            run_test_pattern(n, f, &s, &st, &ctx);
+                            Ok(())
+                        }
+                        None => run_mock(n, d.mock_fault, &s, &st, &ctx),
                     }
-                    Ok(())
                 } else {
                     run_camera(&d, &s, &st, &ctx)
                 };
@@ -149,7 +167,9 @@ fn publish(shared: &Shared, frame: Frame, ctx: &egui::Context) {
 // Mock inputs
 // ---------------------------------------------------------------------------
 
-pub fn mock_devices(count: usize, test_pattern: Option<PatternFormat>) -> Vec<Device> {
+/// `fault`, if any, applies to the last input only, so the others stay
+/// healthy to compare against.
+pub fn mock_devices(count: usize, test_pattern: Option<PatternFormat>, fault: Option<MockFault>) -> Vec<Device> {
     (1..=count)
         .map(|i| Device {
             id: format!("{MOCK_PREFIX}{i}"),
@@ -159,6 +179,7 @@ pub fn mock_devices(count: usize, test_pattern: Option<PatternFormat>) -> Vec<De
             },
             index: None,
             test_pattern,
+            mock_fault: fault.filter(|_| i == count),
         })
         .collect()
 }
@@ -195,17 +216,29 @@ pub fn draw_mock_frame(n: usize, phase: f32, w: usize, h: usize) -> Vec<u8> {
     px
 }
 
-fn run_mock(n: usize, _label: &str, shared: &Shared, stop: &AtomicBool, ctx: &egui::Context) {
+fn run_mock(n: usize, fault: Option<MockFault>, shared: &Shared, stop: &AtomicBool, ctx: &egui::Context) -> Result<(), String> {
+    if fault == Some(MockFault::Fail) {
+        return Err("could not open (--mock-fault=fail)".into());
+    }
     let period = Duration::from_millis(1000 / MOCK_FPS);
     let start = Instant::now();
     let mut seq = 0;
     while !stop.load(Ordering::Relaxed) {
-        let phase = (start.elapsed().as_secs_f32() / 4.0).fract();
-        let rgba = draw_mock_frame(n, phase, MOCK_WIDTH, MOCK_HEIGHT);
-        seq += 1;
-        publish(shared, Frame::new(MOCK_WIDTH, MOCK_HEIGHT, pixels_from_rgba(rgba), seq), ctx);
+        let stalled = fault == Some(MockFault::Stall) && start.elapsed() >= MOCK_STALL_AFTER;
+        if !stalled {
+            let pixels = if fault == Some(MockFault::Dark) {
+                // The near-black a card shows with nothing plugged in.
+                vec![egui::Color32::from_rgb(10, 10, 12); MOCK_WIDTH * MOCK_HEIGHT]
+            } else {
+                let phase = (start.elapsed().as_secs_f32() / 4.0).fract();
+                pixels_from_rgba(draw_mock_frame(n, phase, MOCK_WIDTH, MOCK_HEIGHT))
+            };
+            seq += 1;
+            publish(shared, Frame::new(MOCK_WIDTH, MOCK_HEIGHT, pixels, seq), ctx);
+        }
         std::thread::sleep(period);
     }
+    Ok(())
 }
 
 /// `--test-pattern`: frames on an absolute schedule, so the rate is exactly
@@ -274,6 +307,7 @@ mod camera {
                         label: info.human_name(),
                         index: Some(info.index().as_string()),
                         test_pattern: None,
+                        mock_fault: None,
                     }
                 })
                 .collect(),

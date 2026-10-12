@@ -44,17 +44,18 @@ impl InputViewer {
             return InputState::NotOnScreen;
         }
         let Some(slot) = self.slots.get(id) else { return InputState::Opening };
-        if let Some(e) = slot.stream.error() {
-            return InputState::Failed(e);
-        }
-        match slot.status {
-            Status::Ok => match slot.stream.latest() {
+        let Some(stream) = &slot.stream else { return InputState::Reopening };
+        match slot.health.status() {
+            Status::Ok => match stream.latest() {
                 Some(f) => InputState::Live { width: f.width(), height: f.height() },
                 None => InputState::Opening,
             },
-            Status::Waiting => InputState::Opening,
-            Status::Stalled | Status::Flat => InputState::NoSignal,
-            Status::Failed => InputState::Failed("the stream stopped".into()),
+            Status::Idle | Status::Opening => InputState::Opening,
+            Status::Dark => InputState::Dark,
+            Status::NoFrames => InputState::Failed("No frames since it opened".into()),
+            Status::Stalled => InputState::Failed("Frames stopped".into()),
+            Status::Ended => InputState::Failed("The stream ended".into()),
+            Status::OpenFailed => InputState::Failed(format!("Could not open: {}", slot.health.info().error.unwrap_or_default())),
         }
     }
 
