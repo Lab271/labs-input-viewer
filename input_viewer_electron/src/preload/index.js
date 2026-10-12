@@ -11,12 +11,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Diagnostic log (temporary; see the no-signal detection investigation)
   diagLog: (lines) => ipcRenderer.invoke('diag-log', lines),
-  diagLogReset: () => ipcRenderer.invoke('diag-log-reset'),
 
   // Settings persistence
   loadSettings: () => ipcRenderer.invoke('load-settings'),
   saveSettings: (settings) => ipcRenderer.invoke('save-settings', settings),
-  getSettingsPath: () => ipcRenderer.invoke('get-settings-path'),
 
   // App info
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),

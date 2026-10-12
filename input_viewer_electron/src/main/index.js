@@ -433,12 +433,6 @@ ipcMain.handle('diag-log', (event, lines) => {
   }
 })
 
-ipcMain.handle('diag-log-reset', () => {
-  const file = diagLogPath()
-  try { fs.writeFileSync(file, '') } catch { /* first run */ }
-  return file
-})
-
 // Art-Net reactive mode (issue #59).
 //
 // The POST lives here rather than in the renderer for two reasons. In production
@@ -560,11 +554,6 @@ ipcMain.handle('load-settings', () => {
 // Save settings to file
 ipcMain.handle('save-settings', (event, settings) => {
   return saveSettings(settings)
-})
-
-// Get settings file path (for debugging)
-ipcMain.handle('get-settings-path', () => {
-  return settingsPath
 })
 
 // Get app version for display in UI
