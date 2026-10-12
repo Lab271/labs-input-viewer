@@ -199,7 +199,6 @@ const elements = {
   rightVideo: document.getElementById('right-video'),
   videoWrapper: document.getElementById('video-wrapper'),
   centerDivider: document.getElementById('center-divider'),
-  bottomLogo: document.getElementById('bottom-logo'),
   leftBorder: document.getElementById('left-border'),
   rightBorder: document.getElementById('right-border'),
   inputNameOverlay: document.getElementById('input-name-overlay'),
@@ -237,8 +236,6 @@ const elements = {
   dropdownSystemVolume: document.getElementById('dropdown-system-volume'),
   dropdownSystemVolumeValue: document.getElementById('dropdown-system-volume-value'),
   // Cached label references (avoids DOM queries in hot paths)
-  leftLabel: document.querySelector('#left-feed .input-label'),
-  rightLabel: document.querySelector('#right-feed .input-label'),
   // DVD screensaver overlay
   dvdOverlay: document.getElementById('dvd-overlay'),
   screensaverCanvas: document.getElementById('screensaver-canvas'),
@@ -824,10 +821,6 @@ async function startVideoStream(deviceId, videoElement, side) {
       // leaves it up in forced mode.
       hideNoSignal(side)
 
-      const label = side === 'left' ? elements.leftLabel : elements.rightLabel
-      if (label && device) {
-        label.textContent = getInputName(deviceId, device.label || 'Mock Input')
-      }
       state.health[side].opened(performance.now())
       resetCrop(side)
       return mock.stream
@@ -956,14 +949,6 @@ async function startVideoStream(deviceId, videoElement, side) {
     }
 
     hideNoSignal(side)
-
-    // Update input label using cached reference
-    const device = state.devices.find(d => d.deviceId === deviceId)
-    const label = side === 'left' ? elements.leftLabel : elements.rightLabel
-    if (label && device) {
-      const name = getInputName(deviceId, device.label || 'Unknown Input')
-      label.textContent = name
-    }
 
     attachStreamHealth(side, deviceId, stream)
     return stream
@@ -2134,7 +2119,6 @@ function setLayout(mode) {
       void elements.rightFeed.offsetWidth
       elements.rightFeed.classList.remove('collapsed')
       elements.centerDivider.classList.remove('hidden', 'overlay')
-      elements.bottomLogo.classList.add('hidden')
       ensureRightStream()
       break
     case 'single':
@@ -2151,7 +2135,6 @@ function setLayout(mode) {
         if (state.layoutMode === 'single') elements.rightFeed.classList.add('hidden')
       }, animMs)
       elements.centerDivider.classList.add('overlay')
-      elements.bottomLogo.classList.add('hidden')
       break
   }
 
@@ -2910,11 +2893,6 @@ function buildPickerVolume(side) {
     value.textContent = `${e.target.value}%`
   })
   return row
-}
-
-/** Volume lives in the pickers now; kept so existing callers still refresh it. */
-function renderDropdownVolumeControls() {
-  renderDropdownInputLists()
 }
 
 /**
@@ -5076,9 +5054,8 @@ async function init() {
     console.error('[Detection] Initialization error:', err)
   })
 
-  // Render dropdown input lists and volume controls
+  // Render the dropdown's pickers (each carries its half's volume)
   renderDropdownInputLists()
-  renderDropdownVolumeControls()
 
   // Label the view-mode buttons and fill the Settings shortcut table from the
   // shared list (#258). After renderDropdownInputLists, which paints the rows

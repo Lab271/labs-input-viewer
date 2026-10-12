@@ -193,22 +193,6 @@ body.single-view .video-feed.single video {
   object-fit: contain;
 }
 
-.input-label {
-  position: absolute;
-  bottom: 20px;
-  left: 20px;
-  padding: 8px 16px;
-  background-color: rgba(0, 0, 0, 0.7);
-  border-radius: 6px;
-  font-size: 14px;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
-body.cursor-visible .input-label {
-  opacity: 1;
-}
-
 /* =============================================================================
    No Signal Overlay
    ============================================================================= */
@@ -462,28 +446,6 @@ body.gpu-compositing #right-video {
   max-height: 80%;
   object-fit: contain;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
-}
-
-/* Bottom Logo (shown in single view) */
-#bottom-logo {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  height: 60px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: var(--bg-color);
-  z-index: 15;
-}
-
-#bottom-logo .divider-logo {
-  opacity: 1;
-}
-
-#bottom-logo.hidden {
-  display: none;
 }
 
 /* =============================================================================

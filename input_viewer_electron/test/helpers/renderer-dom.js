@@ -36,11 +36,9 @@ export function requiredElementIds() {
 }
 
 // Nodes the renderer reaches for with a descendant selector rather than an id.
-// These mirror src/renderer/index.html, where each feed contains both a label
-// and a no-signal overlay.
+// These mirror src/renderer/index.html, where each feed contains a no-signal
+// overlay.
 const NESTED = [
-  { parent: 'left-feed', className: 'input-label' },
-  { parent: 'right-feed', className: 'input-label' },
   { parent: 'left-feed', className: 'no-signal-overlay hidden' },
   { parent: 'right-feed', className: 'no-signal-overlay hidden' },
 ]
