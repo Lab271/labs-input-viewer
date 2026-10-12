@@ -1,0 +1,340 @@
+name: Release (egui)
+
+# Installers and auto-update packages for input_viewer_egui, built with
+# Velopack. Same shape as release.yml: manual dispatch, version derived from
+# Conventional Commits, tests gate the publish.
+#
+# It shares GitHub Releases with the Electron app, and two rules keep the two
+# from interfering:
+#
+#   1. Tags are `egui-v*`. release.yml finds its last tag with
+#      `git describe --match 'v[0-9]*'`, so these never become its baseline.
+#   2. Releases are published with `make_latest: false`. electron-updater
+#      resolves /releases/latest; if an egui release were "latest", every
+#      Electron install would look there for a latest.yml that is not there.
+#
+# Unlike release.yml there is no version-bump commit: the tag is the source of
+# truth, and the version is written into Cargo.toml and Info.plist at build
+# time only.
+#
+# `publish: false` (the default) builds and uploads the installers as workflow
+# artifacts and stops. Pull requests touching the egui app get the same build
+# automatically (version 0.0.0-pr.N, never published), which is also how this
+# workflow gets exercised before it reaches main: GitHub only offers
+# workflow_dispatch for workflows already on the default branch.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'input_viewer_egui/**'
+      - '.github/workflows/release-egui.yml'
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish a GitHub release (main only). Off = build artifacts only.'
+        required: false
+        type: boolean
+        default: false
+      bump:
+        description: 'Version bump (auto = derive from commits touching input_viewer_egui/)'
+        required: false
+        type: choice
+        default: auto
+        options: [auto, patch, minor, major]
+
+env:
+  VPK_VERSION: '1.2.161'   # keep equal to the velopack crate in Cargo.lock
+  PACK_ID: InputViewerEgui
+  PACK_TITLE: Input Viewer (egui)
+
+jobs:
+  analyze:
+    name: Analyze commits
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      last_tag: ${{ steps.version.outputs.last_tag }}
+      publish: ${{ steps.version.outputs.publish }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute version
+        id: version
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            echo "Pull request: packaging check only"
+            {
+              echo "version=0.0.0-pr.${{ github.event.pull_request.number }}"
+              echo "last_tag="
+              echo "publish=false"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          LAST_TAG=$(git tag -l 'egui-v*' --sort=-v:refname | head -n1)
+          CURRENT=${LAST_TAG#egui-v}
+          CURRENT=${CURRENT:-0.0.0}
+
+          BUMP="${{ inputs.bump }}"
+          if [ "$BUMP" = "auto" ]; then
+            # Only commits that touch the egui app count; an Electron fix must
+            # not bump the egui version.
+            RANGE=${LAST_TAG:+$LAST_TAG..HEAD}
+            COMMITS=$(git log "${RANGE:-HEAD}" --pretty=format:%s --no-merges -- input_viewer_egui)
+            BUMP=none
+            if echo "$COMMITS" | grep -qiE '^.+!:|BREAKING CHANGE'; then BUMP="major"
+            elif echo "$COMMITS" | grep -qiE '^feat(\(.+\))?:'; then BUMP="minor"
+            elif echo "$COMMITS" | grep -qiE '^(fix|perf|refactor|build|ci)(\(.+\))?:'; then BUMP="patch"
+            fi
+          fi
+          if [ "$BUMP" = "none" ]; then
+            echo "::error::No releasable commits touch input_viewer_egui/ since ${LAST_TAG:-the start}. Pick a bump explicitly to release anyway."
+            exit 1
+          fi
+
+          IFS=. read -r MA MI PA <<< "$CURRENT"
+          case $BUMP in
+            major) VERSION="$((MA + 1)).0.0" ;;
+            minor) VERSION="$MA.$((MI + 1)).0" ;;
+            patch) VERSION="$MA.$MI.$((PA + 1))" ;;
+          esac
+
+          PUBLISH=false
+          if [ "${{ inputs.publish }}" = "true" ]; then
+            if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+              echo "::error::Publishing is only allowed from main (this run is on $GITHUB_REF)."
+              exit 1
+            fi
+            PUBLISH=true
+          fi
+
+          echo "${LAST_TAG:-none} -> $VERSION ($BUMP), publish=$PUBLISH"
+          {
+            echo "version=$VERSION"
+            echo "last_tag=$LAST_TAG"
+            echo "publish=$PUBLISH"
+          } >> "$GITHUB_OUTPUT"
+
+  build-windows:
+    name: Build Windows
+    needs: analyze
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: input_viewer_egui
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: '8.0.x'
+
+      # Cargo.lock records the crate's own version too; both must change or
+      # --locked refuses to build.
+      - name: Set version
+        run: |
+          V="${{ needs.analyze.outputs.version }}"
+          sed -i "s/^version = \"0.0.0\"$/version = \"$V\"/" Cargo.toml
+          perl -0pi -e "s/(name = \"input_viewer_egui\"\nversion = )\"[^\"]*\"/\$1\"$V\"/" Cargo.lock
+          grep -A1 'name = "input_viewer_egui"' Cargo.lock
+
+      - name: Test
+        run: cargo test --release --locked
+
+      - name: Build
+        run: cargo build --release --locked
+
+      - name: Install vpk
+        run: |
+          dotnet tool install -g vpk --version "$VPK_VERSION"
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+
+      # The previous release's full package lets vpk generate a delta, so an
+      # update downloads only what changed.
+      - name: Fetch previous release for deltas
+        if: needs.analyze.outputs.last_tag != ''
+        continue-on-error: true
+        run: |
+          vpk download http --channel windows --outputDir releases \
+            --url "https://github.com/${{ github.repository }}/releases/download/${{ needs.analyze.outputs.last_tag }}/"
+
+      - name: Pack
+        run: |
+          mkdir -p publish
+          cp target/release/input-viewer.exe publish/
+          vpk pack \
+            --packId "$PACK_ID" \
+            --packVersion "${{ needs.analyze.outputs.version }}" \
+            --packTitle "$PACK_TITLE" \
+            --packAuthors "Schuberg Philis / Lab271" \
+            --packDir publish \
+            --mainExe input-viewer.exe \
+            --icon ../input_viewer_electron/build/icon.ico \
+            --channel windows \
+            --outputDir releases
+          ls -la releases
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: egui-windows
+          path: input_viewer_egui/releases/*
+          if-no-files-found: error
+
+  build-mac:
+    name: Build macOS
+    needs: analyze
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: input_viewer_egui
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: '8.0.x'
+
+      # Cargo.lock records the crate's own version too; both must change or
+      # --locked refuses to build.
+      - name: Set version
+        run: |
+          V="${{ needs.analyze.outputs.version }}"
+          sed -i '' "s/^version = \"0.0.0\"$/version = \"$V\"/" Cargo.toml
+          perl -0pi -e "s/(name = \"input_viewer_egui\"\nversion = )\"[^\"]*\"/\$1\"$V\"/" Cargo.lock
+          grep -A1 'name = "input_viewer_egui"' Cargo.lock
+
+      - name: Test
+        run: cargo test --release --locked
+
+      # Universal, like the Electron DMG: one download for Intel and Apple silicon.
+      - name: Build universal binary
+        run: |
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+          cargo build --release --locked --target aarch64-apple-darwin
+          cargo build --release --locked --target x86_64-apple-darwin
+          lipo -create -output input-viewer \
+            target/aarch64-apple-darwin/release/input-viewer \
+            target/x86_64-apple-darwin/release/input-viewer
+          lipo -info input-viewer
+
+      # Built by hand rather than left to vpk, so Info.plist carries
+      # NSCameraUsageDescription. Without it macOS kills the app on first
+      # camera access.
+      - name: Assemble app bundle
+        run: |
+          APP="publish/Input Viewer (egui).app"
+          mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+          cp input-viewer "$APP/Contents/MacOS/"
+          cp ../input_viewer_electron/build/icon.icns "$APP/Contents/Resources/icon.icns"
+          sed 's/@VERSION@/${{ needs.analyze.outputs.version }}/g' packaging/macos/Info.plist > "$APP/Contents/Info.plist"
+          plutil -lint "$APP/Contents/Info.plist"
+          # Ad-hoc signature. Unsigned like the Electron build (no Developer ID
+          # in this repo), but Apple silicon will not run an arm64 binary
+          # without at least this.
+          codesign --force --deep --sign - "$APP"
+
+      - name: Install vpk
+        run: |
+          dotnet tool install -g vpk --version "$VPK_VERSION"
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+
+      - name: Fetch previous release for deltas
+        if: needs.analyze.outputs.last_tag != ''
+        continue-on-error: true
+        run: |
+          vpk download http --channel macos --outputDir releases \
+            --url "https://github.com/${{ github.repository }}/releases/download/${{ needs.analyze.outputs.last_tag }}/"
+
+      - name: Pack
+        run: |
+          vpk pack \
+            --packId "$PACK_ID" \
+            --packVersion "${{ needs.analyze.outputs.version }}" \
+            --packTitle "$PACK_TITLE" \
+            --packAuthors "Schuberg Philis / Lab271" \
+            --packDir "publish/Input Viewer (egui).app" \
+            --mainExe input-viewer \
+            --channel macos \
+            --outputDir releases
+          ls -la releases
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: egui-macos
+          path: input_viewer_egui/releases/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish release
+    needs: [analyze, build-windows, build-mac]
+    if: needs.analyze.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: egui-windows
+          path: artifacts/windows
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: egui-macos
+          path: artifacts/macos
+
+      # Both platforms upload into one release, where asset names must be
+      # unique. The custom channels (windows/macos rather than the default
+      # win/osx) are what make vpk put the channel in every file name; this
+      # fails the run if that ever stops being true, rather than letting one
+      # platform's package silently replace the other's.
+      #
+      # The previous release's packages fetched for delta generation are
+      # dropped: they already live on that release.
+      - name: Collect assets
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.analyze.outputs.version }}"
+          mkdir upload
+          for f in artifacts/*/*; do
+            name=$(basename "$f")
+            case "$name" in
+              *.nupkg) [[ "$name" == *"-$VERSION-"* ]] || { echo "skip $name (previous release)"; continue; } ;;
+            esac
+            if [ -e "upload/$name" ]; then
+              echo "::error::Both platforms produced $name"
+              exit 1
+            fi
+            cp "$f" upload/
+          done
+          ls -la upload
+
+      - name: Create release
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          tag_name: egui-v${{ needs.analyze.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          name: Input Viewer (egui) ${{ needs.analyze.outputs.version }}
+          # Never "latest": that slot belongs to the Electron app's updater.
+          make_latest: 'false'
+          body: |
+            Prototype of Input Viewer built on egui. Installs alongside the Electron app.
+
+            - **Windows:** the `-Setup.exe`. Installs per user, no admin rights needed.
+            - **macOS:** the `-Setup.pkg`. Unsigned, like the Electron build: right-click → Open the first time.
+
+            Installed copies update themselves from releases tagged `egui-v*`.
+          files: upload/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Summary
+        run: |
+          {
+            echo "### Input Viewer (egui) ${{ needs.analyze.outputs.version }}"
+            echo ""
+            echo "Tag \`egui-v${{ needs.analyze.outputs.version }}\`, not marked latest."
+          } >> "$GITHUB_STEP_SUMMARY"
