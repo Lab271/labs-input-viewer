@@ -1,5 +1,5 @@
 {
-  "_comment": "Example of the settings file the app writes, for reference only. The real file lives in the app's user data directory (Settings shows the exact path) -- nothing reads this copy. Keys mirror getDefaultSettings() in src/renderer/renderer.js.",
+  "_comment": "Example of the settings file the app writes, for reference only. The real file is settings.json in the app's user data folder, next to the logs folder whose path the log's startup line prints -- nothing reads this copy. Keys mirror getDefaultSettings() in src/renderer/renderer.js.",
 
   "leftDeviceId": null,
   "rightDeviceId": null,
