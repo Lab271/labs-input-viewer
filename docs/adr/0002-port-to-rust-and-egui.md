@@ -45,8 +45,8 @@ The prototype in `input_viewer_egui/` was built to test #249's objections:
 |---|---|
 | Shaders tuned against ANGLE | Plasma and its post-FX chain run as the **same GLSL**, extracted from the JS at build time (`shaders/extract.mjs`), on desktop GL 3.3. Six of 29 savers are pure fragment shaders and port this way; the rest need their JS orchestration rewritten ([0026](0026-share-glsl-and-work-in-world-space.md)). |
 | Compositing cost | Two synthetic 3840x2160@60 inputs: 60.0 fps shown, 0 skipped/s, ~7 ms capture-to-upload, UI ~95 fps (M3 Pro, `--test-pattern --hud`). #62 had already shown compositing is not the bottleneck in Electron either. |
-| Auto-update | Velopack with a custom update source, alongside the Electron releases ([0048](0048-package-and-update-from-the-public-repo.md)). Built, linted, **not yet run in CI**. |
-| Capture | `nokhwa` (AVFoundation / Media Foundation). Compiles; frames flow from mock inputs. **Not tested against an Elgato 4K60 Pro MK.2**, and nokhwa rejects BGRA-only devices (OBS Virtual Camera). |
+| Auto-update | Velopack with a custom update source, alongside the Electron releases ([0048](0048-package-and-update-from-the-public-repo.md)). Windows `Setup.exe` and macOS `Setup.pkg` **build in CI** (#346); an install-then-update cycle is **not yet tested** (needs two releases). |
+| Capture | `nokhwa` (AVFoundation / Media Foundation). Compiles on Windows and macOS in CI; frames flow from mock inputs; capture health and reopen ported ([0012](0012-judge-health-by-counting-frames.md), [0013](0013-reopen-by-releasing-the-device-with-two-backoffs.md)). **Not tested against an Elgato 4K60 Pro MK.2**, and nokhwa rejects BGRA-only devices (OBS Virtual Camera). |
 
 The release binary is ~16 MB.
 

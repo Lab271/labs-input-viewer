@@ -59,5 +59,10 @@ fails the run if they ever produce the same file name -- the class of bug
 silently, show a small "update ready" note, install on the next quit or a
 nightly restart, and never show a modal for a failed check. And decide the
 install location the wall's startup script will launch
-([0006](0006-app-and-wall-setup-live-in-separate-repos.md)). Not yet run in
-CI.
+([0006](0006-app-and-wall-setup-live-in-separate-repos.md)).
+
+**Verified in CI** (#346): both installers build, and every file carries its
+platform in the name (`InputViewerEgui-windows-Setup.exe`,
+`InputViewerEgui-0.1.0-pr.346-macos-full.nupkg`, `releases.windows.json`...),
+so the two platforms share one release without colliding. **Not yet
+tested:** publishing, installing, and an update from one release to the next.
