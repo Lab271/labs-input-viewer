@@ -16,6 +16,7 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use eframe::egui;
+use crate::filelog::{log_error, log_info, log_warn};
 
 pub const MOCK_PREFIX: &str = "mock-input-";
 const MOCK_WIDTH: usize = 1280;
@@ -127,7 +128,7 @@ impl Stream {
                     run_camera(&d, &s, &st, &ctx)
                 };
                 if let Err(e) = result {
-                    eprintln!("[capture] {}: {e}", d.label);
+                    log_error!("[Video] {}: {e}", d.label);
                     *s.error.lock().unwrap() = Some(e);
                     ctx.request_repaint();
                 }
@@ -268,7 +269,7 @@ fn run_test_pattern(n: usize, f: PatternFormat, shared: &Shared, stop: &AtomicBo
             late += behind.saturating_sub(next);
             frame = behind.max(next);
             if late > 0 && late.is_power_of_two() {
-                eprintln!("[test-pattern] input {n}: source fell behind, {late} frames skipped so far");
+                log_warn!("[TestPattern] input {n}: source fell behind, {late} frames skipped so far");
             }
         }
     }
@@ -312,7 +313,7 @@ mod camera {
                 })
                 .collect(),
             Err(e) => {
-                eprintln!("[capture] device query failed: {e}");
+                log_error!("[Devices] device query failed: {e}");
                 Vec::new()
             }
         }
@@ -328,7 +329,7 @@ mod camera {
         let mut cam = nokhwa::Camera::new(index, format).map_err(|e| e.to_string())?;
         cam.open_stream().map_err(|e| e.to_string())?;
         let res = cam.resolution();
-        eprintln!("[capture] {} stream: {}x{}", d.label, res.width_x, res.height_y);
+        log_info!("[Video] {} stream: {}x{}", d.label, res.width_x, res.height_y);
         let mut seq = 0;
         while !stop.load(Ordering::Relaxed) {
             let buf = cam.frame().map_err(|e| e.to_string())?;

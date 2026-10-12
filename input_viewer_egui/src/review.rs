@@ -18,6 +18,7 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use eframe::egui;
+use crate::filelog::{log_error, log_info};
 
 pub struct Review {
     path: PathBuf,
@@ -53,8 +54,8 @@ impl Review {
             let [w, h] = img.size;
             let bytes: Vec<u8> = img.pixels.iter().flat_map(|c| c.to_array()).collect();
             match image::save_buffer(&self.path, &bytes, w as u32, h as u32, image::ExtendedColorType::Rgba8) {
-                Ok(()) => eprintln!("[review] saved {} ({w}x{h})", self.path.display()),
-                Err(e) => eprintln!("[review] could not save {}: {e}", self.path.display()),
+                Ok(()) => log_info!("[Review] saved {} ({w}x{h})", self.path.display()),
+                Err(e) => log_error!("[Review] could not save {}: {e}", self.path.display()),
             }
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }

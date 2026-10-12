@@ -9,6 +9,7 @@
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Stroke, StrokeKind, Vec2, pos2, vec2};
+use crate::filelog::log_info;
 
 pub const ROTATE_EVERY: Duration = Duration::from_secs(10 * 60);
 
@@ -91,7 +92,7 @@ impl Screensaver {
                 hue: rng.f32(),
             },
         };
-        eprintln!("[screensaver] {} seed={seed}", NAMES[index % NAMES.len()]);
+        log_info!("[Screensaver] {} seed={seed}", NAMES[index % NAMES.len()]);
         Self { index: index % NAMES.len(), seed, state }
     }
 

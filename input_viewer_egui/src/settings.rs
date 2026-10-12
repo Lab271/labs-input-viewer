@@ -21,6 +21,7 @@ use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use crate::filelog::{log_error, log_info, log_warn};
 
 /// Electron's `debouncedSaveSettings` delay: a slider drag writes once, after
 /// it stops.
@@ -165,7 +166,7 @@ pub fn load_from(path: &Path, electron: Option<&Path>) -> (Settings, Origin) {
             }
         },
         Err(e) if e.kind() != std::io::ErrorKind::NotFound => {
-            eprintln!("[settings] cannot read {}: {e}", path.display());
+            log_warn!("[Settings] cannot read {}: {e}", path.display());
         }
         Err(_) => {}
     }
@@ -188,11 +189,11 @@ impl Store {
         };
         let (settings, origin) = load_from(p, electron_path().as_deref());
         match &origin {
-            Origin::Own => eprintln!("[settings] loaded {}", p.display()),
-            Origin::ImportedFromElectron(from) => eprintln!("[settings] imported layout from {}", from.display()),
-            Origin::Defaults => eprintln!("[settings] none found, using defaults"),
+            Origin::Own => log_info!("[Settings] loaded {}", p.display()),
+            Origin::ImportedFromElectron(from) => log_info!("[Settings] imported layout from {}", from.display()),
+            Origin::Defaults => log_info!("[Settings] none found, using defaults"),
             Origin::Recovered { backup, error } => {
-                eprintln!("[settings] {} did not parse ({error}); moved to {}", p.display(), backup.display())
+                log_warn!("[Settings] {} did not parse ({error}); moved to {}", p.display(), backup.display())
             }
         }
         let mut store = Self { path, dirty_since: None };
@@ -229,7 +230,7 @@ impl Store {
         self.dirty_since = None;
         let Some(path) = &self.path else { return };
         if let Err(e) = write_atomic(path, settings) {
-            eprintln!("[settings] could not save {}: {e}", path.display());
+            log_error!("[Settings] could not save {}: {e}", path.display());
         }
     }
 }

@@ -26,6 +26,7 @@ use std::time::Duration;
 
 use velopack::sources::{HttpSource, UpdateSource};
 use velopack::{UpdateCheck, UpdateInfo, UpdateManager, VelopackAsset, VelopackAssetFeed};
+use crate::filelog::{log_error, log_info, log_warn};
 
 pub const REPO: &str = "LAB271/labs-input-viewer";
 pub const TAG_PREFIX: &str = "egui-v";
@@ -120,11 +121,11 @@ impl Updater {
         let manager = match UpdateManager::new(EguiReleases::default(), None, None) {
             Ok(m) => m,
             Err(e) => {
-                eprintln!("[updater] disabled: {e}");
+                log_info!("[AutoUpdater] disabled: {e}");
                 return None;
             }
         };
-        eprintln!("[updater] installed version {}", manager.get_current_version_as_string());
+        log_info!("[AutoUpdater] installed version {}", manager.get_current_version_as_string());
         let status = Arc::new(Mutex::new(Status::Idle));
         let pending = Arc::new(Mutex::new(None));
         let (tx, rx) = mpsc::channel();
@@ -159,9 +160,9 @@ impl Updater {
     /// Install a postponed update as the app quits.
     pub fn on_exit(&self) {
         if let Some((manager, asset)) = self.pending.lock().unwrap().take() {
-            eprintln!("[updater] installing {} on quit", asset.Version);
+            log_info!("[AutoUpdater] installing {} on quit", asset.Version);
             if let Err(e) = manager.wait_exit_then_apply_updates(&asset, true, false, Vec::<String>::new()) {
-                eprintln!("[updater] could not schedule install: {e}");
+                log_error!("[AutoUpdater] could not schedule install: {e}");
             }
         }
     }
@@ -179,22 +180,22 @@ fn run(
         ctx.request_repaint();
     };
     std::thread::sleep(FIRST_CHECK_AFTER);
-    eprintln!("[updater] checking for update...");
+    log_info!("[AutoUpdater] checking for update...");
     let info: Box<UpdateInfo> = match manager.check_for_updates() {
         Ok(UpdateCheck::UpdateAvailable(info)) => info,
         Ok(_) => {
-            eprintln!("[updater] up to date");
+            log_info!("[AutoUpdater] up to date");
             return;
         }
         Err(e) => {
             // Logged, not shown: an offline wall should not greet the room
             // with an error dialog every launch.
-            eprintln!("[updater] check failed: {e}");
+            log_warn!("[AutoUpdater] check failed: {e}");
             return;
         }
     };
     let version = info.TargetFullRelease.Version.clone();
-    eprintln!("[updater] update available: {version}");
+    log_info!("[AutoUpdater] update available: {version}");
     set(Status::Available(version.clone()));
 
     while let Ok(cmd) = rx.recv() {
@@ -212,12 +213,12 @@ fn run(
                 set(Status::Downloading(0));
                 match manager.download_updates(&info, Some(ptx)) {
                     Ok(()) => {
-                        eprintln!("[updater] downloaded {version}");
+                        log_info!("[AutoUpdater] downloaded {version}");
                         *pending.lock().unwrap() = Some((manager.clone(), info.TargetFullRelease.clone()));
                         set(Status::Ready(version.clone()));
                     }
                     Err(e) => {
-                        eprintln!("[updater] download failed: {e}");
+                        log_error!("[AutoUpdater] download failed: {e}");
                         set(Status::Failed(e.to_string()));
                     }
                 }
@@ -225,7 +226,7 @@ fn run(
             Command::RestartNow => {
                 pending.lock().unwrap().take();
                 if let Err(e) = manager.apply_updates_and_restart(&info.TargetFullRelease) {
-                    eprintln!("[updater] restart failed: {e}");
+                    log_error!("[AutoUpdater] restart failed: {e}");
                     set(Status::Failed(e.to_string()));
                 }
             }

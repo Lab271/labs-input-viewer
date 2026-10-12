@@ -16,6 +16,7 @@
 use std::sync::Mutex;
 
 use eframe::glow::{self, HasContext};
+use crate::filelog::{log_error, log_info};
 
 const PLASMA: &str = include_str!("../shaders/plasma.frag");
 const BRIGHT: &str = include_str!("../shaders/post-bright.frag");
@@ -103,7 +104,7 @@ pub fn paint(gl: &glow::Context, viewport: [i32; 4], time: f32, frame: i32, seed
         *state = match unsafe { Gpu::new(gl) } {
             Ok(g) => State::Ready(g),
             Err(e) => {
-                eprintln!("[plasma] GPU setup failed, falling back: {e}");
+                log_error!("[Screensaver] GPU setup failed, falling back: {e}");
                 State::Failed
             }
         };
@@ -180,7 +181,7 @@ impl Gpu {
                 out: None,
                 size: (0, 0),
             };
-            eprintln!("[plasma] shaders compiled");
+            log_info!("[Screensaver] shaders compiled");
             Ok(gpu)
         }
     }
@@ -238,7 +239,7 @@ impl Gpu {
                 return;
             }
             if let Err(e) = self.resize(gl, w, h) {
-                eprintln!("[plasma] {e}");
+                log_error!("[Screensaver] {e}");
                 return;
             }
             let (scene, out) = (self.scene.unwrap(), self.out.unwrap());

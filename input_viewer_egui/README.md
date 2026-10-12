@@ -28,6 +28,7 @@ writes settings.
 | Shortcut table as single source, legend on the bottom edge | `shortcuts.js` | `shortcuts.rs` |
 | Mock inputs as real frames through the capture path | `mock-capture.js` | `capture.rs` |
 | Capture health and reopen backoff, ported with its tests | `stream-health.js` | `health.rs` |
+| Daily log file, same bounds and `[Health]` line format, ported with its tests | `file-log.js` | `filelog.rs` |
 | Split-flap board, screensaver after delay, 10-min rotation, seeded + logged | `split-flap.js`, `registry.js` | `screensaver.rs` |
 | Plasma saver + bloom / ACES / dither chain, same GLSL | `plasma.js`, `post-fx.js` | `plasma.rs`, `shaders/` |
 | Freeze, fullscreen, Esc does one thing per press | `renderer.js` | `app.rs` |

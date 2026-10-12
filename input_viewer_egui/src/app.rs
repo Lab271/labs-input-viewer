@@ -23,6 +23,7 @@ use crate::update::{self, Updater};
 
 mod settings_ui;
 use settings_ui::Pane;
+use crate::filelog::{log_info, log_warn};
 
 const DROPDOWN_IDLE: Duration = Duration::from_secs(30);
 const EDGE_PX: f32 = 6.0;
@@ -41,6 +42,8 @@ const VIDEO_TEXTURE: TextureOptions = TextureOptions::LINEAR.with_mipmap_mode(So
 /// Thumbnail the health check judges flatness on: the size Electron's crop
 /// detection shares with it (#314), so a port of cropping can reuse it.
 const HEALTH_THUMB: (usize, usize) = (384, 216);
+/// A `[Health]` line per side every 10 minutes, as renderer.js writes.
+const HEALTH_SUMMARY_MS: f64 = 10.0 * 60.0 * 1000.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Side {
@@ -136,6 +139,10 @@ struct Slot {
     health: StreamHealth,
     next_sample: f64,
     stats: RenderStats,
+    /// The status last written to the log, as Electron's healthLastStatus.
+    last_logged: Option<Status>,
+    /// The "opened" line for this stream has been written.
+    announced: bool,
 }
 
 impl Slot {
@@ -148,6 +155,8 @@ impl Slot {
             health: StreamHealth::new(),
             next_sample: 0.0,
             stats: RenderStats::new(),
+            last_logged: None,
+            announced: false,
         };
         slot.attach(device, ctx, now);
         slot
@@ -160,6 +169,7 @@ impl Slot {
         self.stats = RenderStats::new();
         self.health.opened(now);
         self.next_sample = now + health_limits::SAMPLE_MS;
+        self.announced = false;
     }
 }
 
@@ -204,6 +214,8 @@ pub struct InputViewer {
     report_count: u64,
     /// Origin of the millisecond clock the health policy runs on.
     epoch: Instant,
+    /// When the last 10-minute `[Health]` summary was written (ms).
+    last_health_summary: f64,
 }
 
 impl InputViewer {
@@ -250,10 +262,30 @@ impl InputViewer {
             ui_frames: (0, Instant::now()),
             report_count: 0,
             epoch: Instant::now(),
+            last_health_summary: 0.0,
             flags,
         };
         if app.flags.mock.is_none() && app.review.is_none() {
             app.updater = Updater::start(cc.egui_ctx.clone());
+        }
+        // Electron wrote gpu-report.txt to answer one recurring question --
+        // is the wall rendering in software? (#268, #271) -- this line answers
+        // it from the log.
+        if let Some(gl) = &cc.gl {
+            use eframe::glow::HasContext as _;
+            let (vendor, renderer, version) = unsafe {
+                (
+                    gl.get_parameter_string(eframe::glow::VENDOR),
+                    gl.get_parameter_string(eframe::glow::RENDERER),
+                    gl.get_parameter_string(eframe::glow::VERSION),
+                )
+            };
+            log_info!("[App] GPU: {vendor} / {renderer} / OpenGL {version}");
+        }
+        if app.flags.no_signal {
+            log_info!("[Health] Not started: --no-signal pins the state");
+        } else {
+            log_info!("[Health] monitoring every {}ms", health_limits::SAMPLE_MS);
         }
         if let Some(n) = app.flags.mock {
             app.set_devices(capture::mock_devices(n, app.flags.test_pattern, app.flags.mock_fault));
@@ -263,7 +295,7 @@ impl InputViewer {
             app.device_rx = Some(rx);
             capture::camera_initialize(move |granted| {
                 if !granted {
-                    eprintln!("[capture] camera access not granted");
+                    log_warn!("[Video] camera access not granted");
                 }
                 let _ = tx.send(capture::camera_devices());
                 ctx.request_repaint();
@@ -278,7 +310,7 @@ impl InputViewer {
         if devices == self.devices {
             return;
         }
-        eprintln!("[devices] {}", devices.iter().map(|d| d.label.as_str()).collect::<Vec<_>>().join(", "));
+        log_info!("[Devices] {}", devices.iter().map(|d| d.label.as_str()).collect::<Vec<_>>().join(", "));
         self.devices = devices;
         self.sides = choose_sides(&self.devices, &self.settings, &self.sides, !self.started);
         self.started |= !self.devices.is_empty();
@@ -365,7 +397,6 @@ impl InputViewer {
                     self.slots.insert(id, Slot::open(&device, ctx, now));
                 }
                 Some(slot) if slot.stream.is_none() && slot.reopen_at.is_some_and(|t| now >= t) => {
-                    eprintln!("[health] {id}: reopened (attempt {})", slot.health.info().attempts);
                     slot.attach(&device, ctx, now);
                 }
                 Some(_) => {}
@@ -396,7 +427,7 @@ impl InputViewer {
                 // watching it.
                 if self.flags.hud && self.report_count.is_multiple_of(5) {
                     let size = frame.as_ref().map_or((0, 0), |f| (f.width(), f.height()));
-                    eprintln!("[render] {id} {}x{}: {} · ui {:.0} fps · {} skipped in total",
+                    log_info!("[Render] {id} {}x{}: {} · ui {:.0} fps · {} skipped in total",
                         size.0, size.1, report.line(), self.ui_fps, slot.stats.total_skipped);
                 }
             }
@@ -406,6 +437,19 @@ impl InputViewer {
         }
     }
 
+    /// Which halves show each device, and its name, for log lines that read
+    /// per side as Electron's do: `[Health] left (Presenter): ...`.
+    fn sides_by_device(&self) -> HashMap<String, (Vec<&'static str>, String)> {
+        let mut map: HashMap<String, (Vec<&'static str>, String)> = HashMap::new();
+        for &i in self.visible_sides() {
+            if let Some(id) = &self.sides[i] {
+                let label = self.label_of(Some(id));
+                map.entry(id.clone()).or_insert_with(|| (Vec::new(), label)).0.push(["left", "right"][i]);
+            }
+        }
+        map
+    }
+
     /// Health: every 2 s per device, never under --no-signal (it is not
     /// started there in Electron either, rather than run and ignored).
     fn sample_health(&mut self) {
@@ -413,17 +457,31 @@ impl InputViewer {
             return;
         }
         let now_ms = self.now_ms();
+        let who = self.sides_by_device();
+        let summary = now_ms - self.last_health_summary >= HEALTH_SUMMARY_MS;
+        if summary {
+            self.last_health_summary = now_ms;
+        }
         for (id, slot) in &mut self.slots {
+            let Some((sides, label)) = who.get(id) else { continue };
             let Some(stream) = &slot.stream else { continue };
+            let frame = stream.latest();
+            if !slot.announced
+                && let Some(f) = &frame
+            {
+                slot.announced = true;
+                for side in sides {
+                    log_info!("[Health] {side} opened \"{label}\" {}x{} id={}", f.width(), f.height(), short_id(id));
+                }
+            }
             // A failure is acted on at once, as Electron does on a rejected
             // open or an ended track; everything else waits for the sample.
             let new_failure = stream.error().is_some() && !slot.health.status().is_fault();
             if now_ms < slot.next_sample && !new_failure {
                 continue;
             }
-            let frame = stream.latest();
             slot.next_sample = now_ms + health_limits::SAMPLE_MS;
-            check_health(id, slot, frame.as_deref(), now_ms);
+            check_health(id, slot, frame.as_deref(), now_ms, sides, label, summary);
         }
     }
 
@@ -452,7 +510,7 @@ impl InputViewer {
         let pinned = self.flags.screensaver.take().and_then(|want| {
             let i = screensaver::NAMES.iter().position(|n| crate::flags::normalise(n) == want);
             if i.is_none() {
-                eprintln!("[flags] no screensaver called {want:?}");
+                log_warn!("[TestFlags] no screensaver called {want:?}");
             }
             i
         });
@@ -796,15 +854,42 @@ impl InputViewer {
     }
 }
 
-/// One health sample for a slot: feed the policy, log transitions, and close
-/// the device for a reopen when the policy says so.
-fn check_health(id: &str, slot: &mut Slot, frame: Option<&capture::Frame>, now: f64) {
+/// Electron logs `deviceId.slice(0, 8)`. Camera ids here are
+/// `camera-<unique id>`, whose first eight characters say nothing, so the
+/// prefix goes first.
+fn short_id(id: &str) -> String {
+    id.strip_prefix("camera-").map_or_else(|| id.to_owned(), |rest| rest.chars().take(8).collect())
+}
+
+/// `describeHealth()` from renderer.js, character for character:
+/// `ok 60fps luma=80+/-64.1 1920x1080 reopens=0`. `+/-` rather than the
+/// plus-minus sign, because the log is read with Windows tools that print it
+/// as two garbage characters.
+fn describe_health(info: &health::Info, frame: Option<&capture::Frame>) -> String {
+    let (luma, std) = info.luma.map_or(("-".to_owned(), "-".to_owned()), |l| {
+        (format!("{}", l.mean.round()), format!("{}", (l.std * 10.0).round() / 10.0))
+    });
+    let size = frame.map_or_else(|| "-".to_owned(), |f| format!("{}x{}", f.width(), f.height()));
+    let error = info.error.as_deref().map(|e| format!(" error={e}")).unwrap_or_default();
+    format!("{} {}fps luma={luma}+/-{std} {size} reopens={}{error}", info.status.name(), info.fps, info.attempts)
+}
+
+/// One health sample for a device: feed the policy, log it per side, and
+/// close the device for a reopen when the policy says so.
+fn check_health(
+    id: &str,
+    slot: &mut Slot,
+    frame: Option<&capture::Frame>,
+    now: f64,
+    sides: &[&str],
+    label: &str,
+    summary: bool,
+) {
     let Some(stream) = &slot.stream else { return };
-    let before = slot.health.info();
     match stream.error() {
         // Failed before a single frame: it never opened.
         Some(e) if frame.is_none() => {
-            if before.status != Status::OpenFailed {
+            if slot.health.status() != Status::OpenFailed {
                 slot.health.open_failed(now, &e);
             }
         }
@@ -819,19 +904,31 @@ fn check_health(id: &str, slot: &mut Slot, frame: Option<&capture::Frame>, now: 
             slot.health.sample(Sample { frames: Some(frame.map_or(0, |f| f.seq)), ended: false, stats }, now);
         }
     }
-    let after = slot.health.info();
-    if after.status != before.status {
-        // One flat ASCII line, as the operators read them (ADR 0044).
-        let luma = after.luma.map_or_else(|| "-".to_owned(), |l| format!("{:.0} +/- {:.1}", l.mean, l.std));
-        let error = after.error.as_deref().map(|e| format!(", {e}")).unwrap_or_default();
-        eprintln!("[health] {id}: {} -> {} (fps {:.1}, luma {luma}{error})",
-            before.status.name(), after.status.name(), after.fps);
+    let info = slot.health.info();
+    let described = describe_health(&info, frame);
+    if slot.last_logged != Some(info.status) {
+        let from = slot.last_logged.map_or("start", Status::name);
+        for side in sides {
+            if matches!(info.status, Status::Ok | Status::Opening | Status::Idle) {
+                log_info!("[Health] {side} ({label}): {from} -> {described}");
+            } else {
+                log_warn!("[Health] {side} ({label}): {from} -> {described}");
+            }
+        }
+        slot.last_logged = Some(info.status);
+    } else if summary && info.status != Status::Idle {
+        for side in sides {
+            log_info!("[Health] {side} ({label}): {described}");
+        }
     }
     let decision = slot.health.decide(now);
     if decision.reopen {
-        let reason = decision.reason.map_or("?", Status::name);
-        eprintln!("[health] {id}: closing for reopen ({reason}, attempt {})", after.attempts + 1);
         slot.health.reopening(now);
+        let reason = decision.reason.map_or("?", Status::name);
+        log_warn!(
+            "[Health] reopening {} ({label}) for {}: {} {reason}, attempt {}",
+            short_id(id), sides.join("+"), sides.first().copied().unwrap_or("?"), slot.health.info().attempts
+        );
         // Dropping the stream closes the device; it is opened again after
         // the release gap, "so the driver sees the device closed rather than
         // a handover".
