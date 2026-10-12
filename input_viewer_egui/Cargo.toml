@@ -1,0 +1,37 @@
+[package]
+name = "input_viewer_egui"
+# Set from the egui-v* tag by .github/workflows/release-egui.yml at build
+# time; the tag, not this line, is the source of truth for releases.
+version = "0.0.0"
+edition = "2024"
+license = "Apache-2.0"
+description = "Prototype of Input Viewer on egui/eframe"
+publish = false
+
+[[bin]]
+name = "input-viewer"
+path = "src/main.rs"
+
+[dependencies]
+bytemuck = { version = "1", features = ["extern_crate_alloc"] }
+dirs = "7"
+# glow rather than the default wgpu: the screensavers are the Electron app's
+# GLSL, and glow runs it unchanged apart from the #version line.
+eframe = { version = "0.36", default-features = false, features = ["accesskit", "default_fonts", "glow", "persistence", "wayland", "x11"] }
+image = { version = "0.25", default-features = false, features = ["png"] }
+nokhwa = { version = "0.10", features = ["input-native", "output-threaded"], optional = true }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ureq = { version = "3", default-features = false, features = ["rustls", "json"] }
+velopack = { version = "1", features = ["public-utils"] }
+
+[features]
+default = ["camera"]
+# Real capture devices through nokhwa (AVFoundation / Media Foundation / V4L2).
+# Build with --no-default-features for a mock-only binary.
+camera = ["dep:nokhwa"]
+
+[profile.dev]
+# Frame conversion and detection loop over every pixel; unoptimised they are
+# slow enough to drop frames on a 4K capture card.
+opt-level = 2

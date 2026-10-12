@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Filled in by .github/workflows/release-egui.yml: @VERSION@ is the release version. -->
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key>
+  <string>Input Viewer (egui)</string>
+  <key>CFBundleDisplayName</key>
+  <string>Input Viewer (egui)</string>
+  <!-- Distinct from the Electron app's com.lab271.input-viewer, so the two can
+       be installed side by side and keep separate camera permissions. -->
+  <key>CFBundleIdentifier</key>
+  <string>com.lab271.input-viewer-egui</string>
+  <key>CFBundleExecutable</key>
+  <string>input-viewer</string>
+  <key>CFBundleIconFile</key>
+  <string>icon</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleShortVersionString</key>
+  <string>@VERSION@</string>
+  <key>CFBundleVersion</key>
+  <string>@VERSION@</string>
+  <key>LSMinimumSystemVersion</key>
+  <string>11.0</string>
+  <key>NSHighResolutionCapable</key>
+  <true/>
+  <!-- Without this the process is killed on first camera access in a bundle. -->
+  <key>NSCameraUsageDescription</key>
+  <string>Input Viewer shows your video capture devices.</string>
+</dict>
+</plist>
