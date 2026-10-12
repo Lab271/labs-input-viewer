@@ -93,7 +93,7 @@ Defects, contradictions and doc drift found on the way are in
 | [0041](0041-settings-json.md) | Settings are one JSON file in the app's data folder; network features default off; test mode never writes | Accepted | Keep, and fix | Done |
 | [0042](0042-test-mode-flags.md) | Test-mode flags reach every state without hardware, and say so loudly | Accepted | Keep | Done |
 | [0043](0043-keep-privileged-work-in-one-place.md) | Keep privileged work in one small, auditable place | Accepted | Drop the mechanism; keep the principle | N/A |
-| [0044](0044-a-bounded-log-file-is-the-operator-contract.md) | A bounded daily log file is the operators' evidence | Accepted | Keep | Not started |
+| [0044](0044-a-bounded-log-file-is-the-operator-contract.md) | A bounded daily log file is the operators' evidence | Accepted | Keep | Done |
 | [0051](0051-request-capture-permission-up-front.md) | Ask for camera access before opening any capture | Accepted | Keep | Partial |
 | [0052](0052-run-background-work-in-app-logic.md) | Run everything that must not stop in `App::logic`, not in `ui` | Accepted | Keep (egui-only decision) | Done |
 
@@ -118,8 +118,8 @@ Driven by what keeps the wall working, not by size.
 2. **Capture robustness:** ~~health thresholds and reopen schedules~~
    (done, [0012](0012-judge-health-by-counting-frames.md),
    [0013](0013-reopen-by-releasing-the-device-with-two-backoffs.md)); native format choice ([0007](0007-capture-at-native-resolution.md)),
-   hot-plug events ([0011](0011-choose-startup-inputs-by-precedence.md)), the
-   log file ([0044](0044-a-bounded-log-file-is-the-operator-contract.md)).
+   hot-plug events ([0011](0011-choose-startup-inputs-by-precedence.md)); ~~the
+   log file~~ (done, [0044](0044-a-bounded-log-file-is-the-operator-contract.md)).
    This is what actually recovers the wall today.
 3. **Picture:** black-bar cropping ([0015](0015-crop-black-bars-by-snapping-to-shapes.md)),
    and its driver-query alternative (#340).

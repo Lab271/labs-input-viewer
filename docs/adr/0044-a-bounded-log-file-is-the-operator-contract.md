@@ -7,7 +7,7 @@
 | **Area** | Platform |
 | **Evidence** | `src/main/file-log.js`; `src/main/index.js:95-122, 292-306, 372-440, 581-680`; `test/file-log.test.js`; `renderer.js:1313` (`__health`); labs-videowall-config `startup/README.md` |
 | **egui verdict** | Keep |
-| **egui status** | Not started |
+| **egui status** | Done |
 
 ## Context
 
@@ -45,8 +45,45 @@ not documented.
 ## Porting to egui
 
 **Keep** the path, file naming, bounds and line formats -- they are an
-interface with the people reading them. `tracing` with a custom appender
-implementing the same limits; a panic hook in place of process-death events;
-a keyboard or CLI health dump in place of `__health()`. Not started: the
-prototype logs to stderr only, though its prefixes (`[health]`, `[capture]`,
-`[render]`, `[updater]`) are already one flat line per event.
+interface with the people reading them.
+
+**Done** (`input_viewer_egui/src/filelog.rs`): a port of `file-log.js` with
+its tests ported case for case.
+
+- **Where:** `<config>/Input Viewer (egui)/logs/input-viewer-YYYY-MM-DD.log`,
+  next to `settings.json`. Local-time days.
+- **Same bounds:** 7 days by file-name date, 20 MB/day with one "cap
+  reached" line, 600 lines/min with a "dropped N" line, 2000 characters per
+  line.
+- **Same behaviour:** synchronous appends; a log that cannot be written
+  disables itself instead of failing.
+- **Every line goes to stderr and the file.** Levels match Electron's
+  `console.log`/`warn`/`error`, and the tags match where an equivalent exists
+  (`[Health]`, `[AutoUpdater]`, `[TestFlags]`, `[Settings]`).
+- **`[Health]` lines in `describeHealth()`'s exact format, one per half
+  showing the device:**
+  `[Health] right (Mock Input 2): ok -> dark 14.4fps luma=10+/-0 1280x720 reopens=0`.
+  Also written: the reopen line, the "opened" line, the 10-minute summary,
+  and `monitoring every 2000ms` (or `Not started: --no-signal ...`).
+- **Startup banner** with OS uptime. A panic hook puts the panic message in
+  the file.
+- **GPU line** in place of `gpu-report.txt`: `[App] GPU: <vendor> /
+  <renderer> / OpenGL <version>`. That answers the question the report
+  existed for: is the wall rendering in software?
+
+Differences:
+
+- The source tag is `[app]` (one process) rather than `[main]` or
+  `[renderer]`.
+- The reopen line's id drops the `camera-` prefix before taking eight
+  characters, since `camera-0` would say nothing.
+
+Not ported:
+
+- `fps-report.txt` -- `--hud` and its `[Render]` lines cover it.
+- The detection diagnostic -- there is no reference detection yet
+  ([0014](0014-detect-no-signal-against-references.md)).
+- `__health()` -- there are no DevTools; a key or CLI dump would replace it.
+
+Mock and review runs log too, as Electron's always does. Only settings are
+protected from test mode.
