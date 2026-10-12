@@ -36,8 +36,16 @@ A disabled input and a failed open show the same board.
 
 ## Porting to egui
 
-**Keep.** Prototype: `side_no_signal(i)` is the single seam (forced flag,
-missing slot, or health status) and `board_since` is the per-side clock.
+**Keep.** Prototype: `side_no_signal(i)` is the single seam -- forced, no
+input, a missing or disabled device, or a device that cannot be opened --
+and `board_since` is the per-side clock. As in Electron, a dark, stalled or
+frameless stream does **not** put the board up; it is reopened and stays
+black meanwhile. Only reference detection
+([0014](0014-detect-no-signal-against-references.md)) turns a live-but-dark
+card into the board -- so without it, a wall whose cards are dark at night
+shows black, never the board or a screensaver. That is today's Electron
+behaviour on the wall too, and a reason to settle D1 in
+[open-questions.md](open-questions.md).
 Missing: the DOWN line, and keeping the clock across a twin side (moot with
 one session per device). The board text is "NO SIGNAL / <label>" without the
 downtime.

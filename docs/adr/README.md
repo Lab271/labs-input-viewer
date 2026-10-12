@@ -46,8 +46,8 @@ Defects, contradictions and doc drift found on the way are in
 
 | ADR | Decision | Status | egui verdict | egui status |
 |---|---|---|---|---|
-| [0012](0012-judge-health-by-counting-frames.md) | Judge capture health by counting frames, never by measuring motion | Accepted | Keep | Partial |
-| [0013](0013-reopen-by-releasing-the-device-with-two-backoffs.md) | Reopen a sick device by releasing it fully, on separate backoffs for faults and for dark | Accepted | Keep | Partial |
+| [0012](0012-judge-health-by-counting-frames.md) | Judge capture health by counting frames, never by measuring motion | Accepted | Keep | Done |
+| [0013](0013-reopen-by-releasing-the-device-with-two-backoffs.md) | Reopen a sick device by releasing it fully, on separate backoffs for faults and for dark | Accepted | Keep | Done |
 | [0014](0014-detect-no-signal-against-references.md) | Detect no-signal by comparing against operator-captured reference screenshots | Accepted -- but dormant on the wall | Decide | Not started |
 | [0015](0015-crop-black-bars-by-snapping-to-shapes.md) | Crop the card's black bars by snapping to known shapes | Accepted | Keep, and reconsider the source | Not started |
 | [0016](0016-laptop-resolution-hint-off-by-default.md) | Keep the "set your laptop to 3840x768" hint off by default | Accepted (premise weakened since 2026-10-02) | Keep | Not started |
@@ -95,6 +95,7 @@ Defects, contradictions and doc drift found on the way are in
 | [0043](0043-keep-privileged-work-in-one-place.md) | Keep privileged work in one small, auditable place | Accepted | Drop the mechanism; keep the principle | N/A |
 | [0044](0044-a-bounded-log-file-is-the-operator-contract.md) | A bounded daily log file is the operators' evidence | Accepted | Keep | Not started |
 | [0051](0051-request-capture-permission-up-front.md) | Ask for camera access before opening any capture | Accepted | Keep | Partial |
+| [0052](0052-run-background-work-in-app-logic.md) | Run everything that must not stop in `App::logic`, not in `ui` | Accepted | Keep (egui-only decision) | Done |
 
 ### Delivery
 
@@ -114,9 +115,9 @@ Driven by what keeps the wall working, not by size.
 1. **Gate: the wall itself.** Run `--test-pattern --hud` and real capture on
    the wall's Windows host with both Elgato cards
    ([0002](0002-port-to-rust-and-egui.md)). Everything below assumes it passes.
-2. **Capture robustness:** native format choice ([0007](0007-capture-at-native-resolution.md)),
-   health thresholds ([0012](0012-judge-health-by-counting-frames.md)),
-   reopen schedules ([0013](0013-reopen-by-releasing-the-device-with-two-backoffs.md)),
+2. **Capture robustness:** ~~health thresholds and reopen schedules~~
+   (done, [0012](0012-judge-health-by-counting-frames.md),
+   [0013](0013-reopen-by-releasing-the-device-with-two-backoffs.md)); native format choice ([0007](0007-capture-at-native-resolution.md)),
    hot-plug events ([0011](0011-choose-startup-inputs-by-precedence.md)), the
    log file ([0044](0044-a-bounded-log-file-is-the-operator-contract.md)).
    This is what actually recovers the wall today.

@@ -7,7 +7,7 @@
 | **Area** | Signal |
 | **Evidence** | `stream-health.js` (constants :40-57), `renderer.js:989-1263`; #311, #159, #314 |
 | **egui verdict** | Keep |
-| **egui status** | Partial |
+| **egui status** | Done |
 
 ## Context
 
@@ -53,14 +53,10 @@ still say 32x18 ([open questions](open-questions.md)).
 counter is the capture callback itself, which is simpler than Chromium's
 stats.
 
-Prototype (`health.rs`) has the shape but not the numbers:
-
-| | Electron | Prototype |
-|---|---|---|
-| stalled | 6 s, after >= 5 fps | 3 s, after 2 frames |
-| no-frames | 8 s from open | stays `Waiting` |
-| dark | spread <= 3 on 384x216, 6 s | spread <= 6 on 32x18, 6 s ("Flat") |
-| sampling | every 2 s | every new frame |
-
-Align the constants and add `no-frames`; reuse the crop thumbnail once
-[0015](0015-crop-black-bars-by-snapping-to-shapes.md) is ported.
+**Done.** `health.rs` is a line-for-line port of `stream-health.js` --
+constants, statuses, backoffs -- with its unit tests ported case for case.
+Sampled every 2 s per device from the frame counter and the luma of a
+**box-averaged** 384x216 thumbnail (averaged as Electron's canvas downscale
+is, so a card's noisy no-signal screen still reads flat). A stream error is
+acted on at once, as a rejected open or an ended track is in Electron.
+Verified end to end with `--mock-fault=dark|stall|fail`.

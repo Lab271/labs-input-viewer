@@ -7,7 +7,7 @@
 | **Area** | Signal |
 | **Evidence** | `stream-health.js:52-54, 238-262`; `renderer.js:1266-1297` (`reopenDevice`), `REOPEN_RELEASE_MS` :995, `:1183-1203` |
 | **egui verdict** | Keep |
-| **egui status** | Partial |
+| **egui status** | Done |
 
 ## Context
 
@@ -40,10 +40,20 @@ Whether it ever cured the original "boots dark" symptom is not recorded.
 ## Porting to egui
 
 **Keep** both schedules, the 60 s reset, the 500 ms release gap and
-one-in-flight. "Release every side" becomes implicit with one session per
-device ([0008](0008-one-capture-session-per-device.md)).
+one-in-flight. "Release every side" is implicit with one session per device
+([0008](0008-one-capture-session-per-device.md)).
 
-Prototype (`app.rs` `REOPEN_BACKOFF`): the fault schedule is right, but it
-resets on the first `Ok` rather than after 60 s healthy, never reopens on
-dark, and reopens without the 500 ms gap (the old stream's thread is joined
-in the background while the new one opens).
+**Done.** On a reopen the slot drops its stream -- closing the device -- and
+opens it again after the 500 ms gap; the health state outlives the stream,
+so attempts accumulate. Measured with `--mock-fault`:
+
+| Fault | Observed |
+|---|---|
+| stall | stalled 6 s after the last frame; closed; reopened 0.5 s later; recovers; repeats |
+| dark | dark after 6 s flat; first reopen at once (5 s since open had passed), second 15 s after the first |
+| fail | open-failed immediately; reopens at +2 s, then +5 s |
+
+Decisions are taken at the 2 s sample, as in Electron. Not ported: the
+no-devices re-enumeration at 5 s / 10 s / 30 s (the prototype polls every
+10 s), and skipping the backoff when a device-change event brings a device
+back ([0011](0011-choose-startup-inputs-by-precedence.md)).
