@@ -12,6 +12,7 @@ use eframe::egui::{
     TextureOptions, Vec2, pos2, vec2,
 };
 use crate::capture::{self, Device, Stream};
+use crate::gpu_video;
 use crate::flags::Flags;
 use crate::health::{self, Sample, Status, StreamHealth, limits as health_limits};
 use crate::render_stats::RenderStats;
@@ -23,7 +24,7 @@ use crate::update::{self, Updater};
 
 mod settings_ui;
 use settings_ui::Pane;
-use crate::filelog::{log_info, log_warn};
+use crate::filelog::{log_error, log_info, log_warn};
 
 const DROPDOWN_IDLE: Duration = Duration::from_secs(30);
 const EDGE_PX: f32 = 6.0;
@@ -127,13 +128,44 @@ fn picker_plan(layout: Layout, multi_view: bool) -> (Vec<(&'static str, Side)>, 
     }
 }
 
+/// The picture a slot draws: an egui texture for RGBA frames, or a GPU
+/// texture that `gpu_video` converts YUY2 frames into.
+#[derive(Clone)]
+enum VideoTexture {
+    Egui(TextureHandle),
+    Gpu { id: egui::TextureId, size: Vec2 },
+}
+
+impl VideoTexture {
+    fn id(&self) -> egui::TextureId {
+        match self {
+            VideoTexture::Egui(t) => t.id(),
+            VideoTexture::Gpu { id, .. } => *id,
+        }
+    }
+    fn size_vec2(&self) -> Vec2 {
+        match self {
+            VideoTexture::Egui(t) => t.size_vec2(),
+            VideoTexture::Gpu { size, .. } => *size,
+        }
+    }
+}
+
+/// GPU conversion state: compiled once, on the first YUY2 frame.
+enum Gpu {
+    NotYet,
+    Ready(gpu_video::Converter),
+    /// Could not set up; YUY2 is converted on the CPU instead (slowly).
+    Failed,
+}
+
 /// One open capture device, shared by every half that shows it (ADR 0008).
 struct Slot {
     /// None between closing the device for a reopen and opening it again.
     stream: Option<Stream>,
     /// When to open again after a reopen's release gap (app clock, ms).
     reopen_at: Option<f64>,
-    texture: Option<TextureHandle>,
+    texture: Option<VideoTexture>,
     shown_seq: u64,
     /// Outlives the stream across reopens, so the backoff backs off.
     health: StreamHealth,
@@ -189,7 +221,10 @@ pub struct InputViewer {
     slots: HashMap<String, Slot>,
     /// Last frame seen per device, for the picker tiles. A snapshot, not a
     /// live preview, so opening the dropdown opens no extra streams.
-    stills: HashMap<String, TextureHandle>,
+    stills: HashMap<String, VideoTexture>,
+    gpu: Gpu,
+    /// Per device, kept across reopens so egui registrations are not leaked.
+    gpu_textures: HashMap<String, gpu_video::GpuTexture>,
     frozen: bool,
     dropdown_open: bool,
     dropdown_bottom: f32,
@@ -239,6 +274,8 @@ impl InputViewer {
             sides: [None, None],
             slots: HashMap::new(),
             stills: HashMap::new(),
+            gpu: Gpu::NotYet,
+            gpu_textures: HashMap::new(),
             frozen: false,
             dropdown_open: false,
             dropdown_bottom: 0.0,
@@ -404,7 +441,7 @@ impl InputViewer {
         }
     }
 
-    fn update_frames(&mut self, ctx: &egui::Context) {
+    fn update_frames(&mut self, ctx: &egui::Context, eframe_frame: &mut eframe::Frame) {
         let now = Instant::now();
         let forced = self.flags.no_signal;
         for (id, slot) in &mut self.slots {
@@ -413,12 +450,62 @@ impl InputViewer {
             let fresh = frame.as_ref().filter(|f| f.seq != slot.shown_seq);
             // While frozen, keep sampling health but stop updating the picture.
             if let Some(f) = fresh.filter(|_| !self.frozen && !forced) {
-                // The Arc is handed over as is: no copy, no conversion here.
-                match &mut slot.texture {
-                    Some(t) => t.set(f.image.clone(), VIDEO_TEXTURE),
-                    None => slot.texture = Some(ctx.load_texture(id.clone(), f.image.clone(), VIDEO_TEXTURE)),
+                let image = match &f.pixels {
+                    // The Arc is handed over as is: no copy, no conversion here.
+                    capture::Pixels::Rgba(image) => Some(image.clone()),
+                    capture::Pixels::Yuyv(bytes) => {
+                        let gl = eframe_frame.gl().cloned();
+                        if let (Gpu::NotYet, Some(gl)) = (&self.gpu, &gl) {
+                            self.gpu = match unsafe { gpu_video::Converter::new(gl) } {
+                                Ok(c) => {
+                                    log_info!("[Video] YUY2 frames are converted on the GPU");
+                                    Gpu::Ready(c)
+                                }
+                                Err(e) => {
+                                    log_error!("[Video] GPU conversion unavailable, converting YUY2 on the CPU: {e}");
+                                    Gpu::Failed
+                                }
+                            };
+                        }
+                        match (&self.gpu, gl) {
+                            (Gpu::Ready(conv), Some(gl)) => {
+                                let tex = match self.gpu_textures.entry(id.clone()) {
+                                    std::collections::hash_map::Entry::Occupied(e) => Some(e.into_mut()),
+                                    std::collections::hash_map::Entry::Vacant(v) => match unsafe { gpu_video::GpuTexture::new(&gl, eframe_frame) } {
+                                        Ok(t) => Some(v.insert(t)),
+                                        Err(e) => {
+                                            log_error!("[Video] {id}: could not create its GPU texture: {e}");
+                                            None
+                                        }
+                                    },
+                                };
+                                if let Some(tex) = tex {
+                                    unsafe { tex.update(&gl, conv, bytes, f.width(), f.height()) };
+                                    slot.texture = Some(VideoTexture::Gpu {
+                                        id: tex.id,
+                                        size: vec2(tex.size[0] as f32, tex.size[1] as f32),
+                                    });
+                                }
+                                None
+                            }
+                            // The slow path, so a machine without the GPU path
+                            // still shows a picture.
+                            _ => {
+                                let rgba = crate::yuv::yuyv_to_rgba(bytes, f.width(), f.height());
+                                Some(std::sync::Arc::new(egui::ColorImage::from_rgba_premultiplied([f.width(), f.height()], &rgba)))
+                            }
+                        }
+                    }
+                };
+                if let Some(image) = image {
+                    match &mut slot.texture {
+                        Some(VideoTexture::Egui(t)) => t.set(image, VIDEO_TEXTURE),
+                        _ => slot.texture = Some(VideoTexture::Egui(ctx.load_texture(id.clone(), image, VIDEO_TEXTURE))),
+                    }
                 }
-                self.stills.insert(id.clone(), slot.texture.clone().unwrap());
+                if let Some(t) = &slot.texture {
+                    self.stills.insert(id.clone(), t.clone());
+                }
                 slot.stats.shown(now, f.seq, slot.shown_seq, f.captured_at);
             }
             if let Some(report) = slot.stats.tick(now) {
@@ -899,7 +986,7 @@ fn check_health(
         None => {
             let stats = frame.map(|f| {
                 let (tw, th) = HEALTH_THUMB;
-                health::luma_stats(&health::thumbnail(f.rgba(), f.width(), f.height(), tw, th))
+                health::luma_stats(&f.health_thumbnail(tw, th))
             });
             slot.health.sample(Sample { frames: Some(frame.map_or(0, |f| f.seq)), ended: false, stats }, now);
         }
@@ -963,7 +1050,7 @@ fn badge(painter: &egui::Painter, at: egui::Pos2, align: Align2, text: &str) {
 /// One input tile: a fixed 128x72 still with the name under it, never the
 /// strip width (a first pass at `width: 100%` in the Electron app measured
 /// 292x164).
-fn tile(ui: &mut egui::Ui, label: &str, still: Option<&TextureHandle>, selected: bool, chip: Option<&str>) -> egui::Response {
+fn tile(ui: &mut egui::Ui, label: &str, still: Option<&VideoTexture>, selected: bool, chip: Option<&str>) -> egui::Response {
     let (rect, resp) = ui.allocate_exact_size(vec2(TILE.x, TILE.y + 22.0), Sense::click());
     let img = Rect::from_min_size(rect.min, TILE);
     let p = ui.painter();
@@ -1014,7 +1101,7 @@ impl eframe::App for InputViewer {
         ctx.request_repaint_after(Duration::from_millis(500));
     }
 
-    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         let now = Instant::now();
         // Every change to settings, from any control or key, is caught by
@@ -1031,7 +1118,7 @@ impl eframe::App for InputViewer {
         self.last_frame = now;
 
         self.handle_keys(&ctx);
-        self.update_frames(&ctx);
+        self.update_frames(&ctx, frame);
 
         let rect = ui.max_rect();
         self.paint_wall(ui, rect, now, dt);

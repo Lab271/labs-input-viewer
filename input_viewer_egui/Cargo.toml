@@ -14,6 +14,7 @@ path = "src/main.rs"
 
 [dependencies]
 bytemuck = { version = "1", features = ["extern_crate_alloc"] }
+bytes = "1"
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 dirs = "7"
 # glow rather than the default wgpu: the screensavers are the Electron app's

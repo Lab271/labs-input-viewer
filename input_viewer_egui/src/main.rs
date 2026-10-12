@@ -10,6 +10,7 @@ mod filelog;
 mod app;
 mod capture;
 mod flags;
+mod gpu_video;
 mod health;
 mod plasma;
 mod render_stats;
@@ -20,6 +21,7 @@ mod settings_status;
 mod shortcuts;
 mod testpattern;
 mod update;
+mod yuv;
 
 use crate::filelog::{log_error, log_info};
 

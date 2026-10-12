@@ -67,24 +67,47 @@ pub struct PatternFormat {
 /// milliseconds a frame per input -- for two 4K60 cards, a large part of the
 /// frame budget spent before anything is drawn.
 pub struct Frame {
-    pub image: Arc<egui::ColorImage>,
+    pub pixels: Pixels,
+    width: usize,
+    height: usize,
     pub seq: u64,
     pub captured_at: Instant,
 }
 
+/// What a frame carries.
+pub enum Pixels {
+    /// Ready for egui, as an `Arc` it can take without a copy.
+    Rgba(Arc<egui::ColorImage>),
+    /// The card's own packed 4:2:2 bytes, `Y0 U Y1 V` per pixel pair,
+    /// converted to RGB on the GPU (`gpu_video.rs`). On the wall's cards this
+    /// is the only 4K format, and converting it on one CPU core took ~49 ms a
+    /// frame.
+    Yuyv(bytes::Bytes),
+}
+
 impl Frame {
     pub fn new(width: usize, height: usize, pixels: Vec<egui::Color32>, seq: u64) -> Self {
-        Self { image: Arc::new(egui::ColorImage::new([width, height], pixels)), seq, captured_at: Instant::now() }
+        let image = Arc::new(egui::ColorImage::new([width, height], pixels));
+        Self { pixels: Pixels::Rgba(image), width, height, seq, captured_at: Instant::now() }
+    }
+    pub fn new_yuyv(width: usize, height: usize, bytes: bytes::Bytes, seq: u64) -> Self {
+        debug_assert_eq!(bytes.len(), width * height * 2);
+        Self { pixels: Pixels::Yuyv(bytes), width, height, seq, captured_at: Instant::now() }
     }
     pub fn width(&self) -> usize {
-        self.image.size[0]
+        self.width
     }
     pub fn height(&self) -> usize {
-        self.image.size[1]
+        self.height
     }
-    /// The same pixels as RGBA bytes, for detection.
-    pub fn rgba(&self) -> &[u8] {
-        bytemuck::cast_slice(&self.image.pixels)
+    /// An averaged RGBA thumbnail for the health check, whatever the format.
+    pub fn health_thumbnail(&self, tw: usize, th: usize) -> Vec<u8> {
+        match &self.pixels {
+            Pixels::Rgba(image) => {
+                crate::health::thumbnail(bytemuck::cast_slice(&image.pixels), self.width, self.height, tw, th)
+            }
+            Pixels::Yuyv(bytes) => crate::yuv::luma_thumbnail(bytes, self.width, self.height, tw, th),
+        }
     }
 }
 
@@ -254,9 +277,12 @@ fn run_test_pattern(n: usize, f: PatternFormat, shared: &Shared, stop: &AtomicBo
     let mut late = 0u64;
     let mut frame = 0u64;
     while !stop.load(Ordering::Relaxed) {
+        // YUY2, as the wall's cards deliver at 4K, so the test exercises the
+        // same GPU conversion path a real input takes.
         let pixels = pattern.frame(frame);
+        let yuyv = crate::yuv::rgba_to_yuyv(bytemuck::cast_slice(&pixels), f.width, f.height);
         // seq starts at 1 like every other source; the pattern counts from 0.
-        publish(shared, Frame::new(f.width, f.height, pixels, frame + 1), ctx);
+        publish(shared, Frame::new_yuyv(f.width, f.height, bytes::Bytes::from(yuyv), frame + 1), ctx);
         let next = frame + 1;
         let due = start + period.mul_f64(next as f64);
         let now = Instant::now();
@@ -283,7 +309,7 @@ fn run_test_pattern(n: usize, f: PatternFormat, shared: &Shared, stop: &AtomicBo
 mod camera {
     use super::*;
     use nokhwa::pixel_format::RgbAFormat;
-    use nokhwa::utils::{ApiBackend, CameraIndex, RequestedFormat, RequestedFormatType};
+    use nokhwa::utils::{ApiBackend, CameraIndex, FrameFormat, RequestedFormat, RequestedFormatType};
 
     const PREFIX: &str = "camera-";
 
@@ -343,11 +369,19 @@ mod camera {
             let t0 = Instant::now();
             let buf = cam.frame().map_err(|e| e.to_string())?;
             let t1 = Instant::now();
-            let img = buf.decode_image::<RgbAFormat>().map_err(|e| e.to_string())?;
-            let t2 = Instant::now();
             seq += 1;
-            let (w, h) = (img.width() as usize, img.height() as usize);
-            publish(shared, Frame::new(w, h, pixels_from_rgba(img.into_raw()), seq), ctx);
+            let res = buf.resolution();
+            let (w, h) = (res.width_x as usize, res.height_y as usize);
+            // YUY2 goes to the GPU as it arrived; anything else is converted
+            // here, as before.
+            let frame = if buf.source_frame_format() == FrameFormat::YUYV && w % 2 == 0 && buf.buffer().len() == w * h * 2 {
+                Frame::new_yuyv(w, h, buf.buffer_bytes(), seq)
+            } else {
+                let img = buf.decode_image::<RgbAFormat>().map_err(|e| e.to_string())?;
+                Frame::new(img.width() as usize, img.height() as usize, pixels_from_rgba(img.into_raw()), seq)
+            };
+            let t2 = Instant::now();
+            publish(shared, frame, ctx);
             read_time += t1 - t0;
             convert_time += t2 - t1;
             n += 1;
