@@ -22,24 +22,26 @@ from that commit.
 
 ## Defects in the Electron app
 
-| # | Defect | Where |
-|---|---|---|
-| E1 | The low-resolution retry requests audio with the **video** device id -- the bug #151 fixed on the main path. | `renderer.js:940-942` |
-| E2 | The reference probe saves nothing: the full scan runs on every cycle anyway, for a diagnostic trace, even with no sink attached. | `detection-simple.js:436-442` (#163, 332fcc3) |
-| E3 | `checkNoSignal()` passes the reference *list* to `compareFrames` and would always return false. Unused. | `detection-simple.js:241` |
-| E4 | `force_release` without a bump builds artifacts and never publishes them. | `release.yml` (publish needs version-bump) |
-| E5 | `chore(deps*)` commits never bump, so Electron/Chromium security updates never release without a manual `bump`. | `release.yml:53-91` |
-| E6 | `settings.json` writes are not atomic; a corrupt file loads as defaults and is overwritten by the next save. | `src/main/index.js` `saveSettings` |
-| E7 | Main and renderer keep different default settings (`layoutMode`, `centerGap`, `borderWidth`, volumes, remote keys, `cropLetterbox`, `aspectHint`). | `index.js:124-150`, `renderer.js:366-405` |
-| E8 | The update error dialog says "Failed to download update" for a failed **check** too. | `index.js:838-851` |
-| E9 | #86's proposed guard -- check every `url`/`path` in `latest*.yml` exists -- was never added. | `release.yml` publish job |
-| E10 | Dead IPC: `get-settings-path` (caller removed in #334), `diag-log-reset` (never called). | `src/preload/index.js` |
-| E11 | Dead markup: `#bottom-logo` (always hidden since 2026-01-16), `.input-label`, the `renderDropdownVolumeControls` shim. | `index.html:36`, `styles.css` |
-| E12 | The same device on both halves opens two audio tracks; the audio may play twice. | `renderer.js` `startVideoStream` |
-| E13 | The WebCodecs read copies the whole frame (~33 MB at 4K) every 1.6 s, contradicting #61's "copies only the region". Unmeasured on the wall. | `frame-source.js` |
-| E14 | shadercheck is not run in CI; a shader regression merges unless someone runs it. | `ci.yml`, `release.yml` |
-| E15 | macOS auto-update has never been confirmed end to end on the unsigned build. | #86 checklist |
-| E16 | A 2026-10-05 over-crop of a mirrored MacBook on the wall is undiagnosed. | #316, #340 |
+Filed as issues on 2026-10-12. E16 was already tracked in #340.
+
+| # | Defect | Where | Issue |
+|---|---|---|---|
+| E1 | The low-resolution retry requests audio with the **video** device id -- the bug #151 fixed on the main path. | `renderer.js:927-929` | #347 |
+| E2 | The reference probe saves nothing: the full scan runs on every cycle anyway, for a diagnostic trace, even with no sink attached. | `detection-simple.js:436-442` (#163, 332fcc3) | #348 |
+| E3 | `checkNoSignal()` passes the reference *list* to `compareFrames` and would always return false. Unused. | `detection-simple.js:241` | #349 |
+| E4 | `force_release` without a bump builds artifacts and never publishes them. | `release.yml` (publish needs version-bump) | #350 |
+| E5 | `chore(deps*)` commits never bump, so Electron/Chromium security updates never release without a manual `bump`. | `release.yml:53-91` | #351 |
+| E6 | `settings.json` writes are not atomic; a corrupt file loads as defaults and is overwritten by the next save. | `src/main/index.js` `saveSettings` | #352 |
+| E7 | Main and renderer keep different default settings (`layoutMode`, `centerGap`, `borderWidth`, volumes, remote keys, `cropLetterbox`, `aspectHint`). | `index.js:124-150`, `renderer.js:366-405` | #353 |
+| E8 | The update error dialog says "Failed to download update" for a failed **check** too. | `index.js:850-860` | #354 |
+| E9 | #86's proposed guard -- check every `url`/`path` in `latest*.yml` exists -- was never added. | `release.yml` publish job | #355 |
+| E10 | Dead IPC: `get-settings-path` (caller removed in #334), `diag-log-reset` (never called). | `src/preload/index.js` | #356 |
+| E11 | Dead markup: `#bottom-logo` (always hidden since 2026-01-16), `.input-label`, the `renderDropdownVolumeControls` shim. | `index.html:36`, `styles.css` | #357 |
+| E12 | The same device on both halves opens two audio tracks; the audio may play twice. | `renderer.js` `startVideoStream` | #358 |
+| E13 | The WebCodecs read copies the whole frame (~33 MB at 4K) every 1.6 s, contradicting #61's "copies only the region". Unmeasured on the wall. | `frame-source.js` | #359 |
+| E14 | shadercheck is not run in CI; a shader regression merges unless someone runs it. | `ci.yml`, `release.yml` | #360 |
+| E15 | macOS auto-update has never been confirmed end to end on the unsigned build. | #86 checklist | #361 |
+| E16 | A 2026-10-05 over-crop of a mirrored MacBook on the wall is undiagnosed. | #316, #340 | #340 |
 
 ## Documentation drift
 

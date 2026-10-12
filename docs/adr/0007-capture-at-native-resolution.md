@@ -39,7 +39,7 @@ The wall's PCIe 4K60 Pro MK.2 always negotiates 3840x2160 (measured
 ## Consequences
 
 The retry path only matters for USB and virtual cameras. It carries a bug:
-it requests audio with the **video** device id (`renderer.js:940-942`), the
+it requests audio with the **video** device id (`renderer.js:927-929`, #347), the
 mistake #151 fixed on the main path ([open questions](open-questions.md)).
 
 ## Porting to egui
