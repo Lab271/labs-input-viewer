@@ -65,18 +65,24 @@ jobs:
         id: version
         run: |
           set -euo pipefail
+          LAST_TAG=$(git tag -l 'egui-v*' --sort=-v:refname | head -n1)
+          CURRENT=${LAST_TAG#egui-v}
+          CURRENT=${CURRENT:-0.0.0}
+          IFS=. read -r MA MI PA <<< "$CURRENT"
+
           if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
-            echo "Pull request: packaging check only"
+            # A pre-release of the next minor. Not 0.0.0-pr.N: vpk requires
+            # >= 0.0.1, and a pre-release sorts below its release, so
+            # 0.0.1-pr.N fails too.
+            VERSION="$MA.$((MI + 1)).0-pr.${{ github.event.pull_request.number }}"
+            echo "Pull request: packaging check only, as $VERSION"
             {
-              echo "version=0.0.0-pr.${{ github.event.pull_request.number }}"
+              echo "version=$VERSION"
               echo "last_tag="
               echo "publish=false"
             } >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          LAST_TAG=$(git tag -l 'egui-v*' --sort=-v:refname | head -n1)
-          CURRENT=${LAST_TAG#egui-v}
-          CURRENT=${CURRENT:-0.0.0}
 
           BUMP="${{ inputs.bump }}"
           if [ "$BUMP" = "auto" ]; then
@@ -95,7 +101,6 @@ jobs:
             exit 1
           fi
 
-          IFS=. read -r MA MI PA <<< "$CURRENT"
           case $BUMP in
             major) VERSION="$((MA + 1)).0.0" ;;
             minor) VERSION="$MA.$((MI + 1)).0" ;;
@@ -133,14 +138,10 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      # Cargo.lock records the crate's own version too; both must change or
-      # --locked refuses to build.
+      # Cargo.toml and Cargo.lock both, or --locked refuses to build; CRLF-safe
+      # for the Windows checkout. See the script.
       - name: Set version
-        run: |
-          V="${{ needs.analyze.outputs.version }}"
-          sed -i "s/^version = \"0.0.0\"$/version = \"$V\"/" Cargo.toml
-          perl -0pi -e "s/(name = \"input_viewer_egui\"\nversion = )\"[^\"]*\"/\$1\"$V\"/" Cargo.lock
-          grep -A1 'name = "input_viewer_egui"' Cargo.lock
+        run: packaging/set-version.sh "${{ needs.analyze.outputs.version }}"
 
       - name: Test
         run: cargo test --release --locked
@@ -198,14 +199,10 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      # Cargo.lock records the crate's own version too; both must change or
-      # --locked refuses to build.
+      # Cargo.toml and Cargo.lock both, or --locked refuses to build; CRLF-safe
+      # for the Windows checkout. See the script.
       - name: Set version
-        run: |
-          V="${{ needs.analyze.outputs.version }}"
-          sed -i '' "s/^version = \"0.0.0\"$/version = \"$V\"/" Cargo.toml
-          perl -0pi -e "s/(name = \"input_viewer_egui\"\nversion = )\"[^\"]*\"/\$1\"$V\"/" Cargo.lock
-          grep -A1 'name = "input_viewer_egui"' Cargo.lock
+        run: packaging/set-version.sh "${{ needs.analyze.outputs.version }}"
 
       - name: Test
         run: cargo test --release --locked
