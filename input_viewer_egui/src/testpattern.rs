@@ -56,6 +56,42 @@ impl Layout {
     }
 }
 
+/// The pattern as YUY2 frames, the way the cards deliver 4K, made cheaply
+/// enough for two 4K60 inputs: the static background is converted once, and
+/// each frame redraws and converts only the rectangles that move. Converting
+/// the whole frame every time capped the source at ~33 fps on the wall's
+/// Threadripper (2026-10-13), and the HUD's "shown" followed it down.
+pub struct YuyvSource {
+    pattern: Pattern,
+    /// RGBA scratch, kept equal to the background outside the moving rects.
+    scratch: Vec<Color32>,
+    background_yuyv: Vec<u8>,
+}
+
+impl YuyvSource {
+    pub fn new(pattern: Pattern) -> Self {
+        let background_yuyv = crate::yuv::rgba_to_yuyv(bytemuck::cast_slice(&pattern.background), pattern.w, pattern.h);
+        Self { scratch: pattern.background.clone(), pattern, background_yuyv }
+    }
+
+    pub fn frame(&mut self, n: u64) -> Vec<u8> {
+        let p = &self.pattern;
+        let w = p.w;
+        let rects = p.moving_rects();
+        for &(x0, y0, x1, y1) in &rects {
+            for y in y0..y1 {
+                self.scratch[y * w + x0..y * w + x1].copy_from_slice(&p.background[y * w + x0..y * w + x1]);
+            }
+        }
+        p.draw_moving(&mut self.scratch, n);
+        let mut out = self.background_yuyv.clone();
+        for r in rects {
+            crate::yuv::rgba_rect_to_yuyv(bytemuck::cast_slice(&self.scratch), w, r, &mut out);
+        }
+        out
+    }
+}
+
 pub struct Pattern {
     w: usize,
     h: usize,
@@ -217,32 +253,45 @@ impl Pattern {
         (self.w, self.h)
     }
 
-    /// Frame `n`, freshly allocated: the buffer is handed to egui, which owns
-    /// it until the GPU upload.
+    /// Frame `n` in RGBA; the reference `YuyvSource` is tested against.
+    #[cfg(test)]
     pub fn frame(&self, n: u64) -> Vec<Color32> {
         let mut px = self.background.clone();
+        self.draw_moving(&mut px, n);
+        px
+    }
+
+    /// Everything that changes between frames lies inside these, the sweep
+    /// as its whole band (the bar's last position must be cleared too).
+    fn moving_rects(&self) -> [(usize, usize, usize, usize); 4] {
+        let l = Layout { w: self.w, h: self.h };
+        let (y0, y1) = l.sweep();
+        [l.lamp_row(), l.strip(), l.timecode(), (0, y0, self.w, y1)]
+    }
+
+    fn draw_moving(&self, px: &mut [Color32], n: u64) {
         let (w, h) = (self.w, self.h);
         let l = Layout { w, h };
+        let px = &mut *px;
 
         let (lx0, ly0, lx1, ly1) = l.lamp_row();
         let cw = (lx1 - lx0) / self.fps.max(1) as usize;
         let x = lx0 + lamp(n, self.fps) * cw;
-        fill(&mut px, w, x + 2, ly0 + 2, x + cw.saturating_sub(2), ly1 - 2, LIT);
+        fill(px, w, x + 2, ly0 + 2, x + cw.saturating_sub(2), ly1 - 2, LIT);
 
         let (sx0, sy0, sx1, sy1) = l.strip();
         let bw = (sx1 - sx0) / 32;
         for bit in 0..32 {
             let on = (n >> (31 - bit)) & 1 == 1;
             let x = sx0 + bit * bw;
-            fill(&mut px, w, x + 2, sy0 + 2, x + bw - 2, sy1 - 2, if on { LIT } else { DIM });
+            fill(px, w, x + 2, sy0 + 2, x + bw - 2, sy1 - 2, if on { LIT } else { DIM });
         }
 
-        seven_seg(&mut px, w, l.timecode(), &timecode(n, self.fps), LIT, PANEL);
+        seven_seg(px, w, l.timecode(), &timecode(n, self.fps), LIT, PANEL);
 
         let (y0, y1) = l.sweep();
         let (bx, bar) = sweep_x(n, w, self.fps);
-        fill(&mut px, w, bx, y0, bx + bar, y1, if n.is_multiple_of(2) { EVEN } else { ODD });
-        px
+        fill(px, w, bx, y0, bx + bar, y1, if n.is_multiple_of(2) { EVEN } else { ODD });
     }
 
     /// Read the frame number back from the strip.
@@ -262,6 +311,35 @@ impl Pattern {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_yuyv_source_matches_converting_the_whole_frame() {
+        let pattern = Pattern::new(320, 180, 60, 1);
+        let reference = Pattern::new(320, 180, 60, 1);
+        let mut source = YuyvSource::new(pattern);
+        for n in [0, 1, 2, 37, 59, 60, 61, 500] {
+            let whole = crate::yuv::rgba_to_yuyv(bytemuck::cast_slice(&reference.frame(n)), 320, 180);
+            assert!(source.frame(n) == whole, "frame {n} differs");
+        }
+    }
+
+    #[test]
+    #[ignore = "timing, run with --release --ignored --nocapture"]
+    fn time_a_4k_frame() {
+        let (w, h) = (3840, 2160);
+        let reference = Pattern::new(w, h, 60, 1);
+        let mut source = YuyvSource::new(Pattern::new(w, h, 60, 1));
+        let t = std::time::Instant::now();
+        for n in 0..60 {
+            std::hint::black_box(crate::yuv::rgba_to_yuyv(bytemuck::cast_slice(&reference.frame(n)), w, h));
+        }
+        let old = t.elapsed() / 60;
+        let t = std::time::Instant::now();
+        for n in 0..60 {
+            std::hint::black_box(source.frame(n));
+        }
+        println!("4K frame: whole-frame conversion {old:?}, moving rects only {:?}", t.elapsed() / 60);
+    }
 
     #[test]
     fn timecode_rolls_over_at_the_frame_rate() {

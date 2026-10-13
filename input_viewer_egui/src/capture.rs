@@ -303,7 +303,7 @@ fn run_mock(n: usize, fault: Option<MockFault>, shape: Option<f64>, shared: &Sha
 /// capture card drops rather than buffers -- and logged, because then the
 /// *source* is the bottleneck and the renderer's numbers mean nothing.
 fn run_test_pattern(n: usize, f: PatternFormat, shared: &Shared, stop: &AtomicBool, ctx: &egui::Context) {
-    let pattern = crate::testpattern::Pattern::new(f.width, f.height, f.fps, n);
+    let mut source = crate::testpattern::YuyvSource::new(crate::testpattern::Pattern::new(f.width, f.height, f.fps, n));
     let period = Duration::from_secs_f64(1.0 / f.fps.max(1) as f64);
     let start = Instant::now();
     let mut late = 0u64;
@@ -311,8 +311,7 @@ fn run_test_pattern(n: usize, f: PatternFormat, shared: &Shared, stop: &AtomicBo
     while !stop.load(Ordering::Relaxed) {
         // YUY2, as the wall's cards deliver at 4K, so the test exercises the
         // same GPU conversion path a real input takes.
-        let pixels = pattern.frame(frame);
-        let yuyv = crate::yuv::rgba_to_yuyv(bytemuck::cast_slice(&pixels), f.width, f.height);
+        let yuyv = source.frame(frame);
         // seq starts at 1 like every other source; the pattern counts from 0.
         publish(shared, Frame::new_yuyv(f.width, f.height, bytes::Bytes::from(yuyv), frame + 1), ctx);
         let next = frame + 1;

@@ -203,6 +203,16 @@ fn with_gpu(gl: &glow::Context, f: impl FnOnce(&mut Gpu)) {
     }
 }
 
+/// Compile `saver`'s program for a `w` x `h` canvas ahead of its first
+/// activation. On the wall a first compile took up to 2.1 s (Bicycle
+/// Horizon, 2026-10-13) and froze the picture that long when the saver
+/// came up; compiled at start-up, the activation only draws.
+pub fn warm(gl: &glow::Context, saver: usize, w: i32, h: i32) {
+    with_gpu(gl, |gpu| unsafe {
+        let _ = gpu.scene_program(gl, saver, sample_count(w, h, SAVERS[saver].antialias));
+    });
+}
+
 /// Render one frame of `saver` into `viewport` (pixels, GL origin
 /// bottom-left) of the framebuffer egui is drawing to.
 pub fn paint(gl: &glow::Context, saver: usize, viewport: [i32; 4], time: f32, frame: i32, seed: [f32; 4]) {

@@ -65,18 +65,68 @@ pub fn rgba_to_yuyv(rgba: &[u8], w: usize, h: usize) -> Vec<u8> {
         for (chunk_index, out_rows) in out.chunks_mut(rows_per * w * 2).enumerate() {
             let src = &rgba[chunk_index * rows_per * w * 4..];
             scope.spawn(move || {
+                let mut memo = PairMemo::default();
                 for (i, q) in out_rows.as_chunks_mut::<4>().0.iter_mut().enumerate() {
-                    let p = &src[i * 8..i * 8 + 8];
-                    let [y0, u0, v0] = rgb_to_ycbcr(p[0], p[1], p[2]);
-                    let [y1, u1, v1] = rgb_to_ycbcr(p[4], p[5], p[6]);
-                    let u = (u16::from(u0) + u16::from(u1)).div_ceil(2) as u8;
-                    let v = (u16::from(v0) + u16::from(v1)).div_ceil(2) as u8;
-                    q.copy_from_slice(&[y0, u, y1, v]);
+                    *q = memo.convert(&src[i * 8..i * 8 + 8]);
                 }
             });
         }
     });
     out
+}
+
+/// One pixel pair to `Y0 U Y1 V`, remembering the last pair: flat colour
+/// (the test pattern, a slide) repeats pairs, and a repeat costs a compare
+/// instead of the float maths.
+#[derive(Default)]
+struct PairMemo {
+    last: Option<([u8; 8], [u8; 4])>,
+}
+
+impl PairMemo {
+    fn convert(&mut self, p: &[u8]) -> [u8; 4] {
+        let key: [u8; 8] = p[..8].try_into().expect("8 bytes");
+        if let Some((k, out)) = self.last
+            && k == key
+        {
+            return out;
+        }
+        let [y0, u0, v0] = rgb_to_ycbcr(p[0], p[1], p[2]);
+        let [y1, u1, v1] = rgb_to_ycbcr(p[4], p[5], p[6]);
+        let u = (u16::from(u0) + u16::from(u1)).div_ceil(2) as u8;
+        let v = (u16::from(v0) + u16::from(v1)).div_ceil(2) as u8;
+        let out = [y0, u, y1, v];
+        self.last = Some((key, out));
+        out
+    }
+}
+
+/// Convert only the rectangle `x0..x1, y0..y1` of an RGBA frame into an
+/// existing YUY2 frame of the same size, rows split across threads. `x0` is
+/// rounded down and `x1` up to whole pixel pairs.
+pub fn rgba_rect_to_yuyv(rgba: &[u8], w: usize, (x0, y0, x1, y1): (usize, usize, usize, usize), out: &mut [u8]) {
+    let (x0, x1) = (x0 & !1, (x1 + 1).min(w) & !1);
+    if x1 <= x0 || y1 <= y0 {
+        return;
+    }
+    let rows = y1 - y0;
+    let threads = std::thread::available_parallelism().map_or(4, |n| n.get()).min(8);
+    let rows_per = rows.div_ceil(threads).max(1);
+    let region = &mut out[y0 * w * 2..y1 * w * 2];
+    std::thread::scope(|scope| {
+        for (chunk, out_rows) in region.chunks_mut(rows_per * w * 2).enumerate() {
+            scope.spawn(move || {
+                let mut memo = PairMemo::default();
+                for (r, row) in out_rows.chunks_mut(w * 2).enumerate() {
+                    let y = y0 + chunk * rows_per + r;
+                    let src = &rgba[(y * w + x0) * 4..(y * w + x1) * 4];
+                    for (i, q) in row[x0 * 2..x1 * 2].as_chunks_mut::<4>().0.iter_mut().enumerate() {
+                        *q = memo.convert(&src[i * 8..i * 8 + 8]);
+                    }
+                }
+            });
+        }
+    });
 }
 
 /// A grey RGBA thumbnail from the Y bytes alone, in full range (0..255) so
@@ -159,6 +209,25 @@ mod tests {
         for y in [0, 18, 36] {
             let row = &rgba[y * w * 4..(y + 1) * w * 4];
             assert_eq!(&rgba_to_yuyv(row, w, 1)[..], &yuyv[y * w * 2..(y + 1) * w * 2], "row {y}");
+        }
+    }
+
+    #[test]
+    fn a_rectangle_converts_exactly_as_the_whole_frame_does() {
+        let (w, h) = (64, 36);
+        let rgba = crate::capture::draw_mock_frame(3, 0.4, w, h);
+        let whole = rgba_to_yuyv(&rgba, w, h);
+        // Start from a different frame, then convert a rect with odd edges.
+        let mut out = rgba_to_yuyv(&crate::capture::draw_mock_frame(1, 0.9, w, h), w, h);
+        rgba_rect_to_yuyv(&rgba, w, (5, 3, 41, 30), &mut out);
+        for y in 0..h {
+            for x in 0..w {
+                let inside = (4..42).contains(&x) && (3..30).contains(&y);
+                let o = (y * w + x) * 2;
+                if inside {
+                    assert_eq!(out[o], whole[o], "Y at {x},{y}");
+                }
+            }
         }
     }
 

@@ -304,6 +304,10 @@ pub struct InputViewer {
     references: HashMap<String, Arc<Vec<reference::Image>>>,
     detector: Option<reference::Detector>,
     next_detect: Instant,
+    /// Shader warm-up: the canvas size (in pixels) and since when it has
+    /// held, and how many savers are compiled for it.
+    warm_size: ([i32; 2], Instant),
+    warmed: usize,
     logo: Option<Logo>,
     /// --hud: repaints per second, and when the count started.
     ui_fps: f32,
@@ -388,6 +392,8 @@ impl InputViewer {
             references: HashMap::new(),
             detector: None,
             next_detect: Instant::now(),
+            warm_size: ([0, 0], Instant::now()),
+            warmed: 0,
             logo: Logo::load(&cc.egui_ctx),
             ui_fps: 0.0,
             ui_frames: (0, Instant::now()),
@@ -1083,6 +1089,36 @@ impl InputViewer {
         painter.image(tex.id(), fit, Rect::from_min_max(pos2(u0, v0), pos2(u1, v1)), Color32::WHITE.gamma_multiply(opacity));
     }
 
+    /// Compile the screensavers' shaders before they are needed, one per
+    /// frame, once the window has kept its size for two seconds -- the size
+    /// sets the supersampling, so a program compiled for a laptop window is
+    /// not the one the wall uses. A size change starts it over (programs
+    /// already built for a size are reused).
+    fn warm_savers(&mut self, ctx: &egui::Context, frame: &eframe::Frame, now: Instant) {
+        let size = ctx.content_rect().size() * ctx.pixels_per_point();
+        let px = [size.x.round() as i32, size.y.round() as i32];
+        if px != self.warm_size.0 {
+            self.warm_size = (px, now);
+            self.warmed = 0;
+            return;
+        }
+        let total = crate::shader_saver::SAVERS.len() + 1;
+        if self.warmed >= total || now.duration_since(self.warm_size.1) < Duration::from_secs(2) {
+            return;
+        }
+        let Some(gl) = frame.gl() else { return };
+        if self.warmed < crate::shader_saver::SAVERS.len() {
+            crate::shader_saver::warm(gl, self.warmed, px[0], px[1]);
+        } else {
+            crate::weather::warm(gl);
+        }
+        self.warmed += 1;
+        if self.warmed == total {
+            log_info!("[Screensaver] shaders compiled ahead for {}x{}", px[0], px[1]);
+        }
+        ctx.request_repaint();
+    }
+
     /// Advance the layout slide and each side's dip, before painting.
     fn step_transitions(&mut self, dt: f32) {
         let reduced = self.settings.reduced_motion;
@@ -1521,6 +1557,7 @@ impl eframe::App for InputViewer {
 
         self.handle_keys(&ctx);
         self.update_frames(&ctx, frame);
+        self.warm_savers(&ctx, frame, now);
 
         let rect = ui.max_rect();
         self.step_transitions(dt);

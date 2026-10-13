@@ -325,6 +325,20 @@ unsafe fn setup(gl: &glow::Context) -> Result<Gpu, String> {
     }
 }
 
+/// Compile ahead of the first activation; see `shader_saver::warm`.
+pub fn warm(gl: &glow::Context) {
+    let mut state = GPU.lock().unwrap();
+    if let State::Uninit = *state {
+        *state = match unsafe { setup(gl) } {
+            Ok(g) => State::Ready(g),
+            Err(e) => {
+                log_error!("[Screensaver] Weather failed to compile, falling back: {e}");
+                State::Failed
+            }
+        };
+    }
+}
+
 fn draw(gl: &glow::Context, viewport: [i32; 4], f: Frame) {
     shader_saver::render(gl, viewport, &BLOOM, 1.0, |gl, w, h| {
         let mut state = GPU.lock().unwrap();
