@@ -2,9 +2,11 @@
 // SPDX-FileCopyrightText: 2025-2026 Schuberg Philis / Lab271
 //! No-signal screen: the split-flap board, then a screensaver.
 //!
-//! The Electron app has ~30 WebGL savers. These are three painter-only ones,
-//! enough to show the lifecycle: per-activation seed (logged, so a look can be
-//! reproduced), rotation every ten minutes, and never repeating the last pick.
+//! The Electron app has ~30 WebGL savers. Ported so far: the six pure
+//! fragment-shader ones (`shader_saver.rs`), plus three painter-only ones.
+//! The lifecycle is Electron's: per-activation seed (logged, so a look can be
+//! reproduced), rotation every ten minutes, never repeating the last pick,
+//! and the DVD logo when a saver cannot start.
 
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -52,7 +54,13 @@ impl Rng {
     }
 }
 
-pub const NAMES: &[&str] = &["Plasma", "Starfield", "DVD logo", "Lissajous"];
+/// The shader savers first, in `shader_saver::SAVERS` order (a test holds
+/// the two together), then the painter ones.
+pub const NAMES: &[&str] = &[
+    "Plasma", "Flow Field", "Julia Family", "Burning Ship", "Moire Interference", "Bicycle Horizon",
+    "Starfield", "DVD logo", "Lissajous",
+];
+const DVD: usize = 7;
 
 pub struct Screensaver {
     pub index: usize,
@@ -61,9 +69,9 @@ pub struct Screensaver {
 }
 
 enum State {
-    /// GPU, see plasma.rs. `seed` is gl-base.js's iSeed: four uncorrelated
-    /// randoms fixed for the activation.
-    Plasma { seed: [f32; 4], frame: i32 },
+    /// GPU, see shader_saver.rs. `seed` is gl-base.js's iSeed: four
+    /// uncorrelated randoms fixed for the activation.
+    Shader { saver: usize, seed: [f32; 4], frame: i32 },
     Starfield { stars: Vec<(f32, f32, f32)>, speed: f32 },
     Dvd { pos: Vec2, vel: Vec2, hue: f32 },
     Lissajous { a: f32, b: f32, phase: f32, hue: f32 },
@@ -73,14 +81,15 @@ impl Screensaver {
     pub fn new(index: usize, seed: u64) -> Self {
         let mut rng = Rng::new(seed);
         let state = match index % NAMES.len() {
-            0 => State::Plasma { seed: [rng.f32(), rng.f32(), rng.f32(), rng.f32()], frame: 0 },
-            1 => State::Starfield {
+            i if i < crate::shader_saver::SAVERS.len() =>
+                State::Shader { saver: i, seed: [rng.f32(), rng.f32(), rng.f32(), rng.f32()], frame: 0 },
+            6 => State::Starfield {
                 stars: (0..600)
                     .map(|_| (rng.range(-1.0, 1.0), rng.range(-1.0, 1.0), rng.range(0.05, 1.0)))
                     .collect(),
                 speed: rng.range(0.15, 0.4),
             },
-            2 => State::Dvd {
+            DVD => State::Dvd {
                 pos: vec2(rng.f32(), rng.f32()),
                 vel: vec2(rng.range(0.08, 0.14), rng.range(0.1, 0.2)),
                 hue: rng.f32(),
@@ -103,20 +112,20 @@ impl Screensaver {
     pub fn paint(&mut self, painter: &egui::Painter, rect: Rect, t: f32, dt: f32) {
         // registry.js falls back to the DVD logo when a saver cannot start;
         // same here if the GPU path did not come up.
-        if matches!(self.state, State::Plasma { .. }) && crate::plasma::failed() {
+        if let State::Shader { saver, .. } = self.state && crate::shader_saver::failed(saver) {
             let mut rng = Rng::new(self.seed);
-            self.index = 2;
+            self.index = DVD;
             self.state = State::Dvd { pos: vec2(rng.f32(), rng.f32()), vel: vec2(0.1, 0.15), hue: rng.f32() };
         }
         painter.rect_filled(rect, 0.0, Color32::BLACK);
         let c = rect.center();
         match &mut self.state {
-            State::Plasma { seed, frame } => {
-                let (seed, f) = (*seed, *frame);
+            State::Shader { saver, seed, frame } => {
+                let (saver, seed, f) = (*saver, *seed, *frame);
                 *frame += 1;
                 let cb = eframe::egui_glow::CallbackFn::new(move |info, painter| {
                     let v = info.viewport_in_pixels();
-                    crate::plasma::paint(painter.gl(), [v.left_px, v.from_bottom_px, v.width_px, v.height_px], t, f, seed);
+                    crate::shader_saver::paint(painter.gl(), saver, [v.left_px, v.from_bottom_px, v.width_px, v.height_px], t, f, seed);
                 });
                 painter.add(egui::PaintCallback { rect, callback: std::sync::Arc::new(cb) });
             }
@@ -207,6 +216,13 @@ pub fn paint_split_flap(painter: &egui::Painter, rect: Rect, lines: &[&str], age
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shader_savers_lead_the_list_in_the_same_order() {
+        let shaders: Vec<_> = crate::shader_saver::SAVERS.iter().map(|s| s.name).collect();
+        assert_eq!(&NAMES[..shaders.len()], &shaders[..]);
+        assert_eq!(NAMES[DVD], "DVD logo");
+    }
 
     #[test]
     fn same_seed_same_sequence() {

@@ -45,8 +45,8 @@ passes extracted verbatim from `post-fx.js`, into RGBA16F, with
 `FRAMEBUFFER_SRGB` disabled so gamma is not applied twice (the #140 trap,
 egui edition), and blits into egui's framebuffer.
 
-Missing: the supersample footer is generated in JS, so `extract.mjs` does not
-see it -- port `makeSupersampleFooter` to Rust before Julia Family and
-Burning Ship (`antialias: 4`). Raymarch's accumulation loop needs its own
+The supersample footer and `resolveSampleCount` are ported to
+`shader_saver.rs` (a test pins the footer to gl-base.js's output character
+for character); Julia Family and Burning Ship use them. Raymarch's accumulation loop needs its own
 port. On desktop GL 3.3 float targets are core, so the 8-bit fallback is a
 WebGL concern only.

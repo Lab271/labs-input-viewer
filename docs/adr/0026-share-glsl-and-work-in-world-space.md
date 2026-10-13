@@ -37,7 +37,9 @@ defined twice.
 ## Porting to egui
 
 **Keep**, and the prototype already relies on it: `shaders/extract.mjs`
-imports `glsl-lib.js`, substitutes `${GLSL.x}`, and writes a `.frag` that
+imports `glsl-lib.js`, *evaluates* each saver's `SHADER` template (so module
+constants such as Julia Family's `WINDOW_RANGE` and the template's escapes
+come out as the browser sees them), and writes a `.frag` that
 runs on GLSL 3.30 unchanged (`floatBitsToUint`, `uint` and `gl_InstanceID`
 are all core there).
 
@@ -45,7 +47,7 @@ Its limits, per saver:
 
 | Kind | Savers | Port |
 |---|---|---|
-| Pure fragment shader | Plasma (done), Flow Field, Julia Family, Burning Ship, Moire, Bicycle Horizon | extract as is (+ supersample footer for two) |
+| Pure fragment shader | Plasma, Flow Field, Julia Family, Burning Ship, Moire, Bicycle Horizon -- **all done** | extract as is (+ supersample footer for two) |
 | Shader with JS constants interpolated (`${SAMPLES}` etc.) | Boids, Aquarium, Pong, Starfield, Metaballs, ... | evaluate the template, not a regex |
 | JS orchestration: ping-pong, instancing, CPU simulation | the other ~20 | rewrite the orchestration in Rust, keep the GLSL |
 | Glyph atlas | Matrix Rain, ASCII Doughnut, Weather, Split Flap | Rust font rasteriser ([0029](0029-text-through-a-baked-glyph-atlas.md)) |

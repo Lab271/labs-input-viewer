@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2025-2026 Schuberg Philis / Lab271
-// Regenerates plasma.frag and the post-FX passes from the Electron app's sources, so the two cannot
-// drift by hand-copying:  node input_viewer_egui/shaders/extract.mjs
+// Regenerates the screensaver shaders and the post-FX passes from the Electron app's sources, so
+// the two cannot drift by hand-copying:  node input_viewer_egui/shaders/extract.mjs
 import { readFileSync, writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
@@ -10,15 +10,26 @@ const here = dirname(fileURLToPath(import.meta.url))
 const savers = join(here, '../../input_viewer_electron/src/renderer/screensavers')
 const { GLSL } = await import(join(savers, 'glsl-lib.js'))
 
-const src = readFileSync(join(savers, 'plasma.js'), 'utf8')
-const body = src.match(/const SHADER = \/\* glsl \*\/ `([\s\S]*?)`\n/)[1]
-const glsl = body.replace(/\$\{GLSL\.(\w+)\}/g, (_, k) => {
-  if (!(k in GLSL)) throw new Error(`GLSL.${k} not found`)
-  return GLSL[k]
-})
-writeFileSync(join(here, 'plasma.frag'),
-  '// GENERATED from input_viewer_electron/.../plasma.js by extract.mjs -- do not edit.\n' + glsl)
-console.log(`plasma.frag: ${glsl.split('\n').length} lines`)
+// The pure fragment-shader savers (ADR 0026). Their render options (bloom,
+// tonemap, exposure, antialias) are transcribed in shader_saver.rs.
+const SAVERS = ['plasma', 'flow-field', 'julia-family', 'burning-ship', 'moire', 'bicycle-horizon']
+
+// The SHADER template is *evaluated*, not regex-substituted: some interpolate
+// module constants (julia-family's WINDOW_RANGE), and evaluating also applies
+// the template's own escapes exactly as the browser does. The module body runs
+// with its imports removed and everything from `export default` on dropped,
+// so only its top-level constants are defined -- no GL, no DOM.
+for (const name of SAVERS) {
+  const src = readFileSync(join(savers, `${name}.js`), 'utf8')
+  const body = src
+    .replace(/^import .*$/gm, '')
+    .replace(/^export default[\s\S]*$/m, '')
+  const glsl = new Function('GLSL', `${body}\nreturn SHADER`)(GLSL)
+  if (typeof glsl !== 'string' || !glsl.includes('mainImage')) throw new Error(`${name}: no SHADER with mainImage`)
+  writeFileSync(join(here, `${name}.frag`),
+    `// GENERATED from input_viewer_electron/.../${name}.js by extract.mjs -- do not edit.\n` + glsl)
+  console.log(`${name}.frag: ${glsl.split('\n').length} lines`)
+}
 
 // The post-FX passes are module-private constants, so they are pulled out of
 // the source text rather than imported.

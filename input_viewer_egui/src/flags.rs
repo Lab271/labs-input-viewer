@@ -9,7 +9,7 @@
 //! | `--mock[=N]` | N synthetic inputs (1-8, default 4). No capture hardware. |
 //! | `--no-signal` | Pins every input into the no-signal state. |
 //! | `--screensaver-delay=MS` | Replaces the five-minute wait. |
-//! | `--screensaver=NAME` | Prototype only: pins the first saver picked (`plasma`, `starfield`, ...). |
+//! | `--screensaver=NAME` | Prototype only: pins the first saver picked (`plasma`, `juliafamily`, `starfield`, ...). |
 //! | `--test-pattern[=WxH@FPS]` | Prototype only: mock inputs carry a motion test pattern, 3840x2160@60 by default. Implies `--mock=2`, the wall's two cards. |
 //! | `--hud` | Prototype only: per-half frame-rate and latency overlay, and a `[render]` log line every 5s. |
 //! | `--mock-shape=W:H` | Prototype only: mock inputs letterboxed at that shape inside pure black, as the cards fit a source of another shape -- to watch cropping (ADR 0015). |

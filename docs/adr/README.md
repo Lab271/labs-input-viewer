@@ -129,6 +129,6 @@ Driven by what keeps the wall working, not by size.
    single instance (D3-D5).
 6. **Operator UI gaps:** cursor, transitions, remote keyboard, remaining
    Settings panes.
-7. **Screensavers:** the five other pure-fragment savers first, then the
-   orchestrated ones; Art-Net and weather alongside.
-8. **Reference detection** -- only if D1 says it is still wanted.
+7. **Screensavers:** the six pure-fragment savers are done; next the
+   orchestrated ones, with Art-Net and weather alongside.
+8. **Reference detection:** wanted (D1), off the video path.
