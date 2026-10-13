@@ -321,7 +321,7 @@ impl InputViewer {
                 let (l, divider, r) = dual_rects(inner, self.settings.center_gap);
                 if let Some(logo) = &self.logo {
                     let uv = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
-                    p.image(logo.id(), map(logo_rect(divider, logo.size_vec2())), uv, Color32::WHITE);
+                    p.image(logo.mipmapped.id(), map(logo_rect(divider, logo.size())), uv, Color32::WHITE);
                 }
                 vec![(0, l), (1, r)]
             }

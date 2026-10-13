@@ -13,6 +13,7 @@ mod crop;
 mod flags;
 mod gpu_video;
 mod health;
+mod logo;
 mod plasma;
 mod remote_key;
 mod render_stats;

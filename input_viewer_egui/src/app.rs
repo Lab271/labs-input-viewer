@@ -16,6 +16,7 @@ use crate::gpu_video;
 use crate::flags::Flags;
 use crate::health::{self, Sample, Status, StreamHealth, limits as health_limits};
 use crate::render_stats::RenderStats;
+use crate::logo::Logo;
 use crate::remote_key;
 use crate::review::Review;
 use crate::transition::{self, Dip};
@@ -115,12 +116,6 @@ fn logo_rect(divider: Rect, logo: Vec2) -> Rect {
     Rect::from_center_size(divider.center(), logo * scale)
 }
 
-fn load_logo(ctx: &egui::Context) -> Option<TextureHandle> {
-    let img = image::load_from_memory(include_bytes!("../assets/logo.png")).ok()?.to_rgba8();
-    let size = [img.width() as usize, img.height() as usize];
-    let image = egui::ColorImage::from_rgba_unmultiplied(size, img.as_raw());
-    Some(ctx.load_texture("logo", image, TextureOptions::LINEAR))
-}
 
 /// `pickerPlan()` from the Electron app: which pickers the dropdown shows and
 /// whether their tiles carry number-key chips.
@@ -270,7 +265,7 @@ pub struct InputViewer {
     last_frame: Instant,
     review: Option<Review>,
     updater: Option<Updater>,
-    logo: Option<TextureHandle>,
+    logo: Option<Logo>,
     /// --hud: repaints per second, and when the count started.
     ui_fps: f32,
     ui_frames: (u32, Instant),
@@ -330,7 +325,7 @@ impl InputViewer {
             review,
             // Never in mock or review runs: those are for looking at the UI.
             updater: None,
-            logo: load_logo(&cc.egui_ctx),
+            logo: Logo::load(&cc.egui_ctx),
             ui_fps: 0.0,
             ui_frames: (0, Instant::now()),
             report_count: 0,
@@ -810,9 +805,10 @@ impl InputViewer {
         // The halves at `layout_t`: dual at 1, single at 0, sliding between.
         let (l, divider, r) = transition::layout_rects(rect, dual_rects(rect, self.settings.center_gap), self.layout_t);
         let shown = transition::ease(self.layout_t);
-        if let Some(logo) = self.logo.as_ref().filter(|_| divider.width() >= 1.0) {
-            let uv = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
-            painter.image(logo.id(), logo_rect(divider, logo.size_vec2()), uv, Color32::WHITE.gamma_multiply(shown));
+        let settled = self.layout_t == 0.0 || self.layout_t == 1.0;
+        if let Some(logo) = self.logo.as_mut().filter(|_| divider.width() >= 1.0) {
+            let r = logo_rect(divider, logo.size());
+            logo.paint(&painter, r, Color32::WHITE.gamma_multiply(shown), settled);
         }
         for (i, half, opacity) in [(0, l, 1.0), (1, r, shown)] {
             if half.width() < 1.0 {
