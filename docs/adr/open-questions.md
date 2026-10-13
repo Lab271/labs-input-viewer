@@ -6,6 +6,8 @@ from that commit.
 
 ## Decisions to make before porting
 
+D1 and D3-D6 decided 2026-10-13; see the ADRs' "Decided" sections.
+
 | # | Question | ADR |
 |---|---|---|
 | D1 | Is reference-based no-signal detection still required? **The wall runs with no references**, and when they were removed is not recorded. | [0014](0014-detect-no-signal-against-references.md) |

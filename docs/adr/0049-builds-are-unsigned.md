@@ -6,7 +6,7 @@
 | **Date** | not recorded; #56 open and on hold |
 | **Area** | Delivery |
 | **Evidence** | `release.yml:196-199` (`CSC_IDENTITY_AUTO_DISCOVERY: false`); `build/entitlements.mac.plist`; `SECURITY.md`; #56, #86 |
-| **egui verdict** | Decide |
+| **egui verdict** | Keep unsigned |
 | **egui status** | Same as Electron (ad-hoc on macOS) |
 
 ## Context
@@ -36,3 +36,8 @@ binary, and leaves the Windows installer unsigned. Velopack can sign and
 notarise if certificates exist. The JIT and library-validation entitlements
 are V8's and are not needed; the camera usage string is
 ([0051](0051-request-capture-permission-up-front.md)).
+
+## Decided 2026-10-13
+
+D6: **unsigned for now**, as Electron. SmartScreen warns on first install
+only; Velopack updates work unsigned. Revisit if the app goes beyond the wall.

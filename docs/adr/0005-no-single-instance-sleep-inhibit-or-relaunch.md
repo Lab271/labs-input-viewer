@@ -6,7 +6,7 @@
 | **Date** | n/a -- never decided, observed as absent |
 | **Area** | Product |
 | **Evidence** | No `requestSingleInstanceLock`, `powerSaveBlocker` or `wakeLock` in `src/`; `index.js:300-306, 346-366`; `startup.ps1` relaunch-once |
-| **egui verdict** | Decide |
+| **egui verdict** | Change: single instance and no sleep in the app |
 | **egui status** | Not started |
 
 ## Context
@@ -43,3 +43,9 @@ after the first 20 s leaves a dark wall until someone notices.
 - **Crash relaunch** -- belongs in the startup script or a Windows service
   wrapper, not in the app. If it moves there, record it in
   labs-videowall-config.
+
+## Decided 2026-10-13
+
+D5: the app holds a **single-instance lock** (a second copy hands over to the
+first and exits) and **keeps the display awake**. Crash relaunch stays in
+`startup.ps1`.

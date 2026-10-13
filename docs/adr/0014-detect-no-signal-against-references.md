@@ -6,7 +6,7 @@
 | **Date** | 2026-01-11 (69fa6d5); several references 2026-08-09 (#161, PRs #160, #162, #166, #167); loop 2026-08-05 (#60, #61, PR #129) |
 | **Area** | Signal |
 | **Evidence** | `detection-simple.js:10-22, 31-43, 140-212, 406-616, 636-713`; `frame-source.js`; `renderer.js:4518-4845`; #83, #104, #150, #163 |
-| **egui verdict** | Decide |
+| **egui verdict** | Port, off the video path |
 | **egui status** | Not started |
 
 ## Context
@@ -62,3 +62,10 @@ keyed by device id rather than base64 in JSON. The whole frame-source layer
 (rVFC, WebCodecs, canvas fallback, the copyTo trap) is Chromium-specific
 and disappears: the capture thread already has CPU frames. Keep the ~1.6 s
 cadence that continues when frames stop.
+
+## Decided 2026-10-13
+
+D1: **port it**, with one constraint: it must never interfere with the video
+stream. The comparison runs on the health thumbnail the app already takes
+(no extra readback, no extra copy of the frame), off the paint path, and
+never holds up a frame.

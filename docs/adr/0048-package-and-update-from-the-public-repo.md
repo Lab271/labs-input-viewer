@@ -6,7 +6,7 @@
 | **Date** | 2025-12-30 (b639ad1, prompt-first); 2026-04-17 (7aa05e8, feed moved to the source repo); 2026-06-08 (9aebf8f, zip for updates); 2026-08-04 (#86, artifactName) |
 | **Area** | Delivery |
 | **Evidence** | `input_viewer_electron/package.json` `build`, `publish`; `src/main/index.js:58-80, 313-325, 797-889`; `release.yml` publish job; #86, #105, #249 |
-| **egui verdict** | Keep; Decide on the unattended prompt |
+| **egui verdict** | Keep; silent updates |
 | **egui status** | Partial |
 
 ## Context
@@ -66,3 +66,9 @@ platform in the name (`InputViewerEgui-windows-Setup.exe`,
 `InputViewerEgui-0.1.0-pr.346-macos-full.nupkg`, `releases.windows.json`...),
 so the two platforms share one release without colliding. **Not yet
 tested:** publishing, installing, and an update from one release to the next.
+
+## Decided 2026-10-13
+
+D3: **silent**. The app checks and downloads in the background, never shows
+a dialog, and applies the update when it next restarts (the wall restarts it
+on boot). Nothing may sit modal over the wall.

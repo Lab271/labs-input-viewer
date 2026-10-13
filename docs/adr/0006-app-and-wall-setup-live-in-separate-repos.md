@@ -52,3 +52,9 @@ app opens the cards.
 
 Decide the install location and change `startup.ps1` in the same release
 that switches the wall, in labs-videowall-config.
+
+## Decided 2026-10-13
+
+D4: Velopack **per user**, `%LocalAppData%\InputViewer`, installed by
+`setup.exe` as `sbpla`; updates need no admin. `startup.ps1` in
+`LAB271/labs-videowall-config` launches it from there.

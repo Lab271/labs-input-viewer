@@ -29,7 +29,7 @@ Defects, contradictions and doc drift found on the way are in
 | [0002](0002-port-to-rust-and-egui.md) | Port Input Viewer to Rust and egui | Proposed | Decide | Prototype |
 | [0003](0003-model-the-wall-as-two-halves.md) | Model the wall as two halves, never N panels | Accepted | Keep | Done |
 | [0004](0004-one-fullscreen-window-wall-composition-is-external.md) | One borderless fullscreen window; the wall's composition is someone else's job | Accepted | Keep | Partial |
-| [0005](0005-no-single-instance-sleep-inhibit-or-relaunch.md) | Single instance, display sleep and crash relaunch are not the app's job (by omission) | Open | Decide | Not started |
+| [0005](0005-no-single-instance-sleep-inhibit-or-relaunch.md) | Single instance, display sleep and crash relaunch are not the app's job (by omission) | Open | Change: single instance and no sleep in the app | Not started |
 | [0006](0006-app-and-wall-setup-live-in-separate-repos.md) | The app and the wall's setup live in separate repos; the startup script owns launch order | Accepted | Keep | Partial |
 
 ### Capture
@@ -48,7 +48,7 @@ Defects, contradictions and doc drift found on the way are in
 |---|---|---|---|---|
 | [0012](0012-judge-health-by-counting-frames.md) | Judge capture health by counting frames, never by measuring motion | Accepted | Keep | Done |
 | [0013](0013-reopen-by-releasing-the-device-with-two-backoffs.md) | Reopen a sick device by releasing it fully, on separate backoffs for faults and for dark | Accepted | Keep | Done |
-| [0014](0014-detect-no-signal-against-references.md) | Detect no-signal by comparing against operator-captured reference screenshots | Accepted -- but dormant on the wall | Decide | Not started |
+| [0014](0014-detect-no-signal-against-references.md) | Detect no-signal by comparing against operator-captured reference screenshots | Accepted -- but dormant on the wall | Port, off the video path | Not started |
 | [0015](0015-crop-black-bars-by-snapping-to-shapes.md) | Crop the card's black bars by snapping to known shapes | Accepted | Keep, and reconsider the source | Not started |
 | [0016](0016-laptop-resolution-hint-off-by-default.md) | Keep the "set your laptop to 3840x768" hint off by default | Accepted (premise weakened since 2026-10-02) | Keep | Not started |
 | [0017](0017-freeze-shows-the-live-picture.md) | Freeze shows exactly the picture that was live | Accepted | Adapt | Done |
@@ -104,8 +104,8 @@ Defects, contradictions and doc drift found on the way are in
 | [0045](0045-release-by-hand-bump-from-commits.md) | Release by hand; derive the version bump from Conventional Commits, with an explicit override | Accepted | Keep | Partial |
 | [0046](0046-version-and-tagging.md) | VERSION is the source of truth; bump through a PR, tag the merged commit | Accepted | Adapt | Partial |
 | [0047](0047-gate-releases-on-tests.md) | Gate every PR and release on lint, tests and build, and show the results inline | Accepted | Keep | Partial |
-| [0048](0048-package-and-update-from-the-public-repo.md) | Package per platform and auto-update from the public source repo, asking first | Accepted | Keep; Decide on the unattended prompt | Partial |
-| [0049](0049-builds-are-unsigned.md) | Builds are unsigned | Accepted (by default) | Decide | Same as Electron (ad-hoc on macOS) |
+| [0048](0048-package-and-update-from-the-public-repo.md) | Package per platform and auto-update from the public source repo, asking first | Accepted | Keep; silent updates | Partial |
+| [0049](0049-builds-are-unsigned.md) | Builds are unsigned | Accepted (by default) | Keep unsigned | Same as Electron (ad-hoc on macOS) |
 | [0050](0050-supply-chain-and-licence.md) | Supply chain and licence: SHA-pinned actions, delayed Dependabot, public registries, Apache-2.0 with SPDX headers | Accepted | Keep | Partial |
 
 ## Suggested port order
