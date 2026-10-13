@@ -141,7 +141,7 @@ mod tests {
         // Colour is shared per pixel pair, so a pair straddling a bar edge
         // blends -- as on the real cards; that is 4:2:2. Every pair whose two
         // source pixels agree must come back within rounding.
-        for (src, out) in rgba.chunks_exact(8).zip(back.chunks_exact(8)) {
+        for (src, out) in rgba.as_chunks::<8>().0.iter().zip(back.as_chunks::<8>().0) {
             if src[..4] == src[4..] {
                 let worst = src.iter().zip(out).map(|(a, b)| (i16::from(*a) - i16::from(*b)).abs()).max().unwrap();
                 assert!(worst <= 2, "uniform pair {src:?} came back as {out:?}");

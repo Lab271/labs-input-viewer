@@ -21,6 +21,7 @@ mod settings;
 mod settings_status;
 mod shortcuts;
 mod testpattern;
+mod transition;
 mod update;
 mod yuv;
 

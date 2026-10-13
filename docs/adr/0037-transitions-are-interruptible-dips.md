@@ -7,7 +7,7 @@
 | **Area** | UI |
 | **Evidence** | `renderer.js` `LAYOUT_ANIM_MS` :2072, `layoutAnimMs` :2081, `:2064-2069, 2934-2962`; `styles.css:133, 180-189` |
 | **egui verdict** | Keep, and reconsider the crossfade |
-| **egui status** | Not started |
+| **egui status** | Done |
 
 ## Context
 
@@ -41,4 +41,11 @@ were never watched on the wall (PR #257). A comment still says the switch
 crossfade:** with one session per device both pictures are already textures,
 so a crossfade costs a second textured quad, not a second decode. The
 display-none/reflow tricks and `!important` against inline styles are DOM
-artefacts. Prototype: switches are instant.
+artefacts.
+
+Done (`transition.rs`): the 320 ms slide and the 130 ms dip, holding black
+up to 2 s for the new input's first frame. Interruptible because neither is
+a timeline: the layout is a position moving toward the setting, and a dip
+remembers only what it is leaving. Every switch dips, number keys included.
+Reduced motion is a setting (`reducedMotion`, Layout pane). The crossfade is
+still not built.

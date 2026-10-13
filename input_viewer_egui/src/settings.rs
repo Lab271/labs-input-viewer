@@ -71,6 +71,10 @@ pub struct Settings {
     /// Crop the capture card's black bars (ADR 0015). On by default, as in
     /// Electron; `false` in settings.json turns it off.
     pub crop_letterbox: bool,
+    /// Switches and layout changes are instant (ADR 0037). Electron read
+    /// the OS `prefers-reduced-motion`; egui has no such query, so it is a
+    /// setting. Electron ignores the key.
+    pub reduced_motion: bool,
     pub border_width: f32,
     pub left_device_id: Option<String>,
     pub right_device_id: Option<String>,
@@ -89,6 +93,7 @@ impl Default for Settings {
             multi_view: true,
             center_gap: 60.0,
             crop_letterbox: true,
+            reduced_motion: false,
             border_width: 0.0,
             left_device_id: None,
             right_device_id: None,

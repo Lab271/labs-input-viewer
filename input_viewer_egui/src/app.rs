@@ -17,6 +17,7 @@ use crate::flags::Flags;
 use crate::health::{self, Sample, Status, StreamHealth, limits as health_limits};
 use crate::render_stats::RenderStats;
 use crate::review::Review;
+use crate::transition::{self, Dip};
 use crate::screensaver::{self, Rng, Screensaver};
 use crate::settings::{Layout, Settings, Store};
 use crate::shortcuts::{self, Action};
@@ -29,7 +30,13 @@ use crate::filelog::{log_error, log_info, log_warn};
 const DROPDOWN_IDLE: Duration = Duration::from_secs(30);
 const EDGE_PX: f32 = 6.0;
 const CLOSE_MARGIN: f32 = 48.0;
-const TOAST_FOR: Duration = Duration::from_millis(2500);
+const TOAST_FOR: Duration = Duration::from_secs(2);
+/// The cursor hides this long after the pointer last moved (ADR 0038).
+const CURSOR_IDLE: Duration = Duration::from_secs(3);
+/// The green LIVE badge after unfreezing.
+const LIVE_FOR: Duration = Duration::from_secs(1);
+const FROZEN_RED: Color32 = Color32::from_rgb(200, 30, 30);
+const LIVE_GREEN: Color32 = Color32::from_rgb(20, 150, 60);
 const TILE: Vec2 = vec2(128.0, 72.0);
 const DEVICE_POLL: Duration = Duration::from_secs(10);
 /// Video is almost always drawn smaller than it arrives (a 3840x2160 card on a
@@ -85,7 +92,7 @@ fn choose_sides(devices: &[Device], s: &Settings, current: &[Option<String>; 2],
 
 /// Dual view: left half, logo divider, right half. The halves share what the
 /// gap leaves, like the flex layout around `#center-divider`.
-fn dual_rects(rect: Rect, gap: f32) -> (Rect, Rect, Rect) {
+pub(crate) fn dual_rects(rect: Rect, gap: f32) -> (Rect, Rect, Rect) {
     let gap = gap.clamp(0.0, rect.width());
     let half = (rect.width() - gap) / 2.0;
     let left = Rect::from_min_size(rect.min, vec2(half, rect.height()));
@@ -230,7 +237,16 @@ pub struct InputViewer {
     gpu: Gpu,
     /// Per device, kept across reopens so egui registrations are not leaked.
     gpu_textures: HashMap<String, gpu_video::GpuTexture>,
+    /// Per side: the dip to black of an input switch (ADR 0037).
+    dips: [Dip; 2],
+    /// Where the layout is between single (0) and dual (1); moves toward
+    /// the setting, so a change mid-way turns around where it is.
+    layout_t: f32,
     frozen: bool,
+    /// Until when the LIVE badge shows, after an unfreeze.
+    live_until: Option<Instant>,
+    /// The pointer last moved; the cursor hides CURSOR_IDLE after it.
+    last_pointer_move: Instant,
     dropdown_open: bool,
     dropdown_bottom: f32,
     legend_open: bool,
@@ -268,6 +284,7 @@ impl InputViewer {
         // for looking at the UI, and must not be able to change the wall's
         // configuration.
         let (settings, store) = Store::open(flags.mock.is_none() && review.is_none());
+        let layout_t = if settings.layout() == Layout::Dual { 1.0 } else { 0.0 };
         let mut app = Self {
             settings,
             store,
@@ -281,7 +298,11 @@ impl InputViewer {
             stills: HashMap::new(),
             gpu: Gpu::NotYet,
             gpu_textures: HashMap::new(),
+            dips: Default::default(),
+            layout_t,
             frozen: false,
+            live_until: None,
+            last_pointer_move: Instant::now(),
             dropdown_open: false,
             dropdown_bottom: 0.0,
             legend_open: false,
@@ -399,12 +420,22 @@ impl InputViewer {
         }
     }
 
+    /// Every user-driven switch goes through here, so every one dips.
+    fn set_side(&mut self, i: usize, id: Option<String>) {
+        if self.sides[i] != id {
+            let from = self.sides[i].take();
+            self.dips[i].switch(from);
+            self.sides[i] = id;
+        }
+    }
+
     fn select(&mut self, id: String, side: Side) {
         let side = if self.settings.multi_view { side } else { Side::Both };
-        match side {
-            Side::Left => self.sides[0] = Some(id.clone()),
-            Side::Right => self.sides[1] = Some(id.clone()),
-            Side::Both => self.sides = [Some(id.clone()), Some(id.clone())],
+        if matches!(side, Side::Left | Side::Both) {
+            self.set_side(0, Some(id.clone()));
+        }
+        if matches!(side, Side::Right | Side::Both) {
+            self.set_side(1, Some(id.clone()));
         }
         if !self.dropdown_open {
             self.toast = Some((self.label_of(Some(&id)), Instant::now()));
@@ -414,7 +445,7 @@ impl InputViewer {
     fn set_multi_view(&mut self, on: bool) {
         self.settings.multi_view = on;
         if !on {
-            self.sides[1] = self.sides[0].clone();
+            self.set_side(1, self.sides[0].clone());
         }
     }
 
@@ -426,8 +457,15 @@ impl InputViewer {
     /// closed for a reopen is opened again here once its release gap is over.
     fn sync_streams(&mut self, ctx: &egui::Context) {
         // A disabled input is never opened; its half shows no signal.
-        let wanted: Vec<String> = self.visible_sides().iter()
+        // Also kept: an input still fading out, and the right half while
+        // the layout is collapsing it.
+        let mut shown: Vec<usize> = self.visible_sides().to_vec();
+        if self.layout_t > 0.0 && !shown.contains(&1) {
+            shown.push(1);
+        }
+        let wanted: Vec<String> = shown.iter()
             .filter_map(|&i| self.sides[i].clone())
+            .chain(self.dips.iter().filter_map(|d| d.fading().map(str::to_owned)))
             .filter(|id| self.settings.is_enabled(id))
             .collect();
         self.slots.retain(|id, _| wanted.contains(id));
@@ -670,6 +708,17 @@ impl InputViewer {
         }
     }
 
+    /// Freeze is instant both ways (ADR 0037); unfreezing flashes LIVE.
+    fn set_frozen(&mut self, on: bool) {
+        if self.frozen && !on {
+            self.live_until = Some(Instant::now() + LIVE_FOR);
+        }
+        if on {
+            self.live_until = None;
+        }
+        self.frozen = on;
+    }
+
     fn run(&mut self, action: Action, ctx: &egui::Context) {
         match action {
             Action::SelectInput(i) => {
@@ -679,7 +728,7 @@ impl InputViewer {
             }
             Action::LayoutDual => self.settings.layout_mode = Some(Layout::Dual),
             Action::LayoutSingle => self.settings.layout_mode = Some(Layout::Single),
-            Action::Freeze => self.frozen = !self.frozen,
+            Action::Freeze => self.set_frozen(!self.frozen),
             Action::ScreensaverToggle => {
                 if self.saver.is_some() {
                     self.saver = None;
@@ -703,7 +752,7 @@ impl InputViewer {
                     self.dropdown_open = false;
                     self.legend_open = false;
                 } else {
-                    self.frozen = false;
+                    self.set_frozen(false);
                     if self.saver_on_demand {
                         self.saver_on_demand = false;
                         self.saver = None;
@@ -727,54 +776,83 @@ impl InputViewer {
             let t = now.duration_since(self.saver_started).as_secs_f32();
             saver.paint(&painter, rect, t, dt);
             if t < 4.0 {
-                badge(&painter, rect.left_bottom() + vec2(16.0, -16.0), Align2::LEFT_BOTTOM,
+                badge(&painter, rect.left_bottom() + vec2(16.0, -16.0), Align2::LEFT_BOTTOM, BADGE_BG,
                     &format!("{}  ·  seed {}", saver.name(), saver.seed));
             }
             return;
         }
 
-        let halves: Vec<(usize, Rect)> = match self.settings.layout() {
-            Layout::Single => vec![(0, rect)],
-            Layout::Dual => {
-                let (l, divider, r) = dual_rects(rect, self.settings.center_gap);
-                if let Some(logo) = &self.logo {
-                    let uv = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
-                    painter.image(logo.id(), logo_rect(divider, logo.size_vec2()), uv, Color32::WHITE);
-                }
-                vec![(0, l), (1, r)]
+        // The halves at `layout_t`: dual at 1, single at 0, sliding between.
+        let (l, divider, r) = transition::layout_rects(rect, dual_rects(rect, self.settings.center_gap), self.layout_t);
+        let shown = transition::ease(self.layout_t);
+        if let Some(logo) = self.logo.as_ref().filter(|_| divider.width() >= 1.0) {
+            let uv = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
+            painter.image(logo.id(), logo_rect(divider, logo.size_vec2()), uv, Color32::WHITE.gamma_multiply(shown));
+        }
+        for (i, half, opacity) in [(0, l, 1.0), (1, r, shown)] {
+            if half.width() < 1.0 {
+                continue;
             }
-        };
-        for (i, half) in halves {
-            if self.side_no_signal(i) {
+            let clipped = painter.with_clip_rect(half);
+            let dip = &self.dips[i];
+            if self.side_no_signal(i) && dip.fading().is_none() {
                 let since = *self.board_since[i].get_or_insert(now);
                 let label = self.label_of(self.sides[i].as_ref());
-                screensaver::paint_split_flap(&painter.with_clip_rect(half), half,
+                screensaver::paint_split_flap(&clipped, half,
                     &["NO SIGNAL", &label], now.duration_since(since).as_secs_f32());
-                continue;
+            } else {
+                self.board_since[i] = None;
+                // While a dip fades, the outgoing input; then the new one.
+                let id = dip.fading().map(str::to_owned).or_else(|| self.sides[i].clone());
+                self.paint_input(&clipped, half, id.as_deref(), opacity);
             }
-            self.board_since[i] = None;
-            let Some(tex) = self.sides[i].as_ref().and_then(|id| self.slots.get(id)).and_then(|s| s.texture.as_ref())
-            else {
-                continue;
-            };
-            // The black-bar crop as texture coordinates (Electron:
-            // object-view-box), then object-fit: contain on what is left.
-            let crop = self.sides[i].as_ref().and_then(|id| self.slots.get(id))
-                .and_then(|s| s.crop.current())
-                .filter(|_| self.settings.crop_letterbox);
-            let ([u0, v0], [u1, v1]) = crop.map_or(([0.0, 0.0], [1.0, 1.0]), crate::crop::Crop::uv);
-            let size = tex.size_vec2() * vec2(u1 - u0, v1 - v0);
-            let scale = (half.width() / size.x).min(half.height() / size.y);
-            let fit = Rect::from_center_size(half.center(), size * scale);
-            painter.image(tex.id(), fit, Rect::from_min_max(pos2(u0, v0), pos2(u1, v1)), Color32::WHITE);
+            let black = dip.black().max(1.0 - opacity);
+            if black > 0.0 {
+                clipped.rect_filled(half, 0.0, Color32::BLACK.gamma_multiply(black));
+            }
         }
 
         if self.frozen {
-            badge(&painter, rect.right_top() + vec2(-16.0, 16.0), Align2::RIGHT_TOP, "FROZEN");
+            badge(&painter, rect.right_top() + vec2(-16.0, 16.0), Align2::RIGHT_TOP, FROZEN_RED, "FROZEN");
+        } else if self.live_until.is_some_and(|t| now < t) {
+            badge(&painter, rect.right_top() + vec2(-16.0, 16.0), Align2::RIGHT_TOP, LIVE_GREEN, "LIVE");
+        } else {
+            self.live_until = None;
         }
         if self.flags.hud {
             self.paint_hud(&painter, rect);
         }
+    }
+
+    /// One input, cropped of its black bars and fitted inside `half`.
+    fn paint_input(&self, painter: &egui::Painter, half: Rect, id: Option<&str>, opacity: f32) {
+        let Some(slot) = id.and_then(|id| self.slots.get(id)) else { return };
+        let Some(tex) = slot.texture.as_ref() else { return };
+        // The black-bar crop as texture coordinates (Electron:
+        // object-view-box), then object-fit: contain on what is left.
+        let crop = slot.crop.current().filter(|_| self.settings.crop_letterbox);
+        let ([u0, v0], [u1, v1]) = crop.map_or(([0.0, 0.0], [1.0, 1.0]), crate::crop::Crop::uv);
+        let size = tex.size_vec2() * vec2(u1 - u0, v1 - v0);
+        let scale = (half.width() / size.x).min(half.height() / size.y);
+        let fit = Rect::from_center_size(half.center(), size * scale);
+        painter.image(tex.id(), fit, Rect::from_min_max(pos2(u0, v0), pos2(u1, v1)), Color32::WHITE.gamma_multiply(opacity));
+    }
+
+    /// Advance the layout slide and each side's dip, before painting.
+    fn step_transitions(&mut self, dt: f32) {
+        let reduced = self.settings.reduced_motion;
+        let target = if self.settings.layout() == Layout::Dual { 1.0 } else { 0.0 };
+        self.layout_t = transition::approach(self.layout_t, target, dt, transition::LAYOUT_SECS, reduced);
+        for i in 0..2 {
+            let ready = self.side_no_signal(i)
+                || self.sides[i].as_ref().and_then(|id| self.slots.get(id)).is_some_and(|s| s.texture.is_some());
+            self.dips[i].step(dt, ready, reduced);
+        }
+    }
+
+    fn transitioning(&self) -> bool {
+        let target = if self.settings.layout() == Layout::Dual { 1.0 } else { 0.0 };
+        self.layout_t != target || self.dips.iter().any(transition::Dip::active)
     }
 
     /// `--hud`: one line per visible half, over its top-left corner.
@@ -802,7 +880,7 @@ impl InputViewer {
             return;
         }
         let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::new("toast")));
-        badge(&painter, rect.center_bottom() - vec2(0.0, 80.0), Align2::CENTER_BOTTOM, text);
+        badge(&painter, rect.center_bottom() - vec2(0.0, 80.0), Align2::CENTER_BOTTOM, BADGE_BG, text);
     }
 
     fn dropdown(&mut self, ctx: &egui::Context, rect: Rect) {
@@ -957,6 +1035,12 @@ impl InputViewer {
 /// on Windows), whose first characters are the same for every card, so they
 /// are hashed (FNV-1a) to eight hex characters the same way. Mock ids are
 /// already short and readable.
+/// ADR 0038: hidden once the pointer has been still for CURSOR_IDLE, but
+/// never while the controls, the legend or Settings are open.
+fn cursor_hidden(idle: Duration, panels_open: bool) -> bool {
+    !panels_open && idle >= CURSOR_IDLE
+}
+
 fn short_id(id: &str) -> String {
     if id.starts_with(capture::MOCK_PREFIX) {
         return id.to_owned();
@@ -1070,10 +1154,12 @@ fn hud_line(painter: &egui::Painter, at: egui::Pos2, text: &str) {
     painter.galley(at, galley, Color32::WHITE);
 }
 
-fn badge(painter: &egui::Painter, at: egui::Pos2, align: Align2, text: &str) {
+const BADGE_BG: Color32 = Color32::from_black_alpha(190);
+
+fn badge(painter: &egui::Painter, at: egui::Pos2, align: Align2, fill: Color32, text: &str) {
     let galley = painter.layout_no_wrap(text.to_owned(), FontId::proportional(22.0), Color32::WHITE);
     let r = align.anchor_size(at, galley.size()).expand2(vec2(16.0, 8.0));
-    painter.rect_filled(r, 8.0, Color32::from_black_alpha(190));
+    painter.rect_filled(r, 8.0, fill);
     painter.galley(r.min + vec2(16.0, 8.0), galley, Color32::WHITE);
 }
 
@@ -1151,12 +1237,14 @@ impl eframe::App for InputViewer {
         self.update_frames(&ctx, frame);
 
         let rect = ui.max_rect();
+        self.step_transitions(dt);
         self.paint_wall(ui, rect, now, dt);
 
         // Hover-to-reveal on the top and bottom edges; a tap there toggles.
         let (pointer, moved, tapped) = ctx.input(|i| (i.pointer.hover_pos(), i.pointer.is_moving(), i.pointer.primary_clicked()));
         if moved || tapped {
             self.last_activity = now;
+            self.last_pointer_move = now;
         }
         if let Some(p) = pointer.filter(|_| self.settings_pane.is_none()) {
             if p.y <= rect.top() + EDGE_PX {
@@ -1191,6 +1279,12 @@ impl eframe::App for InputViewer {
         self.settings_dialog(&ctx, rect);
         self.update_dialog(&ctx);
 
+        // Last, so it overrides whatever cursor a widget asked for.
+        let panels_open = self.dropdown_open || self.legend_open || self.settings_pane.is_some();
+        if cursor_hidden(now.duration_since(self.last_pointer_move), panels_open) {
+            ctx.set_cursor_icon(egui::CursorIcon::None);
+        }
+
         // The halves' current inputs are part of settings (leftDeviceId /
         // rightDeviceId). Not overwritten with None before a side has an
         // input: that is how Electron once forgot the wall's input on restart.
@@ -1209,7 +1303,7 @@ impl eframe::App for InputViewer {
 
         // Animate the board and savers; capture threads request repaints for
         // new frames themselves.
-        if self.saver.is_some() || self.board_since.iter().any(Option::is_some) || self.toast.is_some() {
+        if self.saver.is_some() || self.board_since.iter().any(Option::is_some) || self.toast.is_some() || self.live_until.is_some() || self.transitioning() {
             ctx.request_repaint();
         } else {
             ctx.request_repaint_after(Duration::from_millis(500));
@@ -1300,6 +1394,13 @@ mod tests {
         let r = logo_rect(d, vec2(1014.0, 275.0));
         assert!((r.width() - 54.0).abs() < 0.01, "90% of the column: {r:?}");
         assert_eq!(r.center(), d.center());
+    }
+
+    #[test]
+    fn cursor_hides_when_idle_but_never_over_open_panels() {
+        assert!(!cursor_hidden(Duration::from_millis(2900), false));
+        assert!(cursor_hidden(CURSOR_IDLE, false));
+        assert!(!cursor_hidden(Duration::from_secs(60), true));
     }
 
     #[test]

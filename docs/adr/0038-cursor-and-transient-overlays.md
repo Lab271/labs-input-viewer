@@ -7,7 +7,7 @@
 | **Area** | UI |
 | **Evidence** | `styles.css` `body { cursor: none }`; `renderer.js` `showCursor` :3880, `showInputName` :2250, freeze badge :538 |
 | **egui verdict** | Keep |
-| **egui status** | Partial |
+| **egui status** | Done |
 
 ## Decision
 
@@ -21,7 +21,7 @@
 
 ## Porting to egui
 
-**Keep.** Prototype: toast (2.5 s, suppressed while the pickers are open) and
-FROZEN badge are done. Missing: hiding the cursor
-(`ctx.set_cursor_icon(CursorIcon::None)` after 3 s idle, except over
-controls) and the LIVE flash.
+**Keep.** Done: toast (2 s, suppressed while the pickers are open), red
+FROZEN and a green LIVE for 1 s on unfreeze, and the cursor hidden
+(`CursorIcon::None`) 3 s after the pointer last moved, never while the
+dropdown, the legend or Settings is open.

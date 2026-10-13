@@ -238,6 +238,10 @@ impl InputViewer {
             }
             ui.end_row();
 
+            ui.label("Motion");
+            ui.checkbox(&mut self.settings.reduced_motion, "Reduce motion: switch inputs and views instantly");
+            ui.end_row();
+
             ui.label("Centre gap");
             ui.add(egui::Slider::new(&mut self.settings.center_gap, CENTER_GAP_RANGE).step_by(1.0).suffix(" px"));
             ui.end_row();
