@@ -514,8 +514,8 @@ impl InputViewer {
                 // watching it.
                 if self.flags.hud && self.report_count.is_multiple_of(5) {
                     let size = frame.as_ref().map_or((0, 0), |f| (f.width(), f.height()));
-                    log_info!("[Render] {id} {}x{}: {} · ui {:.0} fps · {} skipped in total",
-                        size.0, size.1, report.line(), self.ui_fps, slot.stats.total_skipped);
+                    log_info!("[Render] {} {}x{}: {} · ui {:.0} fps · {} skipped in total",
+                        short_id(id), size.0, size.1, report.line(), self.ui_fps, slot.stats.total_skipped);
                 }
             }
             if let Some(f) = fresh {
@@ -941,11 +941,17 @@ impl InputViewer {
     }
 }
 
-/// Electron logs `deviceId.slice(0, 8)`. Camera ids here are
-/// `camera-<unique id>`, whose first eight characters say nothing, so the
-/// prefix goes first.
+/// Electron logs `deviceId.slice(0, 8)` -- eight hex characters of a hash.
+/// Camera ids here are the device's own path (`\\?\pci#ven_12ab&dev_0710...`
+/// on Windows), whose first characters are the same for every card, so they
+/// are hashed (FNV-1a) to eight hex characters the same way. Mock ids are
+/// already short and readable.
 fn short_id(id: &str) -> String {
-    id.strip_prefix("camera-").map_or_else(|| id.to_owned(), |rest| rest.chars().take(8).collect())
+    if id.starts_with(capture::MOCK_PREFIX) {
+        return id.to_owned();
+    }
+    let hash = id.bytes().fold(0x811c_9dc5u32, |h, b| (h ^ u32::from(b)).wrapping_mul(0x0100_0193));
+    format!("{hash:08x}")
 }
 
 /// `describeHealth()` from renderer.js, character for character:
@@ -1236,6 +1242,15 @@ mod tests {
     fn without_multi_view_the_right_half_copies_the_left() {
         let s = Settings { multi_view: false, ..Default::default() };
         assert_eq!(ids(choose_sides(&devs(&["a", "b"]), &s, &[None, None], true)), [Some("a"), Some("a")]);
+    }
+
+    #[test]
+    fn short_ids_are_eight_hex_for_cameras_and_readable_for_mocks() {
+        let a = short_id("camera-\\\\?\\pci#ven_12ab&dev_0710&subsys_000e1cfa&rev_00#4&381bec2&0&0019");
+        let b = short_id("camera-\\\\?\\pci#ven_12ab&dev_0710&subsys_000e1cfa&rev_00#4&64a0be6&0&0019");
+        assert_eq!(a.len(), 8);
+        assert_ne!(a, b, "the wall's two cards must not share an id in the log");
+        assert_eq!(short_id("mock-input-2"), "mock-input-2");
     }
 
     #[test]

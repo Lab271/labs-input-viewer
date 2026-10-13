@@ -16,8 +16,9 @@ by capture device id, because index order is not stable across reboots.
 
 ## Decision
 
-- `<userData>/settings.json` -- `%APPDATA%\Input Viewer\` on Windows (see
-  [open questions](open-questions.md) on the folder name).
+- `<userData>/settings.json` -- `%APPDATA%\input-viewer\` on Windows
+  (checked on the wall 2026-10-12; Electron uses package.json's `name`
+  because there is no top-level `productName`).
 - Main merges defaults shallowly over the file; on any read or parse error
   it logs and returns defaults. Writes are a plain `writeFileSync`.
 - The renderer saves an explicit **allowlist** of keys, debounced 300 ms. "A

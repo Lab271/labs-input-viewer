@@ -62,7 +62,7 @@ Filed as issues on 2026-10-12. E16 was already tracked in #340.
 | "Settings shows the exact path" | it no longer does | `settings.example.json` |
 | remote keyboard forwards "arrow key presses" | PgUp/PgDn primarily | Settings copy |
 | screensaver ends on any mouse/key/touch | shake, `V` or signal only | USER_GUIDE |
-| log folder `%APPDATA%\input-viewer\logs` | probably `%APPDATA%\Input Viewer\logs` (`productName`) -- check on the wall | labs-videowall-config |
+| ~~log folder `%APPDATA%\input-viewer\logs`~~ | **resolved 2026-10-12:** it is `%APPDATA%\input-viewer\` on the wall, as labs-videowall-config says | -- |
 | branch types | CLAUDE.md omits `test/`, DEVELOPMENT.md has it | `.claude/` |
 
 ## Not recorded anywhere

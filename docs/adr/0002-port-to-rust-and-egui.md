@@ -58,8 +58,23 @@ The release binary is ~16 MB.
 - Two codebases during the transition. The GLSL stays single-sourced in the
   Electron tree until the port owns it.
 - **Go/no-go gate:** run `--test-pattern --hud` and real capture on the wall's
-  Windows host with both Elgato cards. Media Foundation behaviour through
-  nokhwa is the largest unknown, and every figure so far is from a Mac.
+  Windows host with both Elgato cards.
+
+**Wall test, 2026-10-12** (three runs, Electron closed for ~2 minutes each):
+
+| | First run | After the fixes |
+|---|---|---|
+| Cards open | both, 3840x2160 | both, 3840x2160 YUYV @ 60 negotiated |
+| Capture | ~13 fps | **~40 fps** |
+| UI at full wall (6000x1129) | ~30 fps | **60 fps** |
+| GPU | NVIDIA RTX PRO 4000, OpenGL 3.3 | same |
+| Health and reopen | dark card reopened on schedule | same |
+
+What got it there: a patched nokhwa (it discarded 59.94 fps and could set a
+low rung of the card's frame-rate ladder -- [0007](0007-capture-at-native-resolution.md))
+and YUY2 converted on the GPU instead of one CPU core
+([0018](0018-composite-on-the-gpu.md)). Capture stops at ~40 fps because
+each read from the card takes ~24.5 ms; judged good enough for now.
 
 ## Porting to egui
 

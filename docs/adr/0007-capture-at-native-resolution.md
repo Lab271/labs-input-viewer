@@ -45,14 +45,23 @@ mistake #151 fixed on the main path ([open questions](open-questions.md)).
 ## Porting to egui
 
 **Adapt.** Constraint negotiation is a WebRTC concept; natively the formats
-are enumerable. Keep the product rule -- native resolution, uncompressed
-where offered, log the chosen format -- and replace the guesswork with an
-explicit choice from the device's format list.
+are enumerable. Keep the product rule -- native resolution, log the chosen
+format -- and choose explicitly.
 
 **Lesson to keep from #34:** release any probe stream before opening the
 real one.
 
-Prototype: `capture.rs` asks nokhwa for `AbsoluteHighestResolution` in RGBA
-and logs `stream: WxH`. It does not prefer uncompressed over MJPEG, does not
-log the frame rate or pixel format, and fails outright on devices that only
-offer BGRA (OBS Virtual Camera: `Unknown FourCharCode 1111970369`).
+**What the wall's cards offer** (WinRT shared read-only query, 2026-10-12):
+3840x2160 **only as YUY2**, at up to 59.94 fps; NV12, P010 and RGB only at
+1920x1080 (up to 50 fps). Each format comes as a ladder of frame rates down
+to 1 fps.
+
+**Prototype:** `AbsoluteHighestResolution` through nokhwa, now logged as
+`[Video] <card> stream: 3840x2160 YUYV @ 60fps`. nokhwa's Media Foundation
+bindings had three frame-rate bugs, patched in
+`vendor/nokhwa-bindings-windows` (`PATCHED.md`): fractional rates (59.94 =
+60000/1001) were discarded, `set_format` could set a format whose own rate was
+a low rung of the ladder, and the current rate read as the denominator.
+Before the patch the cards delivered ~13 fps; after it they negotiate 60.
+Still missing: BGRA-only devices (OBS Virtual Camera) fail in nokhwa's macOS
+backend.

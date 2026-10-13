@@ -55,3 +55,11 @@ Electron.
 
 Also keep #34's lesson: render settings must never affect capture format
 negotiation.
+
+**YUY2 is converted on the GPU** (`gpu_video.rs`, measured on the wall
+2026-10-12). Converting each 4K YUY2 frame to RGBA on one CPU core took
+~49 ms on the wall's Threadripper and capped capture at ~12 fps. Now the
+card's bytes are uploaded as a half-width texture and a shader writes the
+RGBA picture (BT.709 limited range; `yuv.rs` is the CPU twin, with tests):
+half the bytes uploaded, nothing per pixel on the CPU. On the wall: capture
+~40 fps, UI 60 fps at full wall size (was ~30).

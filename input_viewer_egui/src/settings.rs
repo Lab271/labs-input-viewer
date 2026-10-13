@@ -28,7 +28,10 @@ use crate::filelog::{log_error, log_info, log_warn};
 const SAVE_DEBOUNCE: Duration = Duration::from_millis(300);
 
 pub const APP_DIR: &str = "Input Viewer (egui)";
-pub const ELECTRON_APP_DIR: &str = "Input Viewer";
+/// Electron's `userData` folder name. Not the product name "Input Viewer":
+/// with no top-level `productName` in package.json, Electron uses `name`.
+/// Checked on the wall 2026-10-12: `%APPDATA%\input-viewer\`.
+pub const ELECTRON_APP_DIR: &str = "input-viewer";
 
 /// The ranges of Electron's sliders.
 pub const CENTER_GAP_RANGE: std::ops::RangeInclusive<f32> = 20.0..=200.0;

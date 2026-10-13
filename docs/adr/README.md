@@ -112,9 +112,9 @@ Defects, contradictions and doc drift found on the way are in
 
 Driven by what keeps the wall working, not by size.
 
-1. **Gate: the wall itself.** Run `--test-pattern --hud` and real capture on
-   the wall's Windows host with both Elgato cards
-   ([0002](0002-port-to-rust-and-egui.md)). Everything below assumes it passes.
+1. ~~**Gate: the wall itself.**~~ Passed 2026-10-12: both cards at 3840x2160,
+   capture ~40 fps, UI 60 fps at full wall size
+   ([0002](0002-port-to-rust-and-egui.md)).
 2. **Capture robustness:** ~~health thresholds and reopen schedules~~
    (done, [0012](0012-judge-health-by-counting-frames.md),
    [0013](0013-reopen-by-releasing-the-device-with-two-backoffs.md)); native format choice ([0007](0007-capture-at-native-resolution.md)),
