@@ -90,8 +90,6 @@ pub const SAVERS: &[ShaderSaver] = &[
         bloom: bloom(0.66, 0.3, 0.3, 0.8), exposure: 1.0, antialias: 4 },
     ShaderSaver { name: "Moire Interference", frag: include_str!("../shaders/moire.frag"),
         bloom: bloom(1.00, 0.35, 0.28, 0.75), exposure: 1.0, antialias: 0 },
-    ShaderSaver { name: "Bicycle Horizon", frag: include_str!("../shaders/bicycle-horizon.frag"),
-        bloom: bloom(1.15, 0.45, 0.45, 1.05), exposure: 0.93, antialias: 0 },
 ];
 
 /// gl-base.js `resolveSampleCount`: fewer samples as the canvas grows. A

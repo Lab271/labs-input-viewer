@@ -77,12 +77,12 @@ impl Rng {
 /// The shader savers first, in `shader_saver::SAVERS` order (a test holds
 /// the two together), then Weather, then the painter ones.
 pub const NAMES: &[&str] = &[
-    "Plasma", "Flow Field", "Julia Family", "Burning Ship", "Moire Interference", "Bicycle Horizon",
+    "Plasma", "Flow Field", "Julia Family", "Burning Ship", "Moire Interference",
     "Weather", "Starfield Warp", "DVD Logo", "Lissajous",
 ];
-const WEATHER: usize = 6;
-const STARFIELD: usize = 7;
-const DVD: usize = 8;
+const WEATHER: usize = 5;
+const STARFIELD: usize = 6;
+const DVD: usize = 7;
 
 /// Whether a saver will take a turn in the random rotation. Only Weather can
 /// decline, while there is no reading -- so a wall that is offline, or has

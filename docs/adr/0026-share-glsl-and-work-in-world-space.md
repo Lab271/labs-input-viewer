@@ -47,7 +47,7 @@ Its limits, per saver:
 
 | Kind | Savers | Port |
 |---|---|---|
-| Pure fragment shader | Plasma, Flow Field, Julia Family, Burning Ship, Moire, Bicycle Horizon -- **all done** | extract as is (+ supersample footer for two) |
+| Pure fragment shader | Plasma, Flow Field, Julia Family, Burning Ship, Moire -- **all done**; Bicycle Horizon dropped (not wanted, 2026-10-13) | extract as is (+ supersample footer for two) |
 | Shader with JS constants interpolated (`${SAMPLES}` etc.) | Boids, Aquarium, Pong, Starfield, Metaballs, ... | evaluate the template, not a regex |
 | JS orchestration: ping-pong, instancing, CPU simulation | the other ~20 | rewrite the orchestration in Rust, keep the GLSL |
 | Glyph atlas | Matrix Rain, ASCII Doughnut, Weather, Split Flap | Rust font rasteriser ([0029](0029-text-through-a-baked-glyph-atlas.md)) |

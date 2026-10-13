@@ -12,7 +12,8 @@ const { GLSL } = await import(join(savers, 'glsl-lib.js'))
 
 // The pure fragment-shader savers (ADR 0026). Their render options (bloom,
 // tonemap, exposure, antialias) are transcribed in shader_saver.rs.
-const SAVERS = ['plasma', 'flow-field', 'julia-family', 'burning-ship', 'moire', 'bicycle-horizon']
+// Bicycle Horizon is left out on purpose (2026-10-13): not wanted on the wall.
+const SAVERS = ['plasma', 'flow-field', 'julia-family', 'burning-ship', 'moire']
 
 // The SHADER template is *evaluated*, not regex-substituted: some interpolate
 // module constants (julia-family's WINDOW_RANGE), and evaluating also applies

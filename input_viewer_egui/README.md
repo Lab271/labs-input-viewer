@@ -30,7 +30,7 @@ writes settings.
 | Capture health and reopen backoff, ported with its tests | `stream-health.js` | `health.rs` |
 | Daily log file, same bounds and `[Health]` line format, ported with its tests | `file-log.js` | `filelog.rs` |
 | Split-flap board, screensaver after delay, 10-min rotation, seeded + logged | `split-flap.js`, `registry.js` | `screensaver.rs` |
-| The six pure-shader savers (Plasma, Flow Field, Julia Family, Burning Ship, Moire, Bicycle Horizon) + bloom / ACES / dither chain, same GLSL, supersampling | `*.js`, `post-fx.js`, `gl-base.js` | `shader_saver.rs`, `shaders/` |
+| Five pure-shader savers (Plasma, Flow Field, Julia Family, Burning Ship, Moire; Bicycle Horizon left out on purpose) + bloom / ACES / dither chain, same GLSL, supersampling | `*.js`, `post-fx.js`, `gl-base.js` | `shader_saver.rs`, `shaders/` |
 | Weather saver and its Open-Meteo poller, off unless `weatherEnabled`; `--weather-state=N\|label` pins a canned reading | `weather.js`, `weather-source.js`, `weather-states.js` | `weather.rs`, `weather_source.rs`, `weather_states.rs` |
 | Freeze, fullscreen, Esc does one thing per press | `renderer.js` | `app.rs` |
 | Settings dialog: Inputs, Layout, Remote keyboard and Screensavers panes | `index.html`, `settings-status.js` | `app/settings_ui.rs`, `settings_status.rs` |
