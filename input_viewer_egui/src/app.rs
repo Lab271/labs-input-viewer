@@ -17,6 +17,7 @@ use crate::flags::Flags;
 use crate::health::{self, Sample, Status, StreamHealth, limits as health_limits};
 use crate::render_stats::RenderStats;
 use crate::logo::Logo;
+use crate::reference;
 use crate::remote_key;
 use crate::review::Review;
 use crate::transition::{self, Dip};
@@ -187,6 +188,8 @@ struct Slot {
     last_logged: Option<Status>,
     /// The "opened" line for this stream has been written.
     announced: bool,
+    /// Whether the picture matches a no-signal reference (ADR 0014).
+    reference: reference::Debounce,
 }
 
 impl Slot {
@@ -202,6 +205,7 @@ impl Slot {
             crop: crate::crop::CropTracker::default(),
             last_logged: None,
             announced: false,
+            reference: reference::Debounce::default(),
         };
         slot.attach(device, ctx, now);
         slot
@@ -279,6 +283,11 @@ pub struct InputViewer {
     /// Held for the app's lifetime: the display must not sleep or blank
     /// while it shows the wall (D5). Released on exit by drop.
     _awake: Option<keepawake::KeepAwake>,
+    /// Decoded no-signal references per device, and the thread that compares
+    /// against them -- started only once some device has references.
+    references: HashMap<String, Arc<Vec<reference::Image>>>,
+    detector: Option<reference::Detector>,
+    next_detect: Instant,
     logo: Option<Logo>,
     /// --hud: repaints per second, and when the count started.
     ui_fps: f32,
@@ -352,6 +361,9 @@ impl InputViewer {
             // Never in mock or review runs: those are for looking at the UI.
             updater: None,
             _awake: keep_awake(),
+            references: HashMap::new(),
+            detector: None,
+            next_detect: Instant::now(),
             logo: Logo::load(&cc.egui_ctx),
             ui_fps: 0.0,
             ui_frames: (0, Instant::now()),
@@ -360,6 +372,7 @@ impl InputViewer {
             last_health_summary: 0.0,
             flags,
         };
+        app.references = reference::load(app.settings.no_signal_references.as_ref());
         if app.flags.mock.is_none() && app.review.is_none() {
             app.updater = Updater::start();
             crate::single_instance::serve(cc.egui_ctx.clone());
@@ -664,7 +677,62 @@ impl InputViewer {
         if !self.devices.iter().any(|d| &d.id == id) || !self.settings.is_enabled(id) {
             return true;
         }
-        self.slots.get(id).is_some_and(|slot| slot.health.status() == Status::OpenFailed)
+        self.slots.get(id).is_some_and(|slot| slot.health.status() == Status::OpenFailed || slot.reference.no_signal)
+    }
+
+    /// Every 1.6 s, hand each on-screen device that has references to the
+    /// detection thread, and apply what came back (ADR 0014). Nothing here
+    /// touches pixels: the job holds the frame by `Arc`.
+    fn detect_references(&mut self, ctx: &egui::Context) {
+        // --no-signal pins the state; detecting would only log verdicts
+        // that hideNoSignal refuses to act on (as in Electron).
+        if self.flags.no_signal || self.references.is_empty() {
+            return;
+        }
+        let detector = self.detector.get_or_insert_with(|| {
+            let ctx = ctx.clone();
+            reference::Detector::new(move || ctx.request_repaint())
+        });
+        for (id, matched) in detector.results() {
+            let label = self.devices.iter().find(|d| d.id == id).map_or_else(|| short_id(&id), |d| d.label.clone());
+            if let Some(slot) = self.slots.get_mut(&id)
+                && slot.reference.feed(matched)
+            {
+                if slot.reference.no_signal {
+                    log_info!("[Detection] {label}: matches a no-signal reference, showing the board");
+                } else {
+                    log_info!("[Detection] {label}: signal restored");
+                }
+            }
+        }
+        let now = Instant::now();
+        if now < self.next_detect {
+            return;
+        }
+        self.next_detect = now + reference::EVERY;
+        for (id, slot) in &self.slots {
+            let (Some(refs), Some(frame)) = (self.references.get(id), slot.stream.as_ref().and_then(Stream::latest)) else { continue };
+            detector.submit(id, frame, refs.clone());
+        }
+    }
+
+    /// Store the device's current picture as a no-signal reference.
+    fn capture_reference(&mut self, id: &str) {
+        let Some(frame) = self.slots.get(id).and_then(|s| s.stream.as_ref()).and_then(Stream::latest) else { return };
+        let img = reference::thumbnail(&frame);
+        reference::append(&mut self.settings.no_signal_references, id, &img);
+        let refs = self.references.entry(id.to_owned()).or_default();
+        Arc::make_mut(refs).push(img);
+        log_info!("[Detection] captured reference {} for {}", refs.len(), short_id(id));
+    }
+
+    fn clear_references(&mut self, id: &str) {
+        reference::clear(&mut self.settings.no_signal_references, id);
+        self.references.remove(id);
+        if let Some(slot) = self.slots.get_mut(id) {
+            slot.reference = reference::Debounce::default();
+        }
+        log_info!("[Detection] cleared the references for {}", short_id(id));
     }
 
     // ------------------------------------------------------------ screensaver
@@ -1248,6 +1316,7 @@ impl eframe::App for InputViewer {
         self.poll_devices(ctx);
         self.sync_streams(ctx);
         self.sample_health();
+        self.detect_references(ctx);
         self.update_saver(Instant::now());
         *self.weather_config.lock().unwrap() = weather_config(&self.settings);
         if let Some(last) = self.remote.as_ref().and_then(remote_key::Sender::poll) {
@@ -1340,6 +1409,12 @@ impl eframe::App for InputViewer {
         self.store.tick(&self.settings);
         if let Some(review) = &mut self.review {
             review.tick(&ctx);
+        }
+        if let Some(r) = self.review.as_mut().filter(|r| r.capture_reference_at.is_some_and(|at| now >= at)) {
+            r.capture_reference_at = None;
+            if let Some(id) = self.sides[0].clone() {
+                self.capture_reference(&id);
+            }
         }
 
         // Animate the board and savers; capture threads request repaints for

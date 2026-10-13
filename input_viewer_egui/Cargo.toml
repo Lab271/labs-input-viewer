@@ -13,6 +13,7 @@ name = "input-viewer"
 path = "src/main.rs"
 
 [dependencies]
+base64 = "0.22"
 bytemuck = { version = "1", features = ["extern_crate_alloc"] }
 bytes = "1"
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }

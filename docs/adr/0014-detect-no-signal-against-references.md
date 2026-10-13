@@ -7,7 +7,7 @@
 | **Area** | Signal |
 | **Evidence** | `detection-simple.js:10-22, 31-43, 140-212, 406-616, 636-713`; `frame-source.js`; `renderer.js:4518-4845`; #83, #104, #150, #163 |
 | **egui verdict** | Port, off the video path |
-| **egui status** | Not started |
+| **egui status** | Done |
 
 ## Context
 
@@ -69,3 +69,15 @@ D1: **port it**, with one constraint: it must never interfere with the video
 stream. The comparison runs on the health thumbnail the app already takes
 (no extra readback, no extra copy of the frame), off the paint path, and
 never holds up a frame.
+
+Built: `reference.rs` ports the probe, the compare with its early exit, the
+two-result debounce and Electron's thresholds unchanged, with the tests.
+Comparisons run on a `no-signal-detect` thread every 1.6 s, holding the
+captured frame by `Arc` (no readback, no whole-frame copy), one job per
+device in flight, none at all for a device without references. References
+stay in Electron's `noSignalReferences` shape in settings.json, so either
+app reads the other's captures. The Inputs pane has a count, "Capture from
+left/right half" and Clear per input. Checked end to end with `--mock` and
+`INPUT_VIEWER_CAPTURE_REFERENCE`: the matched half shows the board, the
+other stays live. Not ported: orphan pruning (references for a device id
+that no longer exists are kept, and ignored).

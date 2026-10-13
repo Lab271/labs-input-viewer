@@ -48,7 +48,7 @@ Defects, contradictions and doc drift found on the way are in
 |---|---|---|---|---|
 | [0012](0012-judge-health-by-counting-frames.md) | Judge capture health by counting frames, never by measuring motion | Accepted | Keep | Done |
 | [0013](0013-reopen-by-releasing-the-device-with-two-backoffs.md) | Reopen a sick device by releasing it fully, on separate backoffs for faults and for dark | Accepted | Keep | Done |
-| [0014](0014-detect-no-signal-against-references.md) | Detect no-signal by comparing against operator-captured reference screenshots | Accepted -- but dormant on the wall | Port, off the video path | Not started |
+| [0014](0014-detect-no-signal-against-references.md) | Detect no-signal by comparing against operator-captured reference screenshots | Accepted -- but dormant on the wall | Port, off the video path | Done |
 | [0015](0015-crop-black-bars-by-snapping-to-shapes.md) | Crop the card's black bars by snapping to known shapes | Accepted | Keep, and reconsider the source | Not started |
 | [0016](0016-laptop-resolution-hint-off-by-default.md) | Keep the "set your laptop to 3840x768" hint off by default | Accepted (premise weakened since 2026-10-02) | Keep | Not started |
 | [0017](0017-freeze-shows-the-live-picture.md) | Freeze shows exactly the picture that was live | Accepted | Adapt | Done |

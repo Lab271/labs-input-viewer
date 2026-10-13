@@ -12,7 +12,9 @@
 //!
 //! `INPUT_VIEWER_OPEN` (`dropdown`, `legend`, `settings`, `settings:layout`) pins a panel open,
 //! since there is no pointer to hover with. `INPUT_VIEWER_SCREENSHOT_AFTER` is
-//! the delay in ms (default 2500).
+//! the delay in ms (default 2500). `INPUT_VIEWER_CAPTURE_REFERENCE=MS` takes
+//! a no-signal reference of the left half's input that long after start, so
+//! reference detection can be checked end to end with `--mock`.
 
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -25,6 +27,8 @@ pub struct Review {
     due: Instant,
     requested: bool,
     pub open: Option<String>,
+    /// When to capture a reference of the left half; taken once.
+    pub capture_reference_at: Option<Instant>,
 }
 
 impl Review {
@@ -36,6 +40,9 @@ impl Review {
             due: Instant::now() + Duration::from_millis(after),
             requested: false,
             open: std::env::var("INPUT_VIEWER_OPEN").ok(),
+            capture_reference_at: std::env::var("INPUT_VIEWER_CAPTURE_REFERENCE").ok()
+                .and_then(|v| v.parse().ok())
+                .map(|ms| Instant::now() + Duration::from_millis(ms)),
         })
     }
 

@@ -164,12 +164,13 @@ impl InputViewer {
         let devices = self.devices.clone();
         let mut enabled_index = 0;
         egui::ScrollArea::vertical().max_height(ui.available_height()).show(ui, |ui| {
-            egui::Grid::new("settings-inputs").num_columns(5).spacing([12.0, 10.0]).show(ui, |ui| {
+            egui::Grid::new("settings-inputs").num_columns(6).spacing([12.0, 10.0]).show(ui, |ui| {
                 ui.weak("Key");
                 ui.weak("");
                 ui.weak("Name");
                 ui.weak("Enabled");
                 ui.weak("Start-up");
+                ui.weak("No-signal references");
                 ui.end_row();
 
                 for (d, (enabled, state)) in devices.iter().zip(states) {
@@ -230,9 +231,42 @@ impl InputViewer {
                     if ui.add_enabled(*enabled, egui::RadioButton::new(is_default, "")).clicked() {
                         self.settings.default_input_id = Some(d.id.clone());
                     }
+
+                    self.references_cell(ui, &d.id);
                     ui.end_row();
                 }
             });
+        });
+    }
+
+    /// The input's no-signal references: how many, capture one, clear them.
+    /// Capture is from whichever half shows the device, as in Electron.
+    fn references_cell(&mut self, ui: &mut egui::Ui, id: &str) {
+        let count = self.references.get(id).map_or(0, |r| r.len());
+        let half = match (self.sides[0].as_deref() == Some(id), self.sides[1].as_deref() == Some(id)) {
+            (true, _) => Some("left"),
+            (false, true) => Some("right"),
+            _ => None,
+        };
+        let has_frame = self.slots.get(id).and_then(|s| s.stream.as_ref()).and_then(Stream::latest).is_some();
+        ui.horizontal(|ui| {
+            ui.label(match count {
+                0 => "None".to_owned(),
+                1 => "1".to_owned(),
+                n => n.to_string(),
+            });
+            let label = half.map_or_else(|| "Capture".to_owned(), |h| format!("Capture from {h} half"));
+            let capture = ui.add_enabled(half.is_some() && has_frame, egui::Button::new(label))
+                .on_hover_text("While the card shows its own no-signal screen: from then on, a picture that \
+                    looks like this shows the split-flap board. A card has several such screens \
+                    (no cable, unsupported mode, HDCP); capture each.")
+                .on_disabled_hover_text("Put this input on a half first.");
+            if capture.clicked() {
+                self.capture_reference(id);
+            }
+            if count > 0 && ui.button("Clear").clicked() {
+                self.clear_references(id);
+            }
         });
     }
 

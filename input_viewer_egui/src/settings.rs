@@ -85,6 +85,9 @@ pub struct Settings {
     /// *disabled* ones, so a saver added later is on by default. Electron has
     /// no such setting and ignores the key.
     pub disabled_screensavers: Vec<String>,
+    /// Electron's no-signal references, kept in its shape (`reference.rs`),
+    /// so captures made by either app work in the other.
+    pub no_signal_references: Option<serde_json::Value>,
     /// The remote keyboard (ADR 0040), under Electron's keys. The API key
     /// is plain text, as it is in Electron and in the firmware.
     pub remote_keyboard_enabled: bool,
@@ -117,6 +120,7 @@ impl Default for Settings {
             reduced_motion: false,
             logo_width: None,
             disabled_screensavers: Vec::new(),
+            no_signal_references: None,
             remote_keyboard_enabled: false,
             remote_keyboard_host: String::new(),
             remote_keyboard_api_key: String::new(),
