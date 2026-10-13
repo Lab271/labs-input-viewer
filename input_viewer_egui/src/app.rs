@@ -16,6 +16,7 @@ use crate::gpu_video;
 use crate::flags::Flags;
 use crate::health::{self, Sample, Status, StreamHealth, limits as health_limits};
 use crate::render_stats::RenderStats;
+use crate::remote_key;
 use crate::review::Review;
 use crate::transition::{self, Dip};
 use crate::screensaver::{self, Rng, Screensaver};
@@ -242,6 +243,12 @@ pub struct InputViewer {
     /// Where the layout is between single (0) and dual (1); moves toward
     /// the setting, so a change mid-way turns around where it is.
     layout_t: f32,
+    /// Started on the first press, so a wall without a remote keyboard
+    /// never runs the thread.
+    remote: Option<remote_key::Sender>,
+    remote_last: Option<remote_key::Last>,
+    /// Settings: the API key is shown in clear.
+    show_api_key: bool,
     frozen: bool,
     /// Until when the LIVE badge shows, after an unfreeze.
     live_until: Option<Instant>,
@@ -300,6 +307,9 @@ impl InputViewer {
             gpu_textures: HashMap::new(),
             dips: Default::default(),
             layout_t,
+            remote: None,
+            remote_last: None,
+            show_api_key: false,
             frozen: false,
             live_until: None,
             last_pointer_move: Instant::now(),
@@ -708,6 +718,19 @@ impl InputViewer {
         }
     }
 
+    /// A presenter's slide change, sent to the remote keyboard if enabled.
+    fn remote_press(&mut self, ctx: &egui::Context, direction: remote_key::Direction) {
+        let s = &self.settings;
+        if !s.remote_keyboard_enabled || s.remote_keyboard_api_key.is_empty() {
+            return;
+        }
+        let Some(url) = remote_key::url(&s.remote_keyboard_host, direction) else { return };
+        let ctx = ctx.clone();
+        self.remote
+            .get_or_insert_with(|| remote_key::Sender::new(move || ctx.request_repaint()))
+            .send(url, s.remote_keyboard_api_key.clone(), direction);
+    }
+
     /// Freeze is instant both ways (ADR 0037); unfreezing flashes LIVE.
     fn set_frozen(&mut self, on: bool) {
         if self.frozen && !on {
@@ -761,6 +784,8 @@ impl InputViewer {
                 }
             }
             Action::Quit => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
+            Action::RemoteBack => self.remote_press(ctx, remote_key::Direction::Left),
+            Action::RemoteForward => self.remote_press(ctx, remote_key::Direction::Right),
         }
     }
 
@@ -1211,6 +1236,9 @@ impl eframe::App for InputViewer {
         self.sync_streams(ctx);
         self.sample_health();
         self.update_saver(Instant::now());
+        if let Some(last) = self.remote.as_ref().and_then(remote_key::Sender::poll) {
+            self.remote_last = Some(last);
+        }
         self.store.tick(&self.settings);
         // Wake up on our own: with every input stalled or failed no frames
         // arrive to request a repaint, and the reopen timers would never fire.
@@ -1262,7 +1290,7 @@ impl eframe::App for InputViewer {
             self.dropdown_open = open == "dropdown";
             self.legend_open = open == "legend";
             if let Some(pane) = open.strip_prefix("settings") {
-                self.settings_pane.get_or_insert(if pane == ":layout" { Pane::Layout } else { Pane::Inputs });
+                self.settings_pane.get_or_insert(match pane { ":layout" => Pane::Layout, ":remote" => Pane::RemoteKeyboard, _ => Pane::Inputs });
             }
             self.last_activity = now;
         }

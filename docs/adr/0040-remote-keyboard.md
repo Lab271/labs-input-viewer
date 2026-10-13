@@ -7,7 +7,7 @@
 | **Area** | UI |
 | **Evidence** | `remote_keyboard/source.ino`; `settings-status.js` `remoteKeyUrl` :25-34, `remoteKeyboardStatus`; `src/main/index.js:506-535`; #32 |
 | **egui verdict** | Keep |
-| **egui status** | Not started |
+| **egui status** | Partial |
 
 ## Context
 
@@ -41,4 +41,11 @@ presses", but PgUp/PgDn are the primary keys.
 **Keep** the firmware contract, the `.local` rule, timeouts, the status line
 and the shortcut rows. CORS and the main-process hop disappear. **Verify
 mDNS:** Chromium resolves `.local` on Windows itself; a Rust HTTP client uses
-the OS resolver, which may not. Not started.
+the OS resolver, which may not.
+
+Done (`remote_key.rs`): the URL rule, a worker thread with ureq (2 s, no
+retry, `[RemoteKey]` log lines), the status line, the Settings pane with a
+masked key, and the legend rows. The chips read `Left / PgUp`: egui's
+default fonts have no arrow glyphs. A loopback test checks the header and
+the 200/401 handling. Still to do: confirm `.local` resolves on the wall,
+and the presenter debug overlay.

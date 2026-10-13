@@ -16,6 +16,7 @@ use crate::settings_status::{self as status, InputState, Tone};
 pub enum Pane {
     Inputs,
     Layout,
+    RemoteKeyboard,
 }
 
 const STILL: Vec2 = vec2(96.0, 54.0);
@@ -94,8 +95,10 @@ impl InputViewer {
                         Layout::Single => "Single",
                     };
                     nav_item(ui, &mut pane, Pane::Layout, "Layout", layout_text, Tone::Off);
+                    let (rk_text, rk_tone, _) = self.remote_status();
+                    nav_item(ui, &mut pane, Pane::RemoteKeyboard, "Remote keyboard", rk_text, rk_tone);
                     ui.add_space(16.0);
-                    ui.label(egui::RichText::new("Remote keyboard and Art-Net are not in this prototype yet.").small().weak());
+                    ui.label(egui::RichText::new("Art-Net is not in this prototype yet.").small().weak());
                 });
                 let (line, _) = ui.allocate_exact_size(vec2(17.0, body_height), Sense::hover());
                 ui.painter().vline(line.center().x, line.y_range(), ui.visuals().widgets.noninteractive.bg_stroke);
@@ -105,6 +108,7 @@ impl InputViewer {
                     match pane {
                         Pane::Inputs => self.inputs_pane(ui, &states),
                         Pane::Layout => self.layout_pane(ui, wall),
+                        Pane::RemoteKeyboard => self.remote_keyboard_pane(ui),
                     }
                 });
             });
@@ -215,6 +219,48 @@ impl InputViewer {
                 }
             });
         });
+    }
+
+    fn remote_status(&self) -> (&'static str, Tone, String) {
+        let s = &self.settings;
+        status::remote_keyboard_status(s.remote_keyboard_enabled, &s.remote_keyboard_host,
+            &s.remote_keyboard_api_key, self.remote_last.as_ref())
+    }
+
+    fn remote_keyboard_pane(&mut self, ui: &mut egui::Ui) {
+        ui.label(egui::RichText::new("Remote keyboard").strong());
+        ui.label(egui::RichText::new(
+            "Turns Left/PgUp and Right/PgDn on this machine into PageUp and PageDown on the presenter's \
+             laptop, through the ESP32 keyboard plugged into it.").weak());
+        ui.add_space(6.0);
+        ui.checkbox(&mut self.settings.remote_keyboard_enabled, "Send presentation keys to the remote keyboard");
+        ui.add_space(6.0);
+        ui.add_enabled_ui(self.settings.remote_keyboard_enabled, |ui| {
+            egui::Grid::new("settings-remote").num_columns(2).spacing([16.0, 10.0]).show(ui, |ui| {
+                ui.label("Hostname");
+                ui.add(egui::TextEdit::singleline(&mut self.settings.remote_keyboard_host)
+                    .hint_text("space_keyboard").desired_width(280.0));
+                ui.end_row();
+                ui.label("API key");
+                ui.horizontal(|ui| {
+                    ui.add(egui::TextEdit::singleline(&mut self.settings.remote_keyboard_api_key)
+                        .password(!self.show_api_key).desired_width(280.0));
+                    if ui.button(if self.show_api_key { "Hide" } else { "Show" }).clicked() {
+                        self.show_api_key = !self.show_api_key;
+                    }
+                });
+                ui.end_row();
+            });
+            ui.label(egui::RichText::new("A name without a dot gets .local.").small().weak());
+        });
+        let (_, tone, line) = self.remote_status();
+        if !line.is_empty() {
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                dot(ui, tone);
+                ui.label(line);
+            });
+        }
     }
 
     fn layout_pane(&mut self, ui: &mut egui::Ui, wall: Rect) {

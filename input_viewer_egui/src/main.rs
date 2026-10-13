@@ -14,6 +14,7 @@ mod flags;
 mod gpu_video;
 mod health;
 mod plasma;
+mod remote_key;
 mod render_stats;
 mod review;
 mod screensaver;

@@ -3,7 +3,6 @@
 //! The keyboard shortcuts, as data -- a port of `shortcuts.js` (#258).
 //!
 //! One list feeds both the key handler and the legend, so the two cannot drift.
-//! The remote-keyboard rows are omitted: the prototype has no remote keyboard.
 
 use eframe::egui::Key;
 
@@ -19,6 +18,8 @@ pub enum Action {
     Fullscreen,
     Escape,
     Quit,
+    RemoteBack,
+    RemoteForward,
 }
 
 pub struct Shortcut {
@@ -47,6 +48,18 @@ pub const SHORTCUTS: &[Shortcut] = &[
     Shortcut { keys: &[(Key::F, Fullscreen), (Key::F11, Fullscreen)], chips: "F / F11", label: "Fullscreen" },
     Shortcut { keys: &[(Key::Escape, Escape)], chips: "Esc", label: "Exit fullscreen, unfreeze, close panels" },
     Shortcut { keys: &[(Key::Q, Quit)], chips: "Q", label: "Quit" },
+    // Electron's chips were arrows; egui's default fonts have no arrow
+    // glyphs, so the keys are spelled out.
+    Shortcut {
+        keys: &[(Key::PageUp, RemoteBack), (Key::ArrowLeft, RemoteBack)],
+        chips: "Left / PgUp",
+        label: "Presentation: back (if the remote keyboard is enabled)",
+    },
+    Shortcut {
+        keys: &[(Key::PageDown, RemoteForward), (Key::ArrowRight, RemoteForward)],
+        chips: "Right / PgDn",
+        label: "Presentation: forward (if the remote keyboard is enabled)",
+    },
 ];
 
 /// The action bound to `key`, looked up in the table above.
@@ -77,7 +90,7 @@ mod tests {
     #[test]
     fn every_action_is_reachable_from_a_key() {
         let all = [LayoutDual, LayoutSingle, Freeze, ScreensaverToggle, ScreensaverNext,
-            ScreensaverPrev, Fullscreen, Escape, Quit, SelectInput(0), SelectInput(3)];
+            ScreensaverPrev, Fullscreen, Escape, Quit, SelectInput(0), SelectInput(3), RemoteBack, RemoteForward];
         for a in all {
             assert!(SHORTCUTS.iter().flat_map(|s| s.keys).any(|(_, b)| *b == a), "{a:?} has no key");
         }

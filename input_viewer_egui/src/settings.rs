@@ -75,6 +75,11 @@ pub struct Settings {
     /// the OS `prefers-reduced-motion`; egui has no such query, so it is a
     /// setting. Electron ignores the key.
     pub reduced_motion: bool,
+    /// The remote keyboard (ADR 0040), under Electron's keys. The API key
+    /// is plain text, as it is in Electron and in the firmware.
+    pub remote_keyboard_enabled: bool,
+    pub remote_keyboard_host: String,
+    pub remote_keyboard_api_key: String,
     pub border_width: f32,
     pub left_device_id: Option<String>,
     pub right_device_id: Option<String>,
@@ -94,6 +99,9 @@ impl Default for Settings {
             center_gap: 60.0,
             crop_letterbox: true,
             reduced_motion: false,
+            remote_keyboard_enabled: false,
+            remote_keyboard_host: String::new(),
+            remote_keyboard_api_key: String::new(),
             border_width: 0.0,
             left_device_id: None,
             right_device_id: None,

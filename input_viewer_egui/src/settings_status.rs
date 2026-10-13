@@ -3,6 +3,8 @@
 //! What the Settings dialog says, kept apart from how it draws it -- the
 //! counterpart of `settings-status.js`, and unit tested for the same reason.
 
+use crate::remote_key::Last;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tone {
     Ok,
@@ -58,9 +60,46 @@ pub fn inputs_nav(states: &[(bool, InputState)]) -> (String, Tone) {
     (text, tone)
 }
 
+/// The remote keyboard's nav entry, tone and status line.
+pub fn remote_keyboard_status(enabled: bool, host: &str, api_key: &str, last: Option<&Last>) -> (&'static str, Tone, String) {
+    if !enabled {
+        return ("Off", Tone::Off, String::new());
+    }
+    if host.trim().is_empty() || api_key.is_empty() {
+        return ("On", Tone::Warn, "Set a hostname and an API key to send presses.".into());
+    }
+    let Some(last) = last else { return ("On", Tone::Ok, "Ready. Nothing sent yet.".into()) };
+    let when = last.at.format("%H:%M:%S");
+    let dir = last.direction.as_str();
+    match (last.ok, last.status) {
+        (true, Some(s)) => ("On", Tone::Ok, format!("Sent {dir} at {when} (HTTP {s}).")),
+        (true, None) => ("On", Tone::Ok, format!("Sent {dir} at {when}.")),
+        (false, Some(s)) => ("On", Tone::Warn, format!("Last press failed at {when}: HTTP {s}.")),
+        (false, None) => ("On", Tone::Warn,
+            format!("Last press failed at {when}: {}.", last.error.as_deref().unwrap_or("no response"))),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::remote_key::Direction;
+    use chrono::TimeZone;
+
+    #[test]
+    fn remote_keyboard_off_needs_setup_and_reports_the_last_press() {
+        assert_eq!(remote_keyboard_status(false, "kbd", "k", None), ("Off", Tone::Off, String::new()));
+        assert_eq!(remote_keyboard_status(true, " ", "k", None).1, Tone::Warn);
+        assert_eq!(remote_keyboard_status(true, "kbd", "", None).1, Tone::Warn);
+        let at = chrono::Local.with_ymd_and_hms(2026, 10, 13, 14, 2, 3).unwrap();
+        let last = |ok, status, error: Option<&str>| Last { ok, direction: Direction::Left, status, error: error.map(Into::into), at };
+        assert_eq!(remote_keyboard_status(true, "kbd", "k", Some(&last(true, Some(200), None))),
+            ("On", Tone::Ok, "Sent left at 14:02:03 (HTTP 200).".into()));
+        assert_eq!(remote_keyboard_status(true, "kbd", "k", Some(&last(false, Some(401), None))).2,
+            "Last press failed at 14:02:03: HTTP 401.");
+        assert_eq!(remote_keyboard_status(true, "kbd", "k", Some(&last(false, None, Some("timeout")))).2,
+            "Last press failed at 14:02:03: timeout.");
+    }
 
     #[test]
     fn key_labels_follow_enabled_order() {

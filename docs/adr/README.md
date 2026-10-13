@@ -84,7 +84,7 @@ Defects, contradictions and doc drift found on the way are in
 | [0037](0037-transitions-are-interruptible-dips.md) | Transitions: interruptible, a dip to black rather than a crossfade, instant under reduced motion | Accepted | Keep, and reconsider the crossfade | Done |
 | [0038](0038-cursor-and-transient-overlays.md) | Hide the cursor; confirm switches with a toast only when nothing else names the input | Accepted | Keep | Done |
 | [0039](0039-visual-language.md) | Visual language: SBP colours, system fonts only, sized for a lit room at a distance | Accepted | Keep | Partial |
-| [0040](0040-remote-keyboard.md) | Forward the presenter's clicker to a networked keyboard | Accepted | Keep | Not started |
+| [0040](0040-remote-keyboard.md) | Forward the presenter's clicker to a networked keyboard | Accepted | Keep | Partial |
 
 ### Platform
 
