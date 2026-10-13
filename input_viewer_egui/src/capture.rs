@@ -23,7 +23,7 @@ const MOCK_WIDTH: usize = 1280;
 const MOCK_HEIGHT: usize = 720;
 const MOCK_FPS: u64 = 15;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Device {
     /// Stable across restarts and replugging: settings are keyed by it.
     pub id: String,
@@ -37,6 +37,10 @@ pub struct Device {
     pub test_pattern: Option<PatternFormat>,
     /// Mock inputs only: misbehave this way (`--mock-fault`).
     pub mock_fault: Option<MockFault>,
+    /// Mock inputs only: draw the picture at this aspect ratio inside the
+    /// frame with pure black around it, as the Elgato cards fit a source of
+    /// another shape into 16:9 (`--mock-shape`, to exercise cropping).
+    pub mock_shape: Option<f64>,
 }
 
 /// How a mock input misbehaves, to drive the health policy without hardware.
@@ -145,7 +149,7 @@ impl Stream {
                             run_test_pattern(n, f, &s, &st, &ctx);
                             Ok(())
                         }
-                        None => run_mock(n, d.mock_fault, &s, &st, &ctx),
+                        None => run_mock(n, d.mock_fault, d.mock_shape, &s, &st, &ctx),
                     }
                 } else {
                     run_camera(&d, &s, &st, &ctx)
@@ -193,7 +197,7 @@ fn publish(shared: &Shared, frame: Frame, ctx: &egui::Context) {
 
 /// `fault`, if any, applies to the last input only, so the others stay
 /// healthy to compare against.
-pub fn mock_devices(count: usize, test_pattern: Option<PatternFormat>, fault: Option<MockFault>) -> Vec<Device> {
+pub fn mock_devices(count: usize, test_pattern: Option<PatternFormat>, fault: Option<MockFault>, shape: Option<f64>) -> Vec<Device> {
     (1..=count)
         .map(|i| Device {
             id: format!("{MOCK_PREFIX}{i}"),
@@ -204,6 +208,7 @@ pub fn mock_devices(count: usize, test_pattern: Option<PatternFormat>, fault: Op
             index: None,
             test_pattern,
             mock_fault: fault.filter(|_| i == count),
+            mock_shape: shape,
         })
         .collect()
 }
@@ -240,7 +245,31 @@ pub fn draw_mock_frame(n: usize, phase: f32, w: usize, h: usize) -> Vec<u8> {
     px
 }
 
-fn run_mock(n: usize, fault: Option<MockFault>, shared: &Shared, stop: &AtomicBool, ctx: &egui::Context) -> Result<(), String> {
+/// A mock frame of `ratio` fitted, shape kept, into the 16:9 mock frame with
+/// pure black around it -- what the Elgato driver does to a source of another
+/// shape.
+fn letterboxed(n: usize, phase: f32, ratio: f64) -> Vec<u8> {
+    let (w, h) = (MOCK_WIDTH, MOCK_HEIGHT);
+    let frame_ratio = w as f64 / h as f64;
+    let (cw, ch) = if ratio > frame_ratio {
+        (w, ((h as f64 * frame_ratio / ratio).round() as usize).max(2))
+    } else {
+        (((w as f64 * ratio / frame_ratio).round() as usize).max(2), h)
+    };
+    let content = draw_mock_frame(n, phase, cw, ch);
+    let mut px = vec![0u8; w * h * 4];
+    for p in px.as_chunks_mut::<4>().0 {
+        p[3] = 255;
+    }
+    let (x0, y0) = ((w - cw) / 2, (h - ch) / 2);
+    for y in 0..ch {
+        let dst = ((y0 + y) * w + x0) * 4;
+        px[dst..dst + cw * 4].copy_from_slice(&content[y * cw * 4..(y + 1) * cw * 4]);
+    }
+    px
+}
+
+fn run_mock(n: usize, fault: Option<MockFault>, shape: Option<f64>, shared: &Shared, stop: &AtomicBool, ctx: &egui::Context) -> Result<(), String> {
     if fault == Some(MockFault::Fail) {
         return Err("could not open (--mock-fault=fail)".into());
     }
@@ -255,7 +284,10 @@ fn run_mock(n: usize, fault: Option<MockFault>, shared: &Shared, stop: &AtomicBo
                 vec![egui::Color32::from_rgb(10, 10, 12); MOCK_WIDTH * MOCK_HEIGHT]
             } else {
                 let phase = (start.elapsed().as_secs_f32() / 4.0).fract();
-                pixels_from_rgba(draw_mock_frame(n, phase, MOCK_WIDTH, MOCK_HEIGHT))
+                pixels_from_rgba(match shape {
+                    Some(ratio) => letterboxed(n, phase, ratio),
+                    None => draw_mock_frame(n, phase, MOCK_WIDTH, MOCK_HEIGHT),
+                })
             };
             seq += 1;
             publish(shared, Frame::new(MOCK_WIDTH, MOCK_HEIGHT, pixels, seq), ctx);
@@ -335,6 +367,7 @@ mod camera {
                         index: Some(info.index().as_string()),
                         test_pattern: None,
                         mock_fault: None,
+                        mock_shape: None,
                     }
                 })
                 .collect(),

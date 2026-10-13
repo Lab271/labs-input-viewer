@@ -42,7 +42,7 @@ const VIDEO_TEXTURE: TextureOptions = TextureOptions::LINEAR.with_mipmap_mode(So
 
 /// Thumbnail the health check judges flatness on: the size Electron's crop
 /// detection shares with it (#314), so a port of cropping can reuse it.
-const HEALTH_THUMB: (usize, usize) = (384, 216);
+const HEALTH_THUMB: (usize, usize) = (crate::crop::SAMPLE_W, crate::crop::SAMPLE_H);
 /// A `[Health]` line per side every 10 minutes, as renderer.js writes.
 const HEALTH_SUMMARY_MS: f64 = 10.0 * 60.0 * 1000.0;
 
@@ -171,6 +171,8 @@ struct Slot {
     health: StreamHealth,
     next_sample: f64,
     stats: RenderStats,
+    /// Black-bar crop for this device's picture (ADR 0015).
+    crop: crate::crop::CropTracker,
     /// The status last written to the log, as Electron's healthLastStatus.
     last_logged: Option<Status>,
     /// The "opened" line for this stream has been written.
@@ -187,6 +189,7 @@ impl Slot {
             health: StreamHealth::new(),
             next_sample: 0.0,
             stats: RenderStats::new(),
+            crop: crate::crop::CropTracker::default(),
             last_logged: None,
             announced: false,
         };
@@ -202,6 +205,8 @@ impl Slot {
         self.health.opened(now);
         self.next_sample = now + health_limits::SAMPLE_MS;
         self.announced = false;
+        // A new stream may be a different source in a different shape.
+        self.crop.reset();
     }
 }
 
@@ -325,7 +330,7 @@ impl InputViewer {
             log_info!("[Health] monitoring every {}ms", health_limits::SAMPLE_MS);
         }
         if let Some(n) = app.flags.mock {
-            app.set_devices(capture::mock_devices(n, app.flags.test_pattern, app.flags.mock_fault));
+            app.set_devices(capture::mock_devices(n, app.flags.test_pattern, app.flags.mock_fault, app.flags.mock_shape));
         } else {
             let (tx, rx) = mpsc::channel();
             let ctx = cc.egui_ctx.clone();
@@ -546,6 +551,7 @@ impl InputViewer {
         let now_ms = self.now_ms();
         let who = self.sides_by_device();
         let summary = now_ms - self.last_health_summary >= HEALTH_SUMMARY_MS;
+        let crop_on = self.settings.crop_letterbox;
         if summary {
             self.last_health_summary = now_ms;
         }
@@ -568,7 +574,7 @@ impl InputViewer {
                 continue;
             }
             slot.next_sample = now_ms + health_limits::SAMPLE_MS;
-            check_health(id, slot, frame.as_deref(), now_ms, sides, label, summary);
+            check_health(id, slot, frame.as_deref(), now_ms, (sides, label), summary, crop_on);
         }
     }
 
@@ -751,11 +757,16 @@ impl InputViewer {
             else {
                 continue;
             };
-            // object-fit: contain.
-            let size = tex.size_vec2();
+            // The black-bar crop as texture coordinates (Electron:
+            // object-view-box), then object-fit: contain on what is left.
+            let crop = self.sides[i].as_ref().and_then(|id| self.slots.get(id))
+                .and_then(|s| s.crop.current())
+                .filter(|_| self.settings.crop_letterbox);
+            let ([u0, v0], [u1, v1]) = crop.map_or(([0.0, 0.0], [1.0, 1.0]), crate::crop::Crop::uv);
+            let size = tex.size_vec2() * vec2(u1 - u0, v1 - v0);
             let scale = (half.width() / size.x).min(half.height() / size.y);
             let fit = Rect::from_center_size(half.center(), size * scale);
-            painter.image(tex.id(), fit, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
+            painter.image(tex.id(), fit, Rect::from_min_max(pos2(u0, v0), pos2(u1, v1)), Color32::WHITE);
         }
 
         if self.frozen {
@@ -974,9 +985,10 @@ fn check_health(
     slot: &mut Slot,
     frame: Option<&capture::Frame>,
     now: f64,
-    sides: &[&str],
-    label: &str,
+    // The halves showing this device, and its name: for the per-side lines.
+    (sides, label): (&[&str], &str),
     summary: bool,
+    crop_on: bool,
 ) {
     let Some(stream) = &slot.stream else { return };
     match stream.error() {
@@ -990,11 +1002,23 @@ fn check_health(
             slot.health.sample(Sample { frames: frame.map(|f| f.seq), ended: true, stats: None }, now);
         }
         None => {
-            let stats = frame.map(|f| {
-                let (tw, th) = HEALTH_THUMB;
-                health::luma_stats(&f.health_thumbnail(tw, th))
-            });
+            // One thumbnail serves both the flatness check and the crop, as
+            // in Electron since #314.
+            let (tw, th) = HEALTH_THUMB;
+            let thumb = frame.map(|f| f.health_thumbnail(tw, th));
+            let stats = thumb.as_ref().map(|t| health::luma_stats(t));
             slot.health.sample(Sample { frames: Some(frame.map_or(0, |f| f.seq)), ended: false, stats }, now);
+            if let (true, Some(t), Some(f)) = (crop_on, &thumb, frame) {
+                let detected = crate::crop::detect(&crate::crop::luma_grid(t), tw, th, f.width(), f.height());
+                if slot.crop.update(detected.as_ref()) {
+                    let what = slot.crop.current().map_or_else(|| "none".to_owned(), |c| {
+                        format!("{} {} of {}x{} (measured {:.3}:1)", c.shape, c.css(), f.width(), f.height(), c.measured)
+                    });
+                    for side in sides {
+                        log_info!("[Crop] {side} ({label}): {what}");
+                    }
+                }
+            }
         }
     }
     let info = slot.health.info();
@@ -1205,7 +1229,7 @@ mod tests {
     use super::*;
 
     fn devs(ids: &[&str]) -> Vec<Device> {
-        ids.iter().map(|id| Device { id: (*id).into(), label: id.to_uppercase(), index: None, test_pattern: None, mock_fault: None }).collect()
+        ids.iter().map(|id| Device { id: (*id).into(), label: id.to_uppercase(), index: None, test_pattern: None, mock_fault: None, mock_shape: None }).collect()
     }
 
     fn ids(sides: [Option<String>; 2]) -> [Option<&'static str>; 2] {

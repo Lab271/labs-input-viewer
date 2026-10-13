@@ -9,6 +9,7 @@ mod filelog;
 
 mod app;
 mod capture;
+mod crop;
 mod flags;
 mod gpu_video;
 mod health;

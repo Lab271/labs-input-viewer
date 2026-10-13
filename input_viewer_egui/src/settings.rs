@@ -68,6 +68,9 @@ pub struct Settings {
     pub layout_mode: Option<Layout>,
     pub multi_view: bool,
     pub center_gap: f32,
+    /// Crop the capture card's black bars (ADR 0015). On by default, as in
+    /// Electron; `false` in settings.json turns it off.
+    pub crop_letterbox: bool,
     pub border_width: f32,
     pub left_device_id: Option<String>,
     pub right_device_id: Option<String>,
@@ -85,6 +88,7 @@ impl Default for Settings {
             layout_mode: Some(Layout::Dual),
             multi_view: true,
             center_gap: 60.0,
+            crop_letterbox: true,
             border_width: 0.0,
             left_device_id: None,
             right_device_id: None,
