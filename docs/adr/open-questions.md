@@ -39,7 +39,7 @@ Filed as issues on 2026-10-12. E16 was already tracked in #340.
 | E9 | #86's proposed guard -- check every `url`/`path` in `latest*.yml` exists -- was never added. | `release.yml` publish job | #355 |
 | E10 | Dead IPC: `get-settings-path` (caller removed in #334), `diag-log-reset` (never called). | `src/preload/index.js` | #356 |
 | E11 | Dead markup: `#bottom-logo` (always hidden since 2026-01-16), `.input-label`, the `renderDropdownVolumeControls` shim. | `index.html:36`, `styles.css` | #357 |
-| E12 | The same device on both halves opens two audio tracks; the audio may play twice. | `renderer.js` `startVideoStream` | #358 |
+| E12 | The same device on both halves opens two audio tracks; the audio may play twice. **egui: fixed by construction** -- one audio capture per device, gain the louder half's ([0010](0010-volume-belongs-to-a-side.md)). | `renderer.js` `startVideoStream` | #358 |
 | E13 | The WebCodecs read copies the whole frame (~33 MB at 4K) every 1.6 s, contradicting #61's "copies only the region". Unmeasured on the wall. | `frame-source.js` | #359 |
 | E14 | shadercheck is not run in CI; a shader regression merges unless someone runs it. | `ci.yml`, `release.yml` | #360 |
 | E15 | macOS auto-update has never been confirmed end to end on the unsigned build. | #86 checklist | #361 |

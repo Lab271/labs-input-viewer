@@ -6,7 +6,7 @@
 //!
 //! | Flag | Effect |
 //! |---|---|
-//! | `--mock[=N]` | N synthetic inputs (1-8, default 4). No capture hardware. |
+//! | `--mock[=N]` | N synthetic inputs (1-8, default 4). No capture hardware. Each also has a synthetic audio device, `Digital Audio Interface (Mock Input N)`, playing a sine tone of its own pitch (220, 277, 330, 440 Hz...), so pairing, mixing and per-half volume can be heard and read in the log (`[Audio] output rms ...` every 5 s) without hardware. |
 //! | `--no-signal` | Pins every input into the no-signal state. |
 //! | `--screensaver-delay=MS` | Replaces the five-minute wait. |
 //! | `--screensaver=NAME` | Prototype only: pins the first saver picked (`plasma`, `juliafamily`, `starfield`, ...). |

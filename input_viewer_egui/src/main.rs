@@ -8,6 +8,7 @@
 mod filelog;
 
 mod app;
+mod audio;
 mod capture;
 mod crop;
 mod flags;

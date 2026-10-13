@@ -30,20 +30,25 @@ writes settings.
 | Capture health and reopen backoff, ported with its tests | `stream-health.js` | `health.rs` |
 | Daily log file, same bounds and `[Health]` line format, ported with its tests | `file-log.js` | `filelog.rs` |
 | Split-flap board, screensaver after delay, 10-min rotation, seeded + logged | `split-flap.js`, `registry.js` | `screensaver.rs` |
-| Plasma saver + bloom / ACES / dither chain, same GLSL | `plasma.js`, `post-fx.js` | `plasma.rs`, `shaders/` |
+| The six pure-shader savers (Plasma, Flow Field, Julia Family, Burning Ship, Moire, Bicycle Horizon) + bloom / ACES / dither chain, same GLSL, supersampling | `*.js`, `post-fx.js`, `gl-base.js` | `shader_saver.rs`, `shaders/` |
 | Weather saver and its Open-Meteo poller, off unless `weatherEnabled`; `--weather-state=N\|label` pins a canned reading | `weather.js`, `weather-source.js`, `weather-states.js` | `weather.rs`, `weather_source.rs`, `weather_states.rs` |
 | Freeze, fullscreen, Esc does one thing per press | `renderer.js` | `app.rs` |
-| Settings dialog: Inputs and Layout panes | `index.html`, `settings-status.js` | `app/settings_ui.rs`, `settings_status.rs` |
+| Settings dialog: Inputs, Layout, Remote keyboard and Screensavers panes | `index.html`, `settings-status.js` | `app/settings_ui.rs`, `settings_status.rs` |
+| Black-bar cropping, ported with its tests | `content-box.js` | `crop.rs` |
+| No-signal references, compared off the video path | `detection-simple.js` | `reference.rs` |
+| Remote keyboard | `remote-key-send` | `remote_key.rs` |
+| Transitions: interruptible dips and layout slide, reduced motion | `renderer.js` | `transition.rs` |
+| Silent auto-update, single instance, display kept awake | electron-updater | `update.rs`, `single_instance.rs` |
 | `settings.json`, same keys, Electron's imported once | `settings.json` | `settings.rs` |
 | Logo column between the halves, side borders | `#center-divider`, `.edge-border` | `app.rs` |
+| Audio paired with its card, one capture per device, per-half volume, Output volume, mock tones | `startVideoStream`, `buildPickerVolume` | `audio.rs`, `audio/` |
 
 ## Not ported
 
-Reference-screenshot no-signal detection, black-bar cropping, audio/volume,
-the remote keyboard and Art-Net (features and their Settings panes),
-WebGPU compositing — and Plasma plus 3 painter-drawn screensavers instead
-of ~30 WebGL ones. Picker tiles show the last frame seen on screen, not a fresh
-snapshot sweep (#242).
+Art-Net (in progress), setting the OS master volume, WebGPU compositing,
+and the ~20 orchestrated WebGL screensavers (three painter-drawn ones stand
+in). Picker tiles show the last frame seen on screen, not a fresh snapshot
+sweep (#242).
 
 ## Headless screenshots
 

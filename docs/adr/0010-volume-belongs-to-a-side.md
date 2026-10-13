@@ -7,7 +7,7 @@
 | **Area** | Capture |
 | **Evidence** | `renderer.js:1329-1404` (gain node per side), `:1436-1489` (polling), `buildPickerVolume` :2885; `src/main/index.js:682-795`; USER_GUIDE |
 | **egui verdict** | Adapt |
-| **egui status** | Not started |
+| **egui status** | Partial |
 
 ## Context
 
@@ -37,4 +37,27 @@ matters.
 behaviour. Replace the shell-out with WASAPI (`windows` crate) and CoreAudio
 calls; the polling concern disappears, since a native read costs
 microseconds. Keep `leftVolume` / `rightVolume` and `systemVolume` in
-`settings.json`. Not started in the prototype.
+`settings.json`.
+
+Prototype: **partial** (`input_viewer_egui/src/audio.rs`).
+
+- Each wall picker has its half's volume slider, a "Both halves" picker
+  sets both, and the capsule has Output volume, as dropdown 2b
+  ([0033](0033-controls-laid-over-the-wall.md)). The speaker button mutes
+  by setting 0 and restores the previous level; there is no separate mute
+  state. Persisted as `leftVolume` / `rightVolume` (0..1, default 1, the
+  renderer's defaults since main sets none, E7).
+- **Gain rule.** One capture per device, not per side, so a device's gain
+  is the **largest** volume among the audible halves showing it, times the
+  output volume. Dual: both halves audible; single: only the left. Max, not
+  sum: a sum is E12's double level; not average: turning one copy down must
+  not quiet the other half. All audible devices are mixed into the default
+  output device (which cpal follows when the default changes).
+- **Not ported: the OS master volume.** Output volume is the app's own
+  master gain, `outputVolume` (0..1, default 1). Electron's `systemVolume`
+  mirrored the OS level; reading it as an app gain would attenuate twice on
+  an import, so it is kept untouched in settings.json. Setting the OS
+  volume natively (WASAPI `IAudioEndpointVolume`, CoreAudio) is still open.
+- The mixed level is logged (`[Audio] output rms ... dBFS`) every 5 s in
+  mock and `--hud` runs and every 10 min otherwise, so a gain can be
+  checked from the log.

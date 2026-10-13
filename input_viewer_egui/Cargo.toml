@@ -17,6 +17,8 @@ base64 = "0.22"
 bytemuck = { version = "1", features = ["extern_crate_alloc"] }
 bytes = "1"
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
+# Audio capture and playback: WASAPI on Windows, CoreAudio on macOS (audio.rs).
+cpal = "0.18"
 dirs = "7"
 # glow rather than the default wgpu: the screensavers are the Electron app's
 # GLSL, and glow runs it unchanged apart from the #version line.
@@ -24,6 +26,8 @@ eframe = { version = "0.36", default-features = false, features = ["accesskit", 
 image = { version = "0.25", default-features = false, features = ["png"] }
 keepawake = "0.6"
 nokhwa = { version = "0.10", features = ["input-native", "output-threaded"], optional = true }
+# Lock-free single-producer rings between the capture and output callbacks.
+rtrb = "0.4.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sysinfo = { version = "0.39", default-features = false, features = ["system"] }

@@ -38,8 +38,8 @@ Defects, contradictions and doc drift found on the way are in
 |---|---|---|---|---|
 | [0007](0007-capture-at-native-resolution.md) | Capture at the card's native resolution, and log what was negotiated | Accepted | Adapt | Partial |
 | [0008](0008-one-capture-session-per-device.md) | One capture session per device, shared by both halves | Accepted (Electron shape: one track per side) | Adapt | Done |
-| [0009](0009-pair-audio-with-its-video-card.md) | Pair audio with its video card; missing audio never blocks video | Accepted | Adapt | Not started |
-| [0010](0010-volume-belongs-to-a-side.md) | Volume belongs to a side; the OS volume is shown and set directly | Accepted | Adapt | Not started |
+| [0009](0009-pair-audio-with-its-video-card.md) | Pair audio with its video card; missing audio never blocks video | Accepted | Adapt | Partial |
+| [0010](0010-volume-belongs-to-a-side.md) | Volume belongs to a side; the OS volume is shown and set directly | Accepted | Adapt | Partial |
 | [0011](0011-choose-startup-inputs-by-precedence.md) | Choose each half's input by a fixed precedence, and keep it across hot-plug | Accepted | Keep | Partial |
 
 ### Signal

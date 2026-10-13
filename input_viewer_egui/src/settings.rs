@@ -8,8 +8,9 @@
 //! so the two apps never write the same file.
 //!
 //! On first launch the Electron file is imported. What carries over is the
-//! layout -- centerGap, borderWidth, layoutMode, multiView -- and every key this
-//! app does not use (Art-Net, remote keyboard, volumes...), kept verbatim in
+//! layout -- centerGap, borderWidth, layoutMode, multiView -- the halves'
+//! volumes, and every key this app does not use (Art-Net, Electron's
+//! systemVolume...), kept verbatim in
 //! `extra` and written back unchanged. Input names do **not** carry over:
 //! Electron keys `inputs` by Chromium's deviceId, a salted hash nothing outside
 //! Chromium can reproduce, and stores no label to match on instead. Those
@@ -36,6 +37,8 @@ pub const ELECTRON_APP_DIR: &str = "input-viewer";
 /// The ranges of Electron's sliders.
 pub const CENTER_GAP_RANGE: std::ops::RangeInclusive<f32> = 20.0..=200.0;
 pub const BORDER_WIDTH_RANGE: std::ops::RangeInclusive<f32> = 0.0..=200.0;
+/// Volumes, as fractions; the sliders show them as 0-100%.
+pub const VOLUME_RANGE: std::ops::RangeInclusive<f32> = 0.0..=1.0;
 /// The logo's width when it is not fitted to the gap.
 pub const LOGO_WIDTH_RANGE: std::ops::RangeInclusive<f32> = 20.0..=1200.0;
 
@@ -53,13 +56,19 @@ pub struct InputSettings {
     /// Operator's name for the input; None shows the device's own label.
     pub name: Option<String>,
     pub enabled: bool,
+    /// Which audio input plays with this video device, as a case-insensitive
+    /// part of its name, or `none`. Unset: paired by name (ADR 0009). The
+    /// escape hatch if the wall's two identical cards pair the wrong way
+    /// round. Electron ignores the key.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub audio_device: Option<String>,
     #[serde(flatten)]
     pub extra: Map<String, Value>,
 }
 
 impl Default for InputSettings {
     fn default() -> Self {
-        Self { name: None, enabled: true, extra: Map::new() }
+        Self { name: None, enabled: true, audio_device: None, extra: Map::new() }
     }
 }
 
@@ -100,6 +109,15 @@ pub struct Settings {
     pub weather_latitude: Option<f64>,
     pub weather_longitude: Option<f64>,
     pub border_width: f32,
+    /// Each half's volume, 0..1 (ADR 0010). It belongs to the half, not the
+    /// input, "so it stays put when you switch inputs". Electron's keys and
+    /// its renderer's defaults (main sets none, E7).
+    pub left_volume: f32,
+    pub right_volume: f32,
+    /// The capsule's Output volume, 0..1: the app's own master gain. Not
+    /// Electron's `systemVolume`, which was the OS master volume and is kept
+    /// untouched in `extra`; reusing it would attenuate twice on an import.
+    pub output_volume: f32,
     pub left_device_id: Option<String>,
     pub right_device_id: Option<String>,
     /// The input both halves start on. None: the first enabled one.
@@ -128,6 +146,9 @@ impl Default for Settings {
             weather_latitude: Some(52.37),
             weather_longitude: Some(4.89),
             border_width: 0.0,
+            left_volume: 1.0,
+            right_volume: 1.0,
+            output_volume: 1.0,
             left_device_id: None,
             right_device_id: None,
             default_input_id: None,
@@ -176,6 +197,9 @@ impl Settings {
         };
         self.center_gap = clamp(self.center_gap, &CENTER_GAP_RANGE, 60.0);
         self.border_width = clamp(self.border_width, &BORDER_WIDTH_RANGE, 0.0);
+        for v in [&mut self.left_volume, &mut self.right_volume, &mut self.output_volume] {
+            *v = clamp(*v, &VOLUME_RANGE, 1.0);
+        }
         self.logo_width = self.logo_width.filter(|w| w.is_finite()).map(|w| w.clamp(*LOGO_WIDTH_RANGE.start(), *LOGO_WIDTH_RANGE.end()));
     }
 }
@@ -316,6 +340,7 @@ mod tests {
       "borderWidth": 12,
       "defaultInputId": null,
       "leftVolume": 0.5,
+      "systemVolume": 35,
       "inputs": { "4f1c0e9a": { "name": "Booth", "enabled": true } },
       "multiView": false,
       "artnetEnabled": true,
@@ -329,6 +354,20 @@ mod tests {
         assert_eq!(s.layout(), Layout::Single);
         assert_eq!((s.center_gap, s.border_width, s.multi_view), (80.0, 12.0, false));
         assert_eq!(s.name_of("4f1c0e9a"), Some("Booth"));
+        // rightVolume is absent: Electron's renderer default, full.
+        assert_eq!((s.left_volume, s.right_volume, s.output_volume), (0.5, 1.0, 1.0));
+    }
+
+    #[test]
+    fn volumes_are_pulled_into_range_and_audio_device_round_trips() {
+        let mut s = parse(r#"{ "leftVolume": 7, "rightVolume": -1, "outputVolume": 0.25,
+            "inputs": { "x": { "audioDevice": "2- game capture" } } }"#).unwrap();
+        assert_eq!((s.left_volume, s.right_volume, s.output_volume), (1.0, 0.0, 0.25));
+        assert_eq!(s.inputs["x"].audio_device.as_deref(), Some("2- game capture"));
+        s.input_mut("y");
+        let back: Value = serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();
+        assert_eq!(back["inputs"]["x"]["audioDevice"], "2- game capture");
+        assert!(back["inputs"]["y"].get("audioDevice").is_none(), "unset is not written");
     }
 
     #[test]
@@ -338,6 +377,7 @@ mod tests {
         assert_eq!(back["artnetUrl"], "http://relay.local");
         assert_eq!(back["artnetSceneBySaver"]["plasma"], "warm");
         assert_eq!(back["leftVolume"], 0.5);
+        assert_eq!(back["systemVolume"], 35, "the OS volume Electron kept is preserved, not reinterpreted");
         assert_eq!(back["layoutMode"], "single");
         assert_eq!(back["centerGap"], 80.0);
     }

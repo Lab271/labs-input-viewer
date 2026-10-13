@@ -11,6 +11,7 @@ use eframe::egui::{
     self, Align2, Color32, CornerRadius, FontId, Key, Rect, Sense, Stroke, StrokeKind, TextureHandle,
     TextureOptions, Vec2, pos2, vec2,
 };
+use crate::audio;
 use crate::capture::{self, Device, Stream};
 use crate::gpu_video;
 use crate::flags::Flags;
@@ -56,6 +57,10 @@ const VIDEO_TEXTURE: TextureOptions = TextureOptions::LINEAR.with_mipmap_mode(So
 const HEALTH_THUMB: (usize, usize) = (crate::crop::SAMPLE_W, crate::crop::SAMPLE_H);
 /// A `[Health]` line per side every 10 minutes, as renderer.js writes.
 const HEALTH_SUMMARY_MS: f64 = 10.0 * 60.0 * 1000.0;
+/// The mixed audio level in the log: every 5 s in mock and `--hud` runs, to
+/// check gains by reading the log; every 10 minutes on the wall.
+const AUDIO_LEVEL_TEST: Duration = Duration::from_secs(5);
+const AUDIO_LEVEL_WALL: Duration = Duration::from_secs(10 * 60);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Side {
@@ -297,6 +302,10 @@ pub struct InputViewer {
     epoch: Instant,
     /// When the last 10-minute `[Health]` summary was written (ms).
     last_health_summary: f64,
+    /// None in review runs, which are for looking at the UI.
+    audio: Option<audio::Engine>,
+    /// What the mute buttons restore: left, right, output.
+    unmute_to: [f32; 3],
 }
 
 impl InputViewer {
@@ -370,9 +379,15 @@ impl InputViewer {
             report_count: 0,
             epoch: Instant::now(),
             last_health_summary: 0.0,
+            audio: None,
+            unmute_to: [1.0; 3],
             flags,
         };
         app.references = reference::load(app.settings.no_signal_references.as_ref());
+        if app.review.is_none() {
+            let every = if app.flags.mock.is_some() || app.flags.hud { AUDIO_LEVEL_TEST } else { AUDIO_LEVEL_WALL };
+            app.audio = Some(audio::Engine::start(app.flags.mock.is_some(), every));
+        }
         if app.flags.mock.is_none() && app.review.is_none() {
             app.updater = Updater::start();
             crate::single_instance::serve(cc.egui_ctx.clone());
@@ -624,6 +639,24 @@ impl InputViewer {
             }
         }
         map
+    }
+
+    /// Hand the audio engine what should be heard, and how loud (ADR 0010):
+    /// the inputs on the audible halves, enabled and present.
+    fn sync_audio(&mut self) {
+        let Some(engine) = &mut self.audio else { return };
+        let s = &self.settings;
+        let videos: Vec<(&str, &str)> = self.devices.iter().map(|d| (d.id.as_str(), d.label.as_str())).collect();
+        let overrides: HashMap<String, String> = s.inputs.iter()
+            .filter_map(|(id, i)| Some((id.clone(), i.audio_device.clone()?)))
+            .collect();
+        let audible: &[usize] = match s.layout() {
+            Layout::Dual => &[0, 1],
+            Layout::Single => &[0],
+        };
+        let sides = self.sides.clone().map(|id| id.filter(|id| s.is_enabled(id) && videos.iter().any(|(v, _)| v == id)));
+        let wanted = audio::device_gains(&sides, audible, [s.left_volume, s.right_volume], s.output_volume);
+        engine.sync(&videos, &overrides, &wanted);
     }
 
     /// Health: every 2 s per device, never under --no-signal (it is not
@@ -1025,6 +1058,10 @@ impl InputViewer {
         let enabled = self.enabled_devices();
         let mut layout = self.settings.layout();
         let mut multi = self.settings.multi_view;
+        // Edited as locals: the picker columns below borrow self.
+        let mut volumes = [self.settings.left_volume, self.settings.right_volume];
+        let mut output = self.settings.output_volume;
+        let mut unmute_to = self.unmute_to;
 
         let resp = egui::Area::new(egui::Id::new("wall-pickers"))
             .fixed_pos(rect.left_top())
@@ -1046,6 +1083,8 @@ impl InputViewer {
                             if self.flags.no_signal {
                                 ui.weak("· --no-signal");
                             }
+                            ui.separator();
+                            volume_row(ui, "Output volume", "Output", &mut output, &mut unmute_to[2]);
                             ui.separator();
                             open_settings = ui.button("Settings").clicked();
                         });
@@ -1076,12 +1115,32 @@ impl InputViewer {
                                     }
                                 });
                             });
+                            // Volume belongs to the half, not the input; a
+                            // both-halves picker sets both (ADR 0010).
+                            let i = usize::from(*side == Side::Right);
+                            let name = match side {
+                                Side::Left if pickers.len() > 1 => "Volume, left half",
+                                Side::Right => "Volume, right half",
+                                Side::Both => "Volume, both halves",
+                                Side::Left => "Volume",
+                            };
+                            col.add_space(4.0);
+                            let mut v = volumes[i];
+                            if volume_row(col, name, "Volume", &mut v, &mut unmute_to[i]) {
+                                match side {
+                                    Side::Both => volumes = [v, v],
+                                    _ => volumes[i] = v,
+                                }
+                            }
                         }
                     });
                 });
             });
         self.dropdown_bottom = resp.response.rect.bottom();
         self.settings.layout_mode = Some(layout);
+        [self.settings.left_volume, self.settings.right_volume] = volumes;
+        self.settings.output_volume = output;
+        self.unmute_to = unmute_to;
         if open_settings {
             self.settings_pane = Some(Pane::Inputs);
             self.dropdown_open = false;
@@ -1147,7 +1206,7 @@ fn keep_awake() -> Option<keepawake::KeepAwake> {
     }
 }
 
-fn short_id(id: &str) -> String {
+pub(crate) fn short_id(id: &str) -> String {
     if id.starts_with(capture::MOCK_PREFIX) {
         return id.to_owned();
     }
@@ -1269,6 +1328,43 @@ fn badge(painter: &egui::Painter, at: egui::Pos2, align: Align2, fill: Color32, 
     painter.galley(r.min + vec2(16.0, 8.0), galley, Color32::WHITE);
 }
 
+/// A speaker button, a label and a 0-100% slider over a 0..1 volume, as
+/// Electron's `.picker-volume` / `.capsule-volume`. The button mutes (volume
+/// 0, there is no separate mute state) and restores what was there before.
+/// True if the volume changed.
+fn volume_row(ui: &mut egui::Ui, a11y: &str, label: &str, volume: &mut f32, unmute_to: &mut f32) -> bool {
+    let before = *volume;
+    ui.horizontal(|ui| {
+        let muted = *volume <= 0.0;
+        // The level icon steps at a third and two thirds, as Electron's.
+        let icon = match *volume {
+            v if v <= 0.0 => "\u{1F507}",
+            v if v < 1.0 / 3.0 => "\u{1F508}",
+            v if v < 2.0 / 3.0 => "\u{1F509}",
+            _ => "\u{1F50A}",
+        };
+        let button = ui.add(egui::Button::new(icon).frame(false))
+            .on_hover_text(if muted { "Unmute" } else { "Mute" });
+        if button.clicked() {
+            if muted {
+                *volume = if *unmute_to > 0.0 { *unmute_to } else { 1.0 };
+            } else {
+                *unmute_to = *volume;
+                *volume = 0.0;
+            }
+        }
+        ui.label(egui::RichText::new(label).small().weak());
+        let mut pct = (*volume * 100.0).round();
+        ui.spacing_mut().slider_width = 140.0;
+        let slider = ui.add(egui::Slider::new(&mut pct, 0.0..=100.0).step_by(1.0).fixed_decimals(0).suffix("%"));
+        slider.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Slider, true, a11y));
+        if slider.changed() {
+            *volume = pct / 100.0;
+        }
+    });
+    *volume != before
+}
+
 /// One input tile: a fixed 128x72 still with the name under it, never the
 /// strip width (a first pass at `width: 100%` in the Electron app measured
 /// 292x164).
@@ -1317,6 +1413,7 @@ impl eframe::App for InputViewer {
         self.sync_streams(ctx);
         self.sample_health();
         self.detect_references(ctx);
+        self.sync_audio();
         self.update_saver(Instant::now());
         *self.weather_config.lock().unwrap() = weather_config(&self.settings);
         if let Some(last) = self.remote.as_ref().and_then(remote_key::Sender::poll) {
