@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2025-2026 Schuberg Philis / Lab271
-//! The Settings dialog: a side-nav modal, like the Electron one, with the two
-//! panes whose features exist here -- Inputs and Layout. Remote keyboard and
-//! Art-Net come with those features; a pane for something that does nothing
-//! would suggest it works.
+//! The Settings dialog: a side-nav modal, like the Electron one, with a pane
+//! per feature that exists here -- Inputs, Layout, Remote keyboard, Art-Net
+//! lighting. A pane for something that does nothing would suggest it works.
 //!
 //! Everything edits `self.settings` in place. Saving is not done here: the
 //! frame loop notices the change and writes it, debounced.
 
 use super::*;
 use crate::settings::{BORDER_WIDTH_RANGE, CENTER_GAP_RANGE, LOGO_WIDTH_RANGE};
-use crate::settings_status::{self as status, InputState, Tone};
+use crate::artnet::target::{saver_select_value, set_saver_mode};
+use crate::settings_status::{self as status, ArtnetCounts, InputState, Tone};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Pane {
@@ -18,6 +18,53 @@ pub enum Pane {
     Layout,
     RemoteKeyboard,
     Screensavers,
+    Artnet,
+}
+
+/// index.html's target options. group:/strip: targets are site-specific and
+/// stay file-only; one set by hand is kept as an extra entry rather than
+/// coerced to the first option, which would silently repoint the room the
+/// moment someone opened this pane to change something unrelated.
+const ARTNET_TARGETS: &[(&str, &str)] = &[
+    ("all", "All fixtures \u{2014} one flat colour"),
+    ("spatial", "Spatial \u{2014} colours follow the wall"),
+    ("effect:spot", "Spot \u{2014} follows the bright part of the wall"),
+    ("effect:ripple", "Ripple"),
+    ("effect:plasma", "Plasma"),
+    ("effect:blobs", "Blobs"),
+    ("effect:aurora", "Aurora"),
+];
+
+/// The target dropdown's entries for `current`: the declared ones, plus the
+/// current value if it is not among them, labelled as from settings.json.
+pub(super) fn artnet_target_options(current: &str) -> Vec<(String, String)> {
+    let mut out: Vec<(String, String)> = ARTNET_TARGETS.iter().map(|(v, l)| ((*v).to_owned(), (*l).to_owned())).collect();
+    if !out.iter().any(|(v, _)| v == current) {
+        out.push((current.to_owned(), format!("{current} (set in settings.json)")));
+    }
+    out
+}
+
+/// The per-saver dropdown's entries: Reactive, Spatial, Off, the relay's
+/// scenes and effects, and anything already configured that the relay did
+/// not offer -- a saved mapping is never silently rewritten for want of a
+/// network.
+pub(super) fn artnet_saver_options(current: &str, configured: &[String], catalogue: Option<&crate::artnet::client::Catalogue>) -> Vec<(String, String)> {
+    let mut out: Vec<(String, String)> = vec![
+        ("reactive".into(), "Reactive".into()),
+        ("spatial".into(), "Spatial \u{2014} colours follow the wall".into()),
+        ("off".into(), "Leave lights alone".into()),
+    ];
+    if let Some(c) = catalogue {
+        out.extend(c.scenes.iter().map(|n| (format!("scene:{n}"), format!("Scene: {n}"))));
+        out.extend(c.effects.iter().map(|n| (format!("effect:{n}"), format!("Effect: {n}"))));
+    }
+    for extra in std::iter::once(current).chain(configured.iter().map(String::as_str)) {
+        if !out.iter().any(|(v, _)| v == extra) {
+            out.push((extra.to_owned(), format!("{extra} (configured)")));
+        }
+    }
+    out
 }
 
 const STILL: Vec2 = vec2(96.0, 54.0);
@@ -102,8 +149,8 @@ impl InputViewer {
                     let savers_text = format!("{on} of {}", screensaver::NAMES.len());
                     nav_item(ui, &mut pane, Pane::Screensavers, "Screensavers", &savers_text,
                         if on == 0 { Tone::Warn } else { Tone::Off });
-                    ui.add_space(16.0);
-                    ui.label(egui::RichText::new("Art-Net is not in this prototype yet.").small().weak());
+                    let (an_text, an_tone, _) = self.artnet_status();
+                    nav_item(ui, &mut pane, Pane::Artnet, "Art-Net lighting", an_text, an_tone);
                 });
                 let (line, _) = ui.allocate_exact_size(vec2(17.0, body_height), Sense::hover());
                 ui.painter().vline(line.center().x, line.y_range(), ui.visuals().widgets.noninteractive.bg_stroke);
@@ -115,6 +162,7 @@ impl InputViewer {
                         Pane::Layout => self.layout_pane(ui, wall),
                         Pane::RemoteKeyboard => self.remote_keyboard_pane(ui),
                         Pane::Screensavers => self.screensavers_pane(ui),
+                        Pane::Artnet => self.artnet_pane(ui),
                     }
                 });
             });
@@ -343,6 +391,126 @@ impl InputViewer {
         }
     }
 
+    fn artnet_status(&self) -> (&'static str, Tone, String) {
+        let shared = self.artnet.as_ref().map(crate::artnet::worker::Worker::shared);
+        let counts = shared.as_ref().map(|s| ArtnetCounts {
+            sent: s.status.sent,
+            failures: s.status.failures,
+            last_error: s.status.last_error.as_deref(),
+        });
+        status::artnet_status(self.settings.artnet_enabled, &self.settings.artnet_url, counts)
+    }
+
+    fn artnet_pane(&mut self, ui: &mut egui::Ui) {
+        ui.label(egui::RichText::new("Art-Net lighting").strong());
+        ui.label(egui::RichText::new(
+            "Drive the room lighting from the active screensaver. Nothing is sent until this is enabled \
+             and a URL is given \u{2014} there is no default relay.").weak());
+        ui.add_space(6.0);
+        ui.checkbox(&mut self.settings.artnet_enabled, "Enable Art-Net");
+        if !self.settings.artnet_enabled {
+            return;
+        }
+        let shared = self.artnet.as_ref().map(crate::artnet::worker::Worker::shared);
+        ui.add_space(6.0);
+        egui::ScrollArea::vertical().max_height(ui.available_height()).auto_shrink([false, true]).show(ui, |ui| {
+            let mut editing_url = false;
+            egui::Grid::new("settings-artnet").num_columns(2).spacing([16.0, 10.0]).show(ui, |ui| {
+                ui.label("Relay URL");
+                let url = ui.add(egui::TextEdit::singleline(&mut self.settings.artnet_url)
+                    .hint_text("https://spacelights.lab271.io").desired_width(320.0));
+                editing_url = url.has_focus();
+                if url.lost_focus() {
+                    self.settings.artnet_url = self.settings.artnet_url.trim().to_owned();
+                }
+                ui.end_row();
+
+                ui.label("");
+                let (_, tone, line) = self.artnet_status();
+                ui.horizontal(|ui| {
+                    dot(ui, tone);
+                    ui.label(line);
+                });
+                ui.end_row();
+
+                ui.label("Target");
+                let options = artnet_target_options(&self.settings.artnet_target);
+                let shown = options.iter().find(|(v, _)| *v == self.settings.artnet_target).map_or("", |(_, l)| l.as_str()).to_owned();
+                egui::ComboBox::from_id_salt("artnet-target").width(320.0).selected_text(shown).show_ui(ui, |ui| {
+                    for (value, label) in &options {
+                        ui.selectable_value(&mut self.settings.artnet_target, value.clone(), label);
+                    }
+                });
+                ui.end_row();
+
+                ui.label("Release scene");
+                ui.add(egui::TextEdit::singleline(&mut self.settings.artnet_release_scene)
+                    .hint_text("Leave empty to keep the last colour").desired_width(320.0));
+                ui.end_row();
+
+                ui.label("Max brightness");
+                percent_slider(ui, &mut self.settings.artnet_max_brightness);
+                ui.end_row();
+
+                // Depth only means anything for the spot.
+                if self.settings.artnet_target == "effect:spot" {
+                    ui.label("Spot depth");
+                    percent_slider(ui, &mut self.settings.artnet_spot_depth);
+                    ui.end_row();
+                }
+            });
+
+            if let Some(s) = shared.as_ref().map(|s| &s.status) {
+                last_send(ui, s);
+            }
+
+            // Scene names come from the relay once per URL, when the field
+            // is not being typed in -- Electron once asked on every keystroke.
+            let url = self.settings.artnet_url.trim().to_owned();
+            if !editing_url && status::is_relay_url(&url) && self.artnet_catalogue_for.as_deref() != Some(url.as_str())
+                && let Some(worker) = &self.artnet
+            {
+                worker.send(crate::artnet::worker::Msg::ReadCatalogue);
+                self.artnet_catalogue_for = Some(url);
+            }
+
+            ui.add_space(12.0);
+            let map = &self.settings.artnet_scene_by_saver;
+            let customised = screensaver::NAMES.iter().filter(|n| map.contains_key(**n)).count();
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("Per screensaver").strong());
+                ui.label(egui::RichText::new(if customised == 0 { "all default".to_owned() } else { format!("{customised} customised") }).small().weak());
+            });
+            ui.label(egui::RichText::new(
+                "Each screensaver can drive the lights from its own picture (the default), hold a fixed scene, run an \
+                 effect, or leave the room alone. When the signal comes back the room returns to however it was before \
+                 the screensaver started.").small().weak());
+            ui.add_space(4.0);
+            let configured: Vec<String> = map.values().filter_map(|v| v.as_str())
+                .filter(|v| v.starts_with("scene:") || v.starts_with("effect:")).map(str::to_owned).collect();
+            let catalogue = shared.as_ref().and_then(|s| s.catalogue.as_ref());
+            egui::Grid::new("settings-artnet-savers").num_columns(2).spacing([16.0, 6.0]).show(ui, |ui| {
+                for saver in screensaver::NAMES {
+                    let current = saver_select_value(saver, &self.settings.artnet_scene_by_saver);
+                    let custom = self.settings.artnet_scene_by_saver.contains_key(*saver);
+                    ui.label(if custom { egui::RichText::new(*saver).strong() } else { egui::RichText::new(*saver) });
+                    let options = artnet_saver_options(&current, &configured, catalogue);
+                    let shown = options.iter().find(|(v, _)| *v == current).map_or(current.clone(), |(_, l)| l.clone());
+                    let mut picked = current.clone();
+                    egui::ComboBox::from_id_salt(("artnet-saver", *saver)).width(260.0).selected_text(shown).show_ui(ui, |ui| {
+                        for (value, label) in &options {
+                            ui.selectable_value(&mut picked, value.clone(), label);
+                        }
+                    });
+                    if picked != current {
+                        set_saver_mode(&mut self.settings.artnet_scene_by_saver, saver, &picked);
+                    }
+                    ui.end_row();
+                }
+            });
+        });
+    }
+
     fn layout_pane(&mut self, ui: &mut egui::Ui, wall: Rect) {
         ui.label(egui::RichText::new("Layout").strong());
         ui.add_space(6.0);
@@ -429,6 +597,36 @@ impl InputViewer {
         }
         p.rect_stroke(area, 2.0, Stroke::new(1.0, Color32::from_gray(70)), StrokeKind::Outside);
     }
+}
+
+/// A 0..1 setting as a 0-100% slider, as Electron's range inputs.
+fn percent_slider(ui: &mut egui::Ui, value: &mut f64) {
+    let mut pct = (*value * 100.0).round();
+    if ui.add(egui::Slider::new(&mut pct, 0.0..=100.0).step_by(1.0).suffix("%")).changed() {
+        *value = pct / 100.0;
+    }
+}
+
+/// What the last request was: a swatch of the colour, where it went, when.
+fn last_send(ui: &mut egui::Ui, s: &crate::artnet::client::Status) {
+    let Some((at, url, ok)) = &s.last_request else { return };
+    ui.add_space(6.0);
+    ui.horizontal(|ui| {
+        if let Some(c) = s.last_colour {
+            let (r, _) = ui.allocate_exact_size(vec2(14.0, 14.0), Sense::hover());
+            let k = c.brightness as f32;
+            let scale = |v: u8| (f32::from(v) * k).round() as u8;
+            ui.painter().rect_filled(r, 3.0, Color32::from_rgb(scale(c.rgb.r), scale(c.rgb.g), scale(c.rgb.b)));
+        }
+        let path = url.find("://").and_then(|i| url[i + 3..].find('/').map(|j| &url[i + 3 + j..])).unwrap_or(url);
+        let what = match (&s.last_colour, s.active_mode) {
+            (Some(c), "reactive" | "effect" | "spatial") if s.last_spot.is_none() && s.last_spatial.is_none() =>
+                format!("rgb({}, {}, {}) at {:.0}%", c.rgb.r, c.rgb.g, c.rgb.b, c.brightness * 100.0),
+            _ => s.active_saver.clone().map_or_else(String::new, |n| format!("for {n} ({})", s.active_mode)),
+        };
+        let verb = if *ok { "Sent" } else { "Failed" };
+        ui.label(egui::RichText::new(format!("{verb} {what} to {path} at {}", at.format("%H:%M:%S"))).small().weak());
+    });
 }
 
 fn nav_item(ui: &mut egui::Ui, current: &mut Pane, pane: Pane, label: &str, state: &str, tone: Tone) {

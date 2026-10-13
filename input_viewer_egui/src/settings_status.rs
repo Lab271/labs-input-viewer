@@ -80,6 +80,58 @@ pub fn remote_keyboard_status(enabled: bool, host: &str, api_key: &str, last: Op
     }
 }
 
+/// True for an http(s) URL with a host -- settings-status.js `isRelayUrl`,
+/// which leaned on `new URL()`. Also what the Art-Net transport accepts, so
+/// the status line and the requests cannot disagree.
+pub fn is_relay_url(url: &str) -> bool {
+    let u = url.trim();
+    let rest = ["http://", "https://"].iter().find_map(|s| {
+        u.get(..s.len()).filter(|p| p.eq_ignore_ascii_case(s)).map(|_| &u[s.len()..])
+    });
+    let Some(rest) = rest else { return false };
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
+    let host_port = authority.rsplit_once('@').map_or(authority, |(_, h)| h);
+    let host = if host_port.starts_with('[') {
+        host_port.split_inclusive(']').next().unwrap_or("")
+    } else {
+        host_port.split(':').next().unwrap_or("")
+    };
+    !host.is_empty() && !host.contains(char::is_whitespace)
+}
+
+/// What the Art-Net client last reported, as far as the status line cares.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ArtnetCounts<'a> {
+    pub sent: u64,
+    pub failures: u32,
+    pub last_error: Option<&'a str>,
+}
+
+/// Art-Net's nav entry, tone and status line -- settings-status.js
+/// `artnetStatus`. Before Electron had this, a wrong URL or a dead relay was
+/// visible only in the log file.
+pub fn artnet_status(enabled: bool, url: &str, counts: Option<ArtnetCounts<'_>>) -> (&'static str, Tone, String) {
+    if !enabled {
+        return ("Off", Tone::Off, String::new());
+    }
+    let url = url.trim();
+    if url.is_empty() {
+        return ("On", Tone::Warn, "Not configured: enter the relay URL. Nothing is sent until you do.".into());
+    }
+    if !is_relay_url(url) {
+        return ("On", Tone::Warn, "That is not an http(s) URL. Nothing is sent.".into());
+    }
+    match counts {
+        Some(ArtnetCounts { failures, last_error: Some(e), .. }) if failures > 0 => {
+            ("On", Tone::Warn, format!("Last send failed: {e}."))
+        }
+        Some(ArtnetCounts { sent, .. }) if sent > 0 => {
+            ("On", Tone::Ok, format!("Sending. {sent} update{} so far.", if sent == 1 { "" } else { "s" }))
+        }
+        _ => ("On", Tone::Ok, "Ready. The lights follow the next screensaver.".into()),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -99,6 +151,51 @@ mod tests {
             "Last press failed at 14:02:03: HTTP 401.");
         assert_eq!(remote_keyboard_status(true, "kbd", "k", Some(&last(false, None, Some("timeout")))).2,
             "Last press failed at 14:02:03: timeout.");
+    }
+
+    // ---- settings-status.test.js: artnetStatus, isRelayUrl
+
+    const ON: &str = "https://relay.lan";
+    fn counts(sent: u64, failures: u32, last_error: Option<&str>) -> Option<ArtnetCounts<'_>> {
+        Some(ArtnetCounts { sent, failures, last_error })
+    }
+
+    #[test]
+    fn artnet_is_off_while_disabled() {
+        assert_eq!(artnet_status(false, ON, None).0, "Off");
+    }
+
+    #[test]
+    fn artnet_warns_when_on_with_no_url_or_one_that_is_not_http() {
+        for url in ["", "ftp://x", "relay"] {
+            assert_eq!(artnet_status(true, url, None).1, Tone::Warn, "{url}");
+        }
+    }
+
+    #[test]
+    fn artnet_surfaces_the_clients_last_error() {
+        let (_, tone, line) = artnet_status(true, ON, counts(3, 2, Some("HTTP 502")));
+        assert_eq!(tone, Tone::Warn);
+        assert!(line.contains("HTTP 502"), "{line}");
+    }
+
+    #[test]
+    fn artnet_is_green_once_sending_and_ready_before_that() {
+        assert_eq!(artnet_status(true, ON, counts(1, 0, None)).2, "Sending. 1 update so far.");
+        assert_eq!(artnet_status(true, ON, counts(4, 0, None)).2, "Sending. 4 updates so far.");
+        assert_eq!(artnet_status(true, ON, counts(0, 0, None)).1, Tone::Ok);
+        assert_eq!(artnet_status(true, ON, None).1, Tone::Ok);
+    }
+
+    #[test]
+    fn relay_urls_are_http_or_https_with_a_host() {
+        assert!(is_relay_url("http://relay.lan:8080"));
+        assert!(is_relay_url("https://spacelights.lab271.io"));
+        assert!(is_relay_url("HTTP://127.0.0.1:8765/"));
+        assert!(!is_relay_url("file:///etc/passwd"));
+        assert!(!is_relay_url("not a url"));
+        assert!(!is_relay_url("http://"));
+        assert!(!is_relay_url("http://:8000"));
     }
 
     #[test]

@@ -12,6 +12,7 @@ use eframe::egui::{
     TextureOptions, Vec2, pos2, vec2,
 };
 use crate::audio;
+use crate::artnet::{self, observer, worker::{Msg as ArtnetMsg, Worker as ArtnetWorker}};
 use crate::capture::{self, Device, Stream};
 use crate::gpu_video;
 use crate::flags::Flags;
@@ -260,6 +261,16 @@ pub struct InputViewer {
     remote_last: Option<remote_key::Last>,
     /// Settings: the API key is shown in clear.
     show_api_key: bool,
+    /// Art-Net (ADR 0030). The worker starts the first time Art-Net is
+    /// enabled, so a wall without a relay never runs the thread.
+    artnet: Option<ArtnetWorker>,
+    /// What the worker was last told, so only changes are sent.
+    artnet_config: Option<artnet::Config>,
+    /// The saver the worker last heard about, as (index, started), which
+    /// turns the saver lifecycle into activate / rotate / release.
+    artnet_saver: Option<(usize, Instant)>,
+    /// The URL the relay's scene names were last asked of.
+    artnet_catalogue_for: Option<String>,
     frozen: bool,
     /// Until when the LIVE badge shows, after an unfreeze.
     live_until: Option<Instant>,
@@ -347,6 +358,10 @@ impl InputViewer {
             remote: None,
             remote_last: None,
             show_api_key: false,
+            artnet: None,
+            artnet_config: None,
+            artnet_saver: None,
+            artnet_catalogue_for: None,
             frozen: false,
             live_until: None,
             last_pointer_move: Instant::now(),
@@ -391,6 +406,17 @@ impl InputViewer {
         if app.flags.mock.is_none() && app.review.is_none() {
             app.updater = Updater::start();
             crate::single_instance::serve(cc.egui_ctx.clone());
+        }
+        // --artnet-url: only where nothing is written, so a test relay can
+        // never be saved into the wall's settings.json.
+        if let Some(url) = app.flags.artnet_url.clone() {
+            if app.store.path().is_none() {
+                log_info!("[TestFlags] Art-Net on for this run, relay {url}");
+                app.settings.artnet_enabled = true;
+                app.settings.artnet_url = url;
+            } else {
+                log_warn!("[TestFlags] --artnet-url ignored: only honoured with --mock or in a review run");
+            }
         }
         // Electron wrote gpu-report.txt to answer one recurring question --
         // is the wall rendering in software? (#268, #271) -- this line answers
@@ -827,6 +853,57 @@ impl InputViewer {
         if self.saver.is_some() && (disabled || now.duration_since(self.saver_started) >= screensaver::ROTATE_EVERY) {
             self.start_saver(None);
         }
+    }
+
+    // ----------------------------------------------------------------- art-net
+
+    /// Keep the Art-Net worker in step with settings and the saver, from
+    /// `logic` so it carries on while the window is covered (ADR 0052).
+    ///
+    /// The one place the saver lifecycle reaches the lighting, whatever
+    /// started or stopped the saver -- the timer, a key, signal returning --
+    /// like Electron's `notifyArtnetSaver`, so no new way of starting a
+    /// saver can forget to report it.
+    fn sync_artnet(&mut self, ctx: &egui::Context) {
+        let cfg = artnet::Config::from_settings(&self.settings);
+        if cfg.enabled && self.artnet.is_none() {
+            let ctx = ctx.clone();
+            self.artnet = Some(ArtnetWorker::start(cfg.clone(), move || ctx.request_repaint()));
+            self.artnet_config = Some(cfg.clone());
+            // A saver already up is taken over now.
+            self.artnet_saver = None;
+        }
+        let Some(worker) = &self.artnet else { return };
+
+        if self.artnet_config.as_ref() != Some(&cfg) {
+            // A target change switches between the colour and effect paths:
+            // release first (renderer.js setArtnetTarget), or an effect we
+            // started keeps running with nothing driving it. Unlike Electron
+            // the running saver is then taken over again, from a fresh
+            // snapshot of the room the release just put back.
+            if self.artnet_config.as_ref().is_some_and(|old| old.target != cfg.target) && self.artnet_saver.is_some() {
+                worker.send(ArtnetMsg::Release);
+                self.artnet_saver = None;
+            }
+            worker.send(ArtnetMsg::Config(cfg.clone()));
+            self.artnet_config = Some(cfg.clone());
+        }
+
+        let current = self.saver.as_ref().map(|s| (s.index, self.saver_started));
+        if current != self.artnet_saver {
+            match (self.artnet_saver, &self.saver) {
+                (None, Some(s)) => worker.send(ArtnetMsg::Activate(s.name().to_owned())),
+                (Some(_), Some(s)) => worker.send(ArtnetMsg::Rotate(s.name().to_owned())),
+                // After the saver has stopped drawing, so no frame of it can
+                // land after the release and light the room again.
+                (Some(_), None) => worker.send(ArtnetMsg::Release),
+                (None, None) => {}
+            }
+            self.artnet_saver = current;
+        }
+
+        // The readback exists only while Art-Net is enabled (the 40x).
+        observer::sync(cfg.enabled, || Some(worker.frames()));
     }
 
     // ------------------------------------------------------------------- keys
@@ -1416,6 +1493,7 @@ impl eframe::App for InputViewer {
         self.sync_audio();
         self.update_saver(Instant::now());
         *self.weather_config.lock().unwrap() = weather_config(&self.settings);
+        self.sync_artnet(ctx);
         if let Some(last) = self.remote.as_ref().and_then(remote_key::Sender::poll) {
             self.remote_last = Some(last);
         }
@@ -1470,7 +1548,7 @@ impl eframe::App for InputViewer {
             self.dropdown_open = open == "dropdown";
             self.legend_open = open == "legend";
             if let Some(pane) = open.strip_prefix("settings") {
-                self.settings_pane.get_or_insert(match pane { ":layout" => Pane::Layout, ":remote" => Pane::RemoteKeyboard, ":screensavers" => Pane::Screensavers, _ => Pane::Inputs });
+                self.settings_pane.get_or_insert(match pane { ":layout" => Pane::Layout, ":remote" => Pane::RemoteKeyboard, ":screensavers" => Pane::Screensavers, ":artnet" => Pane::Artnet, _ => Pane::Inputs });
             }
             self.last_activity = now;
         }

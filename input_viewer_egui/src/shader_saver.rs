@@ -457,6 +457,9 @@ impl Post {
             gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(out.fbo));
             gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None);
             gl.blit_framebuffer(0, 0, w, h, x, y, x + w, y + h, glow::COLOR_BUFFER_BIT, glow::NEAREST);
+            // Art-Net (ADR 0030): samples the finished RGBA8 frame; one
+            // atomic load and nothing else while Art-Net is off.
+            crate::artnet::observer::observe(gl, Some(out.fbo), [0, 0, w, h], None);
             gl.bind_framebuffer(glow::FRAMEBUFFER, None);
             gl.bind_vertex_array(None);
             gl.use_program(None);

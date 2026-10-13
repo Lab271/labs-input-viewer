@@ -9,12 +9,13 @@
 //! | `--mock[=N]` | N synthetic inputs (1-8, default 4). No capture hardware. Each also has a synthetic audio device, `Digital Audio Interface (Mock Input N)`, playing a sine tone of its own pitch (220, 277, 330, 440 Hz...), so pairing, mixing and per-half volume can be heard and read in the log (`[Audio] output rms ...` every 5 s) without hardware. |
 //! | `--no-signal` | Pins every input into the no-signal state. |
 //! | `--screensaver-delay=MS` | Replaces the five-minute wait. |
-//! | `--screensaver=NAME` | Prototype only: pins the first saver picked (`plasma`, `juliafamily`, `starfield`, ...). |
+//! | `--screensaver=NAME` | Prototype only: pins the first saver picked (`plasma`, `juliafamily`, `starfieldwarp`, ...). |
 //! | `--test-pattern[=WxH@FPS]` | Prototype only: mock inputs carry a motion test pattern, 3840x2160@60 by default. Implies `--mock=2`, the wall's two cards. |
 //! | `--hud` | Prototype only: per-half frame-rate and latency overlay, and a `[render]` log line every 5s. |
 //! | `--mock-shape=W:H` | Prototype only: mock inputs letterboxed at that shape inside pure black, as the cards fit a source of another shape -- to watch cropping (ADR 0015). |
 //! | `--weather-state=N\|LABEL` | Prototype only: Weather shows a canned reading from `weather_states.rs` -- by index, label, or a label prefix only one state has, such as `snow` -- instead of the live one, so rain, snow, fog and night can be reviewed. Electron does this with the preview's A key. |
 //! | `--mock-fault=dark\|stall\|fail` | Prototype only: the last mock input goes dark, stalls after 10 s, or fails to open -- to watch the health policy reopen it. |
+//! | `--artnet-url=URL` | Prototype only: Art-Net on, against URL, for this run. Honoured only where settings are never written (`--mock`, review runs), which is also where settings.json is not read -- so a test relay can never end up in the wall's file. |
 //!
 //! Unknown `--` arguments are collected rather than ignored, so a typo like
 //! `--nosignal` gets logged. A flag that silently does nothing means someone at
@@ -42,6 +43,7 @@ pub struct Flags {
     pub mock_shape: Option<f64>,
     /// Index into `weather_states::STATES`.
     pub weather_state: Option<usize>,
+    pub artnet_url: Option<String>,
     pub unrecognised: Vec<String>,
 }
 
@@ -57,6 +59,7 @@ impl Default for Flags {
             mock_fault: None,
             mock_shape: None,
             weather_state: None,
+            artnet_url: None,
             unrecognised: Vec::new(),
         }
     }
@@ -109,6 +112,7 @@ where
                 "fail" => flags.mock_fault = Some(MockFault::Fail),
                 _ => flags.unrecognised.push(arg.to_owned()),
             },
+            ("--artnet-url", Some(v)) if !v.is_empty() => flags.artnet_url = Some(v.to_owned()),
             _ => flags.unrecognised.push(arg.to_owned()),
         }
     }
@@ -222,6 +226,12 @@ mod tests {
         assert_eq!(parse(["--weather-state=snow"]).weather_state, Some(5));
         assert_eq!(parse(["--weather-state=hail"]).unrecognised, ["--weather-state=hail"]);
         assert_eq!(parse(["--weather-state"]).unrecognised, ["--weather-state"]);
+    }
+
+    #[test]
+    fn artnet_url_is_taken_verbatim() {
+        assert_eq!(parse(["--artnet-url=http://127.0.0.1:8765"]).artnet_url.as_deref(), Some("http://127.0.0.1:8765"));
+        assert_eq!(parse(["--artnet-url="]).unrecognised, ["--artnet-url="]);
     }
 
     #[test]

@@ -7,7 +7,7 @@
 | **Area** | Screensavers |
 | **Evidence** | `gl-base.js:165-302, 400-457, 603-622`; `artnet-sync.js:1-150, 300-345, 440-470, 783-787`; `src/main/index.js:442-504` |
 | **egui verdict** | Keep |
-| **egui status** | Not started |
+| **egui status** | Done |
 
 ## Context
 
@@ -50,4 +50,35 @@ Silicon.
 backoff and defaults. CORS and the main-process hop disappear: any thread
 can POST. Since the Rust savers already render into their own RGBA8 target
 before the blit, a GPU downscale plus an async PBO read becomes possible.
-Not started.
+
+Done, in `input_viewer_egui/src/artnet/`, with the seven Electron test files
+ported case for case (the two that the port makes true by construction --
+no overlapping requests, no pending timers -- are noted, not ported):
+
+- **Client** (`client.rs`): artnet-sync.js as a synchronous state machine
+  over a `Transport` trait, owned by one worker thread (`worker.rs`, ureq,
+  2 s timeout, no retry, http(s) only, an unparseable GET is a failure). The
+  UI thread only sends it messages; nothing on the render path waits on the
+  LAN. The saver lifecycle reaches it from one place in `App::logic`
+  (activate / rotate / release by comparing the running saver), per
+  [0052](0052-run-background-work-in-app-logic.md).
+- **Readback** (`observer.rs`): one NEAREST blit of the saver's output down
+  to 64x32, one `readPixels` into a PBO, a fence, collected on a later
+  frame. Measured on an M3 Pro (GL 4.1 over Metal, 2560x1440): 0.1-0.3 ms
+  of render-thread time per read, collected 2-30 ms after issue, once a
+  second. 32 tile-sized blits, the literal port of the 8x4 grid, cost
+  9-20 ms per read there, so each 8x8 tile now samples its whole grid cell
+  on an 8x8 lattice instead of an 8x8 block at its centre (same layout and
+  maths, wider coverage, still point samples). With Art-Net off the cost
+  is one atomic load per frame. **Still to measure on the wall's discrete
+  GPU**, per the consequence above.
+- Painter savers (Starfield, DVD logo, Lissajous) feed the observer through
+  a paint callback that samples egui's framebuffer, since in Electron every
+  saver went through gl-base. The split-flap board does not: in Electron it
+  was a GL runtime too and fed frames even with no saver up.
+- Settings: the `artnet*` keys are typed fields with main/index.js's
+  defaults (maxBrightness 0.8: Electron's client alone fell back to 1, see
+  E7), read leniently so a mistyped key cannot get the file moved aside.
+- A target change releases and then re-activates the running saver, where
+  Electron only released. `--artnet-url=URL` turns Art-Net on for a mock or
+  review run, which never writes settings.

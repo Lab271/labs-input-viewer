@@ -63,7 +63,7 @@ Defects, contradictions and doc drift found on the way are in
 | [0021](0021-screensaver-registry-contract.md) | Screensavers are modules behind one synchronous contract, with a safe fallback | Accepted | Keep | Partial |
 | [0022](0022-seed-every-activation.md) | Seed every activation from the clock, log the seed, and perturb within curated ranges | Accepted | Adapt | Partial |
 | [0023](0023-start-after-5-min-rotate-every-10.md) | Start a screensaver after 5 minutes dark, rotate every 10, never repeat the last | Accepted -- dismissal is Open | Keep; Decide on dismissal | Partial |
-| [0024](0024-scale-by-area-and-room.md) | Scale savers by area and by room light, not by axis | Accepted | Keep | Not started |
+| [0024](0024-scale-by-area-and-room.md) | Scale savers by area and by room light, not by axis | Accepted | Keep | Done |
 | [0025](0025-hdr-post-chain-owns-tonemapping.md) | An HDR post chain owns tonemapping; savers emit linear HDR; supersample in the shader | Accepted | Keep | Partial |
 | [0026](0026-share-glsl-and-work-in-world-space.md) | Share GLSL through one library, and work in world space divided by the short axis | Accepted | Keep | Partial |
 | [0027](0027-network-access-outside-savers.md) | Keep network access outside the savers; weather is opt-in and coarsened | Accepted | Keep | Done |

@@ -9,6 +9,7 @@ mod filelog;
 
 mod app;
 mod audio;
+mod artnet;
 mod capture;
 mod crop;
 mod flags;

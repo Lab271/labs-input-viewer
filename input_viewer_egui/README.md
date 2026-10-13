@@ -42,13 +42,13 @@ writes settings.
 | `settings.json`, same keys, Electron's imported once | `settings.json` | `settings.rs` |
 | Logo column between the halves, side borders | `#center-divider`, `.edge-border` | `app.rs` |
 | Audio paired with its card, one capture per device, per-half volume, Output volume, mock tones | `startVideoStream`, `buildPickerVolume` | `audio.rs`, `audio/` |
+| Art-Net lighting: all modes, snapshot/restore, backoff, Settings pane, ported with its tests | `artnet-sync.js`, `gl-base.js` `observeFrames` | `artnet/`, `app/settings_ui.rs` |
 
 ## Not ported
 
-Art-Net (in progress), setting the OS master volume, WebGPU compositing,
-and the ~20 orchestrated WebGL screensavers (three painter-drawn ones stand
-in). Picker tiles show the last frame seen on screen, not a fresh snapshot
-sweep (#242).
+Setting the OS master volume, WebGPU compositing, and the ~20 orchestrated
+WebGL screensavers (three painter-drawn ones stand in). Picker tiles show the
+last frame seen on screen, not a fresh snapshot sweep (#242).
 
 ## Headless screenshots
 
@@ -122,9 +122,9 @@ Updates only run in an installed copy; `cargo run` logs
 `<config>/Input Viewer/settings.json` and in the same format. On first launch
 the Electron file is imported once:
 
-- **Carries over:** `centerGap`, `borderWidth`, `layoutMode`, `multiView`, and
-  every key this app does not use yet (Art-Net, remote keyboard, volumes),
-  written back unchanged.
+- **Carries over:** `centerGap`, `borderWidth`, `layoutMode`, `multiView`, the
+  remote keyboard and Art-Net keys, and every key this app does not use yet
+  (volumes), written back unchanged.
 - **Does not:** input names, enabled flags and the default input. Electron
   keys `inputs` by Chromium's `deviceId`, a salted hash nothing outside
   Chromium can reproduce, and stores no label to match on.

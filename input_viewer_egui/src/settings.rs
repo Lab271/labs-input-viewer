@@ -9,8 +9,8 @@
 //!
 //! On first launch the Electron file is imported. What carries over is the
 //! layout -- centerGap, borderWidth, layoutMode, multiView -- the halves'
-//! volumes, and every key this app does not use (Art-Net, Electron's
-//! systemVolume...), kept verbatim in
+//! volumes, the remote keyboard and Art-Net keys, and every key this app does
+//! not use (Electron's systemVolume...), kept verbatim in
 //! `extra` and written back unchanged. Input names do **not** carry over:
 //! Electron keys `inputs` by Chromium's deviceId, a salted hash nothing outside
 //! Chromium can reproduce, and stores no label to match on instead. Those
@@ -20,7 +20,8 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use serde::{Deserialize, Serialize};
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{Map, Value};
 use crate::filelog::{log_error, log_info, log_warn};
 
@@ -108,6 +109,28 @@ pub struct Settings {
     pub weather_enabled: bool,
     pub weather_latitude: Option<f64>,
     pub weather_longitude: Option<f64>,
+    /// Art-Net lighting (ADR 0030), under Electron's keys and main/index.js's
+    /// defaults: off, and no URL -- the URL is the entire capability. Read
+    /// leniently: these keys lived untyped in `extra` until the port, and a
+    /// hand-edited value of the wrong type must not get the whole file
+    /// moved aside as corrupt.
+    #[serde(deserialize_with = "lenient")]
+    pub artnet_enabled: bool,
+    #[serde(deserialize_with = "lenient")]
+    pub artnet_url: String,
+    /// `all` | `spatial` | `group:<name>` | `strip:<name>` | `effect:<name>`.
+    #[serde(deserialize_with = "lenient_target")]
+    pub artnet_target: String,
+    /// Posted on release when there is no snapshot; empty keeps the last colour.
+    #[serde(deserialize_with = "lenient")]
+    pub artnet_release_scene: String,
+    #[serde(deserialize_with = "lenient_max_brightness")]
+    pub artnet_max_brightness: f64,
+    #[serde(deserialize_with = "lenient_spot_depth")]
+    pub artnet_spot_depth: f64,
+    /// `{ "<Saver Display Name>": "reactive"|"off"|"spatial"|"scene:x"|"effect:x" }`.
+    #[serde(deserialize_with = "lenient")]
+    pub artnet_scene_by_saver: Map<String, Value>,
     pub border_width: f32,
     /// Each half's volume, 0..1 (ADR 0010). It belongs to the half, not the
     /// input, "so it stays put when you switch inputs". Electron's keys and
@@ -145,6 +168,13 @@ impl Default for Settings {
             weather_enabled: false,
             weather_latitude: Some(52.37),
             weather_longitude: Some(4.89),
+            artnet_enabled: false,
+            artnet_url: String::new(),
+            artnet_target: "all".into(),
+            artnet_release_scene: String::new(),
+            artnet_max_brightness: crate::artnet::DEFAULT_MAX_BRIGHTNESS,
+            artnet_spot_depth: crate::artnet::DEFAULT_SPOT_DEPTH,
+            artnet_scene_by_saver: Map::new(),
             border_width: 0.0,
             left_volume: 1.0,
             right_volume: 1.0,
@@ -200,8 +230,36 @@ impl Settings {
         for v in [&mut self.left_volume, &mut self.right_volume, &mut self.output_volume] {
             *v = clamp(*v, &VOLUME_RANGE, 1.0);
         }
+        self.artnet_max_brightness = unit(self.artnet_max_brightness, crate::artnet::DEFAULT_MAX_BRIGHTNESS);
+        self.artnet_spot_depth = unit(self.artnet_spot_depth, crate::artnet::DEFAULT_SPOT_DEPTH);
         self.logo_width = self.logo_width.filter(|w| w.is_finite()).map(|w| w.clamp(*LOGO_WIDTH_RANGE.start(), *LOGO_WIDTH_RANGE.end()));
     }
+}
+
+/// A fraction for a 0-100% slider; anything else is the default.
+fn unit(v: f64, default: f64) -> f64 {
+    if v.is_finite() { v.clamp(0.0, 1.0) } else { default }
+}
+
+/// The value if it has the right type, else the type's default.
+fn lenient<'de, D: Deserializer<'de>, T: DeserializeOwned + Default>(d: D) -> Result<T, D::Error> {
+    Ok(serde_json::from_value(Value::deserialize(d)?).unwrap_or_default())
+}
+
+fn lenient_or<'de, D: Deserializer<'de>, T: DeserializeOwned>(d: D, default: T) -> Result<T, D::Error> {
+    Ok(serde_json::from_value(Value::deserialize(d)?).unwrap_or(default))
+}
+
+fn lenient_target<'de, D: Deserializer<'de>>(d: D) -> Result<String, D::Error> {
+    lenient_or(d, "all".to_owned())
+}
+
+fn lenient_max_brightness<'de, D: Deserializer<'de>>(d: D) -> Result<f64, D::Error> {
+    lenient_or(d, crate::artnet::DEFAULT_MAX_BRIGHTNESS)
+}
+
+fn lenient_spot_depth<'de, D: Deserializer<'de>>(d: D) -> Result<f64, D::Error> {
+    lenient_or(d, crate::artnet::DEFAULT_SPOT_DEPTH)
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -371,8 +429,10 @@ mod tests {
     }
 
     #[test]
-    fn keys_this_app_does_not_use_survive_a_round_trip() {
+    fn keys_survive_a_round_trip() {
         let s = parse(ELECTRON).unwrap();
+        assert!(s.artnet_enabled);
+        assert_eq!(s.artnet_url, "http://relay.local");
         let back: Value = serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();
         assert_eq!(back["artnetUrl"], "http://relay.local");
         assert_eq!(back["artnetSceneBySaver"]["plasma"], "warm");
@@ -389,6 +449,69 @@ mod tests {
         assert!(s.multi_view);
         assert_eq!(s.center_gap, 60.0);
         assert!(s.is_enabled("never-seen"));
+    }
+
+    /// Every artnet* key main/index.js defines, read from its source -- the
+    /// Electron side of artnet-settings-ui.test.js's allowlist test. A key
+    /// added there and not typed here would still round-trip through
+    /// `extra`, but would do nothing; this makes that a failure.
+    fn main_artnet_keys() -> Vec<String> {
+        let src = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../input_viewer_electron/src/main/index.js"))
+            .expect("the Electron app beside this one");
+        let body = &src[src.find("const defaultSettings = {").expect("defaultSettings")..];
+        let body = &body[..body.find("\n}").unwrap()];
+        body.lines()
+            .filter_map(|l| l.strip_prefix("  ")?.split(':').next())
+            .filter(|k| k.starts_with("artnet") && k.chars().all(char::is_alphanumeric))
+            .map(str::to_owned)
+            .collect()
+    }
+
+    #[test]
+    fn round_trips_every_artnet_setting_the_electron_main_process_defines() {
+        let keys = main_artnet_keys();
+        assert!(keys.len() >= 6, "{keys:?}");
+        let sentinels = serde_json::json!({
+            "artnetEnabled": true,
+            "artnetUrl": "https://relay.example",
+            "artnetTarget": "effect:spot",
+            "artnetReleaseScene": "warm_wit",
+            "artnetMaxBrightness": 0.42,
+            "artnetSpotDepth": 0.27,
+            "artnetSceneBySaver": { "matrixRain": "scene:lab_modus" },
+        });
+        let mut want: Vec<_> = sentinels.as_object().unwrap().keys().cloned().collect();
+        let mut got = keys.clone();
+        want.sort();
+        got.sort();
+        assert_eq!(want, got, "the sentinel list is stale");
+
+        let s = parse(&sentinels.to_string()).unwrap();
+        assert!(s.extra.keys().all(|k| !k.starts_with("artnet")), "an artnet key is untyped: {:?}", s.extra.keys());
+        let back: Value = serde_json::to_value(&s).unwrap();
+        for k in &keys {
+            assert_eq!(back[k], sentinels[k], "{k} did not round-trip");
+        }
+    }
+
+    #[test]
+    fn artnet_defaults_are_the_main_processes() {
+        let s = Settings::default();
+        assert!(!s.artnet_enabled);
+        assert_eq!((s.artnet_url.as_str(), s.artnet_target.as_str(), s.artnet_release_scene.as_str()), ("", "all", ""));
+        assert_eq!((s.artnet_max_brightness, s.artnet_spot_depth), (0.8, 0.5));
+        assert!(s.artnet_scene_by_saver.is_empty());
+    }
+
+    #[test]
+    fn a_mistyped_artnet_key_falls_back_instead_of_losing_the_file() {
+        let s = parse(r#"{ "centerGap": 90, "artnetSceneBySaver": null, "artnetMaxBrightness": "bright",
+            "artnetSpotDepth": 7, "artnetTarget": 3, "artnetEnabled": "yes" }"#).unwrap();
+        assert_eq!(s.center_gap, 90.0);
+        assert!(s.artnet_scene_by_saver.is_empty());
+        assert_eq!((s.artnet_max_brightness, s.artnet_spot_depth), (0.8, 1.0));
+        assert_eq!(s.artnet_target, "all");
+        assert!(!s.artnet_enabled);
     }
 
     #[test]

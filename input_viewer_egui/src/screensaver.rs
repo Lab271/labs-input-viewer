@@ -78,7 +78,7 @@ impl Rng {
 /// the two together), then Weather, then the painter ones.
 pub const NAMES: &[&str] = &[
     "Plasma", "Flow Field", "Julia Family", "Burning Ship", "Moire Interference", "Bicycle Horizon",
-    "Weather", "Starfield", "DVD logo", "Lissajous",
+    "Weather", "Starfield Warp", "DVD Logo", "Lissajous",
 ];
 const WEATHER: usize = 6;
 const STARFIELD: usize = 7;
@@ -220,6 +220,19 @@ impl Screensaver {
                 painter.add(egui::Shape::line(pts, Stroke::new(2.0, hsv((*hue + t * 0.01).fract(), 0.6, 0.9))));
             }
         }
+        // Art-Net for the painter savers (ADR 0030). They have no GL target
+        // of their own, so a paint callback added after their shapes samples
+        // what egui has drawn so far in this rect. In Electron every saver
+        // went through gl-base and fed the observer; this keeps that true.
+        // Not even the callback is added while Art-Net is off.
+        if !matches!(self.state, State::Shader { .. } | State::Weather(_)) && crate::artnet::observer::wanted() {
+            let cb = eframe::egui_glow::CallbackFn::new(|info, painter| {
+                let v = info.viewport_in_pixels();
+                crate::artnet::observer::observe(painter.gl(), painter.intermediate_fbo(),
+                    [v.left_px, v.from_bottom_px, v.width_px, v.height_px], painter.intermediate_fbo());
+            });
+            painter.add(egui::PaintCallback { rect, callback: std::sync::Arc::new(cb) });
+        }
     }
 }
 
@@ -269,8 +282,8 @@ mod tests {
         let shaders: Vec<_> = crate::shader_saver::SAVERS.iter().map(|s| s.name).collect();
         assert_eq!(&NAMES[..shaders.len()], &shaders[..]);
         assert_eq!(NAMES[WEATHER], "Weather");
-        assert_eq!(NAMES[STARFIELD], "Starfield");
-        assert_eq!(NAMES[DVD], "DVD logo");
+        assert_eq!(NAMES[STARFIELD], "Starfield Warp");
+        assert_eq!(NAMES[DVD], "DVD Logo");
     }
 
     /// Every index a sweep of picks can produce.
