@@ -1311,7 +1311,10 @@ fn keep_awake() -> Option<keepawake::KeepAwake> {
         .app_reverse_domain("nl.lab271.inputviewer")
         .create()
     {
-        Ok(k) => Some(k),
+        Ok(k) => {
+            log_info!("[App] keeping the display awake while running");
+            Some(k)
+        }
         Err(e) => {
             log_warn!("[App] could not keep the display awake: {e}");
             None

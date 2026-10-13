@@ -185,6 +185,18 @@ jobs:
           path: input_viewer_egui/releases/*
           if-no-files-found: error
 
+      # Diagnostics for the wall, never part of a release: the capture-rate
+      # probe (examples/capture_rate.rs). A separate artifact, so publishing
+      # releases/* cannot pick it up.
+      - name: Build capture probe
+        run: cargo build --release --locked --example capture_rate
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: egui-windows-tools
+          path: input_viewer_egui/target/release/examples/capture_rate.exe
+          if-no-files-found: error
+
   build-mac:
     name: Build macOS
     needs: analyze
