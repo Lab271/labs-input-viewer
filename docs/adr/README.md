@@ -29,7 +29,7 @@ Defects, contradictions and doc drift found on the way are in
 | [0002](0002-port-to-rust-and-egui.md) | Port Input Viewer to Rust and egui | Proposed | Decide | Prototype |
 | [0003](0003-model-the-wall-as-two-halves.md) | Model the wall as two halves, never N panels | Accepted | Keep | Done |
 | [0004](0004-one-fullscreen-window-wall-composition-is-external.md) | One borderless fullscreen window; the wall's composition is someone else's job | Accepted | Keep | Partial |
-| [0005](0005-no-single-instance-sleep-inhibit-or-relaunch.md) | Single instance, display sleep and crash relaunch are not the app's job (by omission) | Open | Change: single instance and no sleep in the app | Not started |
+| [0005](0005-no-single-instance-sleep-inhibit-or-relaunch.md) | Single instance, display sleep and crash relaunch are not the app's job (by omission) | Open | Change: single instance and no sleep in the app | Done (lock, awake) |
 | [0006](0006-app-and-wall-setup-live-in-separate-repos.md) | The app and the wall's setup live in separate repos; the startup script owns launch order | Accepted | Keep | Partial |
 
 ### Capture
@@ -104,7 +104,7 @@ Defects, contradictions and doc drift found on the way are in
 | [0045](0045-release-by-hand-bump-from-commits.md) | Release by hand; derive the version bump from Conventional Commits, with an explicit override | Accepted | Keep | Partial |
 | [0046](0046-version-and-tagging.md) | VERSION is the source of truth; bump through a PR, tag the merged commit | Accepted | Adapt | Partial |
 | [0047](0047-gate-releases-on-tests.md) | Gate every PR and release on lint, tests and build, and show the results inline | Accepted | Keep | Partial |
-| [0048](0048-package-and-update-from-the-public-repo.md) | Package per platform and auto-update from the public source repo, asking first | Accepted | Keep; silent updates | Partial |
+| [0048](0048-package-and-update-from-the-public-repo.md) | Package per platform and auto-update from the public source repo, asking first | Accepted | Keep; silent updates | Done (silent) |
 | [0049](0049-builds-are-unsigned.md) | Builds are unsigned | Accepted (by default) | Keep unsigned | Same as Electron (ad-hoc on macOS) |
 | [0050](0050-supply-chain-and-licence.md) | Supply chain and licence: SHA-pinned actions, delayed Dependabot, public registries, Apache-2.0 with SPDX headers | Accepted | Keep | Partial |
 

@@ -7,7 +7,7 @@
 | **Area** | Delivery |
 | **Evidence** | `input_viewer_electron/package.json` `build`, `publish`; `src/main/index.js:58-80, 313-325, 797-889`; `release.yml` publish job; #86, #105, #249 |
 | **egui verdict** | Keep; silent updates |
-| **egui status** | Partial |
+| **egui status** | Done (silent) |
 
 ## Context
 
@@ -72,3 +72,8 @@ tested:** publishing, installing, and an update from one release to the next.
 D3: **silent**. The app checks and downloads in the background, never shows
 a dialog, and applies the update when it next restarts (the wall restarts it
 on boot). Nothing may sit modal over the wall.
+
+Built: `update.rs` checks 3 s after start and every 6 h, downloads without
+asking, and applies on quit (`wait_exit_then_apply_updates`, no restart) or,
+after a kill, at the next start before the window opens
+(`get_update_pending_restart`). The only UI is a line in the Settings footer.

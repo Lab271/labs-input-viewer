@@ -2,9 +2,14 @@
 // SPDX-FileCopyrightText: 2025-2026 Schuberg Philis / Lab271
 //! Auto-update, the egui counterpart of electron-updater.
 //!
-//! Same flow as the Electron main process: one check a few seconds after
-//! start, then "Download / Later", then "Restart now / Later". A postponed
-//! update installs on the next quit, as `autoInstallOnAppQuit` does there.
+//! **Silent** (D3, ADR 0048). Electron asked "Download / Later" and then
+//! "Restart now / Later", and on an unattended wall such a prompt just sits
+//! over the picture. Here there is no dialog at all: a check a few seconds
+//! after start and every six hours after, a background download, and the
+//! update applies when the app next stops -- on quit, or, if it was killed
+//! (a shutdown, a crash), at the next start before the window opens. The wall
+//! restarts the app on boot, so an update lands within a day without anyone
+//! seeing it happen. Every step is in the log.
 //!
 //! Packaging and updates are Velopack. Releases share the
 //! `LAB271/labs-input-viewer` repo with the Electron app, which constrains
@@ -20,7 +25,7 @@
 //!   prefix instead and hands the chosen release to `HttpSource`.
 
 use std::path::Path;
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -31,6 +36,8 @@ use crate::filelog::{log_error, log_info, log_warn};
 pub const REPO: &str = "LAB271/labs-input-viewer";
 pub const TAG_PREFIX: &str = "egui-v";
 const FIRST_CHECK_AFTER: Duration = Duration::from_secs(3);
+/// The wall runs for weeks; one check per launch would never see a release.
+const CHECK_EVERY: Duration = Duration::from_secs(6 * 60 * 60);
 
 #[derive(serde::Deserialize)]
 struct Release {
@@ -91,34 +98,46 @@ impl UpdateSource for EguiReleases {
 }
 
 /// What the UI should show.
+/// For the Settings footer; never shown over the wall.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Status {
     Idle,
-    Available(String),
-    Downloading(i16),
+    Downloading(String),
+    /// Downloaded; installs when the app next stops.
     Ready(String),
-    Failed(String),
-}
-
-enum Command {
-    Download,
-    RestartNow,
 }
 
 /// Background updater. All Velopack calls block on the network, so they run on
-/// a worker thread and report back through `status`.
+/// a worker thread.
 pub struct Updater {
     status: Arc<Mutex<Status>>,
-    commands: Sender<Command>,
     /// Set once an update is downloaded, so `on_exit` can apply it.
     pending: Arc<Mutex<Option<(UpdateManager, VelopackAsset)>>>,
+}
+
+fn manager() -> Result<UpdateManager, velopack::Error> {
+    UpdateManager::new(EguiReleases::default(), None, None)
+}
+
+/// An update downloaded by a previous run that never got to apply it (the app
+/// was killed rather than quit): apply it now and restart into it, with the
+/// same arguments. Called before the window opens, so nobody sees a flash of
+/// the old version. Returns only if there was nothing to apply or it failed.
+pub fn apply_staged_on_start() {
+    let Ok(manager) = manager() else { return };
+    let Some(asset) = manager.get_update_pending_restart() else { return };
+    log_info!("[AutoUpdater] applying {} downloaded by a previous run", asset.Version);
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if let Err(e) = manager.apply_updates_and_restart_with_args(&asset, &args) {
+        log_error!("[AutoUpdater] could not apply {}: {e}", asset.Version);
+    }
 }
 
 impl Updater {
     /// None when the app was not installed by Velopack (`cargo run`, a copied
     /// binary): there is nothing to update in place, as with `isDev` in Electron.
-    pub fn start(ctx: eframe::egui::Context) -> Option<Self> {
-        let manager = match UpdateManager::new(EguiReleases::default(), None, None) {
+    pub fn start() -> Option<Self> {
+        let manager = match manager() {
             Ok(m) => m,
             Err(e) => {
                 log_info!("[AutoUpdater] disabled: {e}");
@@ -128,36 +147,20 @@ impl Updater {
         log_info!("[AutoUpdater] installed version {}", manager.get_current_version_as_string());
         let status = Arc::new(Mutex::new(Status::Idle));
         let pending = Arc::new(Mutex::new(None));
-        let (tx, rx) = mpsc::channel();
         let (s, p) = (status.clone(), pending.clone());
         std::thread::Builder::new()
             .name("updater".into())
-            .spawn(move || run(manager, rx, s, p, ctx))
+            .spawn(move || run(&manager, &s, &p))
             .ok()?;
-        Some(Self { status, commands: tx, pending })
+        Some(Self { status, pending })
     }
 
     pub fn status(&self) -> Status {
         self.status.lock().unwrap().clone()
     }
 
-    pub fn dismiss(&self) {
-        let mut s = self.status.lock().unwrap();
-        // "Later" on a downloaded update keeps it pending for on_exit.
-        if !matches!(*s, Status::Downloading(_)) {
-            *s = Status::Idle;
-        }
-    }
-
-    pub fn download(&self) {
-        let _ = self.commands.send(Command::Download);
-    }
-
-    pub fn restart_now(&self) {
-        let _ = self.commands.send(Command::RestartNow);
-    }
-
-    /// Install a postponed update as the app quits.
+    /// Install a downloaded update as the app quits, without restarting it:
+    /// whatever started the app (the wall's startup script) starts it again.
     pub fn on_exit(&self) {
         if let Some((manager, asset)) = self.pending.lock().unwrap().take() {
             log_info!("[AutoUpdater] installing {} on quit", asset.Version);
@@ -168,18 +171,15 @@ impl Updater {
     }
 }
 
-fn run(
-    manager: UpdateManager,
-    rx: Receiver<Command>,
-    status: Arc<Mutex<Status>>,
-    pending: Arc<Mutex<Option<(UpdateManager, VelopackAsset)>>>,
-    ctx: eframe::egui::Context,
-) {
-    let set = |s: Status| {
-        *status.lock().unwrap() = s;
-        ctx.request_repaint();
-    };
+fn run(manager: &UpdateManager, status: &Mutex<Status>, pending: &Mutex<Option<(UpdateManager, VelopackAsset)>>) {
     std::thread::sleep(FIRST_CHECK_AFTER);
+    loop {
+        check_and_download(manager, status, pending);
+        std::thread::sleep(CHECK_EVERY);
+    }
+}
+
+fn check_and_download(manager: &UpdateManager, status: &Mutex<Status>, pending: &Mutex<Option<(UpdateManager, VelopackAsset)>>) {
     log_info!("[AutoUpdater] checking for update...");
     let info: Box<UpdateInfo> = match manager.check_for_updates() {
         Ok(UpdateCheck::UpdateAvailable(info)) => info,
@@ -187,49 +187,27 @@ fn run(
             log_info!("[AutoUpdater] up to date");
             return;
         }
+        // Logged only: an offline wall tries again in six hours.
         Err(e) => {
-            // Logged, not shown: an offline wall should not greet the room
-            // with an error dialog every launch.
             log_warn!("[AutoUpdater] check failed: {e}");
             return;
         }
     };
     let version = info.TargetFullRelease.Version.clone();
-    log_info!("[AutoUpdater] update available: {version}");
-    set(Status::Available(version.clone()));
-
-    while let Ok(cmd) = rx.recv() {
-        match cmd {
-            Command::Download => {
-                let (ptx, prx) = mpsc::channel::<i16>();
-                let progress_status = status.clone();
-                let progress_ctx = ctx.clone();
-                std::thread::spawn(move || {
-                    for pct in prx {
-                        *progress_status.lock().unwrap() = Status::Downloading(pct);
-                        progress_ctx.request_repaint();
-                    }
-                });
-                set(Status::Downloading(0));
-                match manager.download_updates(&info, Some(ptx)) {
-                    Ok(()) => {
-                        log_info!("[AutoUpdater] downloaded {version}");
-                        *pending.lock().unwrap() = Some((manager.clone(), info.TargetFullRelease.clone()));
-                        set(Status::Ready(version.clone()));
-                    }
-                    Err(e) => {
-                        log_error!("[AutoUpdater] download failed: {e}");
-                        set(Status::Failed(e.to_string()));
-                    }
-                }
-            }
-            Command::RestartNow => {
-                pending.lock().unwrap().take();
-                if let Err(e) = manager.apply_updates_and_restart(&info.TargetFullRelease) {
-                    log_error!("[AutoUpdater] restart failed: {e}");
-                    set(Status::Failed(e.to_string()));
-                }
-            }
+    if pending.lock().unwrap().as_ref().is_some_and(|(_, a)| a.Version == version) {
+        return;
+    }
+    log_info!("[AutoUpdater] downloading {version}");
+    *status.lock().unwrap() = Status::Downloading(version.clone());
+    match manager.download_updates(&info, None) {
+        Ok(()) => {
+            log_info!("[AutoUpdater] downloaded {version}; installs when the app next stops");
+            *pending.lock().unwrap() = Some((manager.clone(), info.TargetFullRelease.clone()));
+            *status.lock().unwrap() = Status::Ready(version);
+        }
+        Err(e) => {
+            log_error!("[AutoUpdater] download of {version} failed: {e}");
+            *status.lock().unwrap() = Status::Idle;
         }
     }
 }

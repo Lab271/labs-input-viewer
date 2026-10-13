@@ -7,7 +7,7 @@
 | **Area** | Product |
 | **Evidence** | No `requestSingleInstanceLock`, `powerSaveBlocker` or `wakeLock` in `src/`; `index.js:300-306, 346-366`; `startup.ps1` relaunch-once |
 | **egui verdict** | Change: single instance and no sleep in the app |
-| **egui status** | Not started |
+| **egui status** | Done (lock, awake) |
 
 ## Context
 
@@ -49,3 +49,10 @@ after the first 20 s leaves a dark wall until someone notices.
 D5: the app holds a **single-instance lock** (a second copy hands over to the
 first and exits) and **keeps the display awake**. Crash relaunch stays in
 `startup.ps1`.
+
+Built: `single_instance.rs` holds a loopback port as the lock (released by
+the OS however the process dies); a second copy asks the first to come
+forward and exits; a stranger on the port does not block the start. Test
+runs skip it. `keepawake` holds display and idle-sleep assertions for the
+app's lifetime (checked on macOS: `PreventUserIdleDisplaySleep` "Showing the
+video wall"; Windows uses `SetThreadExecutionState`, to confirm on the wall).

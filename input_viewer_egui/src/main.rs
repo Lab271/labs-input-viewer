@@ -22,6 +22,7 @@ mod settings;
 mod shader_saver;
 mod settings_status;
 mod shortcuts;
+mod single_instance;
 mod testpattern;
 mod transition;
 mod update;
@@ -30,6 +31,12 @@ mod yuv;
 use crate::filelog::{log_error, log_info};
 
 /// The log file, the startup banner and the panic hook (ADR 0044).
+/// The taskbar / title-bar icon. The executable's own icon (Explorer,
+/// shortcuts) is embedded by build.rs on Windows; the .app's is the .icns.
+fn window_icon() -> eframe::egui::IconData {
+    eframe::icon_data::from_png_bytes(include_bytes!("../assets/icon.png")).unwrap_or_default()
+}
+
 fn start_log() {
     if let Some(config) = dirs::config_dir() {
         filelog::init(config.join(settings::APP_DIR).join("logs"));
@@ -59,6 +66,7 @@ fn main() -> eframe::Result {
     velopack::VelopackApp::build().run();
 
     start_log();
+    update::apply_staged_on_start();
     let flags = flags::parse(std::env::args().skip(1));
     for arg in &flags.unrecognised {
         log_error!("[TestFlags] unrecognised argument: {arg}");
@@ -66,12 +74,18 @@ fn main() -> eframe::Result {
     if flags.mock.is_some() || flags.no_signal || flags.screensaver_delay != flags::DEFAULT_SCREENSAVER_DELAY {
         log_info!("[TestFlags] test mode: {flags:?}");
     }
+    // Test runs may sit beside the real app; only a real one takes the lock.
+    let test_run = flags.mock.is_some() || flags.test_pattern.is_some() || std::env::var_os("INPUT_VIEWER_SCREENSHOT").is_some();
+    if !test_run && matches!(single_instance::acquire(), single_instance::Outcome::Second) {
+        return Ok(());
+    }
 
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_title("Input Viewer")
             .with_inner_size([1500.0, 500.0])
-            .with_min_inner_size([480.0, 160.0]),
+            .with_min_inner_size([480.0, 160.0])
+            .with_icon(window_icon()),
         renderer: eframe::Renderer::Glow,
         ..Default::default()
     };

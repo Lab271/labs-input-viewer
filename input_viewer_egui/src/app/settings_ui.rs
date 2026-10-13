@@ -124,6 +124,15 @@ impl InputViewer {
                 None => "Test mode: changes apply now but are not saved.".into(),
             };
             ui.label(egui::RichText::new(saved).small().weak());
+            // Updates are silent (D3); this is the one place they show.
+            let version = format!("Version {}", env!("CARGO_PKG_VERSION"));
+            let update = match self.updater.as_ref().map(crate::update::Updater::status) {
+                None => format!("{version}. Not installed by the installer, so it does not update itself."),
+                Some(crate::update::Status::Idle) => format!("{version}. Updates install by themselves."),
+                Some(crate::update::Status::Downloading(v)) => format!("{version}. Downloading {v}…"),
+                Some(crate::update::Status::Ready(v)) => format!("{version}. {v} is downloaded and installs when the app next restarts."),
+            };
+            ui.label(egui::RichText::new(update).small().weak());
         });
 
         self.settings_pane = if close || modal.should_close() { None } else { Some(pane) };

@@ -23,7 +23,7 @@ use crate::transition::{self, Dip};
 use crate::screensaver::{self, Rng, Screensaver};
 use crate::settings::{Layout, Settings, Store};
 use crate::shortcuts::{self, Action};
-use crate::update::{self, Updater};
+use crate::update::Updater;
 
 mod settings_ui;
 use settings_ui::Pane;
@@ -267,6 +267,9 @@ pub struct InputViewer {
     last_frame: Instant,
     review: Option<Review>,
     updater: Option<Updater>,
+    /// Held for the app's lifetime: the display must not sleep or blank
+    /// while it shows the wall (D5). Released on exit by drop.
+    _awake: Option<keepawake::KeepAwake>,
     logo: Option<Logo>,
     /// --hud: repaints per second, and when the count started.
     ui_fps: f32,
@@ -327,6 +330,7 @@ impl InputViewer {
             review,
             // Never in mock or review runs: those are for looking at the UI.
             updater: None,
+            _awake: keep_awake(),
             logo: Logo::load(&cc.egui_ctx),
             ui_fps: 0.0,
             ui_frames: (0, Instant::now()),
@@ -336,7 +340,8 @@ impl InputViewer {
             flags,
         };
         if app.flags.mock.is_none() && app.review.is_none() {
-            app.updater = Updater::start(cc.egui_ctx.clone());
+            app.updater = Updater::start();
+            crate::single_instance::serve(cc.egui_ctx.clone());
         }
         // Electron wrote gpu-report.txt to answer one recurring question --
         // is the wall rendering in software? (#268, #271) -- this line answers
@@ -997,55 +1002,6 @@ impl InputViewer {
         }
     }
 
-    /// The two electron-updater dialogs, as an egui window.
-    fn update_dialog(&mut self, ctx: &egui::Context) {
-        let Some(updater) = &self.updater else { return };
-        let status = updater.status();
-        let (title, body) = match &status {
-            update::Status::Idle => return,
-            update::Status::Available(v) => ("Update available", format!("A new version ({v}) is available.\nWould you like to download it now?")),
-            update::Status::Downloading(p) => ("Downloading update", format!("{p}%")),
-            update::Status::Ready(v) => ("Update ready", format!("Version {v} has been downloaded.\nThe application will restart to install it.")),
-            update::Status::Failed(e) => ("Update error", format!("Failed to update:\n{e}")),
-        };
-        egui::Window::new(title)
-            .collapsible(false)
-            .resizable(false)
-            .anchor(Align2::CENTER_CENTER, Vec2::ZERO)
-            .order(egui::Order::Tooltip)
-            .show(ctx, |ui| {
-                ui.label(body);
-                ui.add_space(8.0);
-                ui.horizontal(|ui| match &status {
-                    update::Status::Available(_) => {
-                        if ui.button("Download").clicked() {
-                            updater.download();
-                        }
-                        if ui.button("Later").clicked() {
-                            updater.dismiss();
-                        }
-                    }
-                    update::Status::Downloading(p) => {
-                        ui.add(egui::ProgressBar::new(*p as f32 / 100.0).desired_width(240.0));
-                    }
-                    update::Status::Ready(_) => {
-                        if ui.button("Restart now").clicked() {
-                            updater.restart_now();
-                        }
-                        // Installs on the next quit instead.
-                        if ui.button("Later").clicked() {
-                            updater.dismiss();
-                        }
-                    }
-                    _ => {
-                        if ui.button("OK").clicked() {
-                            updater.dismiss();
-                        }
-                    }
-                });
-            });
-    }
-
     fn legend(&mut self, ctx: &egui::Context, rect: Rect) {
         let resp = egui::Area::new(egui::Id::new("legend"))
             .anchor(Align2::CENTER_BOTTOM, vec2(0.0, -8.0))
@@ -1077,6 +1033,26 @@ impl InputViewer {
 /// never while the controls, the legend or Settings are open.
 fn cursor_hidden(idle: Duration, panels_open: bool) -> bool {
     !panels_open && idle >= CURSOR_IDLE
+}
+
+/// Keep the display on (and the machine out of idle sleep) while the app
+/// runs. Electron relied on the wall's power plan; a changed power plan or a
+/// Windows update resetting it would blank the wall after the timeout.
+fn keep_awake() -> Option<keepawake::KeepAwake> {
+    match keepawake::Builder::default()
+        .display(true)
+        .idle(true)
+        .reason("Showing the video wall")
+        .app_name("Input Viewer")
+        .app_reverse_domain("nl.lab271.inputviewer")
+        .create()
+    {
+        Ok(k) => Some(k),
+        Err(e) => {
+            log_warn!("[App] could not keep the display awake: {e}");
+            None
+        }
+    }
 }
 
 fn short_id(id: &str) -> String {
@@ -1318,7 +1294,6 @@ impl eframe::App for InputViewer {
         }
         self.paint_toast(&ctx, rect, now);
         self.settings_dialog(&ctx, rect);
-        self.update_dialog(&ctx);
 
         // Last, so it overrides whatever cursor a widget asked for.
         let panels_open = self.dropdown_open || self.legend_open || self.settings_pane.is_some();

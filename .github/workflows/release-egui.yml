@@ -174,7 +174,7 @@ jobs:
             --packAuthors "Schuberg Philis / Lab271" \
             --packDir publish \
             --mainExe input-viewer.exe \
-            --icon ../input_viewer_electron/build/icon.ico \
+            --icon packaging/icon/icon.ico \
             --channel windows \
             --outputDir releases
           ls -la releases
@@ -226,7 +226,7 @@ jobs:
           APP="publish/Input Viewer (egui).app"
           mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
           cp input-viewer "$APP/Contents/MacOS/"
-          cp ../input_viewer_electron/build/icon.icns "$APP/Contents/Resources/icon.icns"
+          cp packaging/icon/icon.icns "$APP/Contents/Resources/icon.icns"
           sed 's/@VERSION@/${{ needs.analyze.outputs.version }}/g' packaging/macos/Info.plist > "$APP/Contents/Info.plist"
           plutil -lint "$APP/Contents/Info.plist"
           # Ad-hoc signature. Unsigned like the Electron build (no Developer ID
