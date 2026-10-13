@@ -7,7 +7,7 @@
 | **Area** | Screensavers |
 | **Evidence** | `weather-source.js:1-99`; `weather.js:45-60, 83-86`; `weather-states.js`; `src/main/index.js:142-147` |
 | **egui verdict** | Keep |
-| **egui status** | Not started |
+| **egui status** | Done |
 
 ## Context
 
@@ -36,6 +36,23 @@ headers.
 ## Porting to egui
 
 **Keep** the split, the opt-in default, the rounding, the backoff and
-staleness rules. The poller becomes a background thread (`ureq` is already a
-dependency, for the updater). CORS stops mattering. The weather saver itself
-is multi-pass with glyphs and needs a real port. Not started.
+staleness rules. CORS stops mattering. Done:
+
+- `weather_source.rs`: a `weather` thread started from `InputViewer::new`,
+  polling Open-Meteo with `ureq` (10 s timeout) for the app's lifetime.
+  Same fields, intervals, backoff, stale/expire rules and `parseReading`;
+  config (`weatherEnabled`, `weatherLatitude`, `weatherLongitude`, same keys
+  and defaults) is read at each poll. The clock is monotonic, not
+  `Date.now()`. Clock and fetch are injected; both Electron test files are
+  ported case for case, except the throwing-`isAvailable` case, which Rust
+  cannot express.
+- The singleton stays (`install` / `current_reading`), as in Electron; D11
+  is still open.
+- `weather.rs`: sky and instanced precipitation shaders generated from
+  `weather.js` by `extract.mjs`, through the shared post chain
+  (`shader_saver::render`); 25 s easing, seeded lightning, FALLBACK.
+- The random rotation skips Weather without a reading
+  (`screensaver::pick_random`); `--screensaver=weather` and the stepping keys
+  still show it. `--weather-state=N|label` pins a canned state
+  (`weather_states.rs`) for review, in place of the preview's A key.
+- No Settings pane for weather, in either app; the keys are hand-edited.

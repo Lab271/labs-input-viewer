@@ -7,7 +7,7 @@
 | **Area** | Screensavers |
 | **Evidence** | `screensavers/glyph-atlas.js:6-19`; `artnet-sync.js:17-24` |
 | **egui verdict** | Adapt |
-| **egui status** | Not started |
+| **egui status** | Partial |
 
 ## Context
 
@@ -32,3 +32,10 @@ bake-once is still the right performance choice. Rasterise with egui's own
 font system (`epaint` already builds an atlas) or `ab_glyph`, and keep the
 fonts redistributable ([0039](0039-visual-language.md)). The prototype draws
 its painter-based savers' text with egui directly.
+
+Weather's readout is done that way too: one line of square cells (the
+atlas's layout, glyph at 0.82 of the cell) on the same dark plate, painted
+with egui's monospace font over the GPU scene. It therefore skips bloom and
+ACES, which in Electron only dimmed it slightly. Matrix Rain, ASCII Doughnut
+and Split Flap, which index glyphs per pixel in the shader, still need a
+real atlas.

@@ -26,6 +26,9 @@ mod single_instance;
 mod testpattern;
 mod transition;
 mod update;
+mod weather;
+mod weather_source;
+mod weather_states;
 mod yuv;
 
 use crate::filelog::{log_error, log_info};

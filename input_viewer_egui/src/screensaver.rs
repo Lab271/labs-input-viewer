@@ -3,10 +3,13 @@
 //! No-signal screen: the split-flap board, then a screensaver.
 //!
 //! The Electron app has ~30 WebGL savers. Ported so far: the six pure
-//! fragment-shader ones (`shader_saver.rs`), plus three painter-only ones.
+//! fragment-shader ones (`shader_saver.rs`), Weather (`weather.rs`), plus
+//! three painter-only ones.
 //! The lifecycle is Electron's: per-activation seed (logged, so a look can be
 //! reproduced), rotation every ten minutes, never repeating the last pick,
-//! and the DVD logo when a saver cannot start.
+//! and the DVD logo when a saver cannot start. A saver that depends on
+//! something outside itself can decline the *random* rotation
+//! (`is_available`, registry.js `isAvailable`); explicit selection ignores it.
 
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -72,12 +75,31 @@ impl Rng {
 }
 
 /// The shader savers first, in `shader_saver::SAVERS` order (a test holds
-/// the two together), then the painter ones.
+/// the two together), then Weather, then the painter ones.
 pub const NAMES: &[&str] = &[
     "Plasma", "Flow Field", "Julia Family", "Burning Ship", "Moire Interference", "Bicycle Horizon",
-    "Starfield", "DVD logo", "Lissajous",
+    "Weather", "Starfield", "DVD logo", "Lissajous",
 ];
-const DVD: usize = 7;
+const WEATHER: usize = 6;
+const STARFIELD: usize = 7;
+const DVD: usize = 8;
+
+/// Whether a saver will take a turn in the random rotation. Only Weather can
+/// decline, while there is no reading -- so a wall that is offline, or has
+/// the feature off, never lands on it.
+pub fn is_available(index: usize) -> bool {
+    index != WEATHER || crate::weather_source::current_reading().is_some()
+}
+
+/// The rotation's pick: registry.js `pickRandomIndex` within the savers
+/// ticked in Settings. Prefers an enabled saver that is available, never the
+/// previous one if there is another; if no enabled saver is available,
+/// availability is ignored -- a repeat or a saver without data is a smaller
+/// problem than a blank wall. None only when every saver is disabled.
+pub fn pick_rotation(rng: &mut Rng, avoid: Option<usize>, enabled: &[bool], available: impl Fn(usize) -> bool) -> Option<usize> {
+    let both: Vec<bool> = enabled.iter().enumerate().map(|(i, &e)| e && available(i)).collect();
+    pick(&both, avoid, rng).or_else(|| pick(enabled, avoid, rng))
+}
 
 pub struct Screensaver {
     pub index: usize,
@@ -89,6 +111,7 @@ enum State {
     /// GPU, see shader_saver.rs. `seed` is gl-base.js's iSeed: four
     /// uncorrelated randoms fixed for the activation.
     Shader { saver: usize, seed: [f32; 4], frame: i32 },
+    Weather(Box<crate::weather::Weather>),
     Starfield { stars: Vec<(f32, f32, f32)>, speed: f32 },
     Dvd { pos: Vec2, vel: Vec2, hue: f32 },
     Lissajous { a: f32, b: f32, phase: f32, hue: f32 },
@@ -100,7 +123,8 @@ impl Screensaver {
         let state = match index % NAMES.len() {
             i if i < crate::shader_saver::SAVERS.len() =>
                 State::Shader { saver: i, seed: [rng.f32(), rng.f32(), rng.f32(), rng.f32()], frame: 0 },
-            6 => State::Starfield {
+            WEATHER => State::Weather(Box::new(crate::weather::Weather::new(seed))),
+            STARFIELD => State::Starfield {
                 stars: (0..600)
                     .map(|_| (rng.range(-1.0, 1.0), rng.range(-1.0, 1.0), rng.range(0.05, 1.0)))
                     .collect(),
@@ -129,7 +153,12 @@ impl Screensaver {
     pub fn paint(&mut self, painter: &egui::Painter, rect: Rect, t: f32, dt: f32) {
         // registry.js falls back to the DVD logo when a saver cannot start;
         // same here if the GPU path did not come up.
-        if let State::Shader { saver, .. } = self.state && crate::shader_saver::failed(saver) {
+        let failed = match self.state {
+            State::Shader { saver, .. } => crate::shader_saver::failed(saver),
+            State::Weather(_) => crate::weather::failed(),
+            _ => false,
+        };
+        if failed {
             let mut rng = Rng::new(self.seed);
             self.index = DVD;
             self.state = State::Dvd { pos: vec2(rng.f32(), rng.f32()), vel: vec2(0.1, 0.15), hue: rng.f32() };
@@ -146,6 +175,7 @@ impl Screensaver {
                 });
                 painter.add(egui::PaintCallback { rect, callback: std::sync::Arc::new(cb) });
             }
+            State::Weather(w) => w.paint(painter, rect, t, dt),
             State::Starfield { stars, speed } => {
                 let scale = rect.width().max(rect.height()) * 0.5;
                 for s in stars.iter_mut() {
@@ -238,7 +268,66 @@ mod tests {
     fn shader_savers_lead_the_list_in_the_same_order() {
         let shaders: Vec<_> = crate::shader_saver::SAVERS.iter().map(|s| s.name).collect();
         assert_eq!(&NAMES[..shaders.len()], &shaders[..]);
+        assert_eq!(NAMES[WEATHER], "Weather");
+        assert_eq!(NAMES[STARFIELD], "Starfield");
         assert_eq!(NAMES[DVD], "DVD logo");
+    }
+
+    /// Every index a sweep of picks can produce.
+    fn reachable(avoid: Option<usize>, available: impl Fn(usize) -> bool) -> std::collections::BTreeSet<usize> {
+        let mut rng = Rng::new(11);
+        let all = [true; NAMES.len()];
+        (0..4000).filter_map(|_| pick_rotation(&mut rng, avoid, &all, &available)).collect()
+    }
+
+    #[test]
+    fn the_rotation_never_picks_weather_without_a_reading() {
+        let seen = reachable(None, |i| i != WEATHER);
+        assert!(!seen.contains(&WEATHER));
+        assert_eq!(seen.len(), NAMES.len() - 1, "every other saver is still reached");
+    }
+
+    #[test]
+    fn the_rotation_picks_weather_once_a_reading_arrives() {
+        assert!(reachable(None, |_| true).contains(&WEATHER));
+    }
+
+    #[test]
+    fn filtering_still_never_repeats_the_previous_pick() {
+        for avoid in 0..NAMES.len() {
+            assert!(!reachable(Some(avoid), |i| i != WEATHER).contains(&avoid), "avoid {avoid}");
+        }
+    }
+
+    #[test]
+    fn a_valid_index_even_when_nothing_is_available() {
+        let seen = reachable(Some(3), |_| false);
+        assert!(seen.iter().all(|&i| i < NAMES.len() && i != 3));
+    }
+
+    /// The only test that touches the injected reading, so parallel tests
+    /// cannot race on it.
+    #[test]
+    fn availability_never_brings_back_a_disabled_saver() {
+        let mut rng = Rng::new(5);
+        let mut enabled = [false; NAMES.len()];
+        enabled[WEATHER] = true;
+        enabled[DVD] = true;
+        for _ in 0..500 {
+            // Weather has no reading: DVD is the only choice, repeats and all.
+            assert_eq!(pick_rotation(&mut rng, Some(DVD), &enabled, |i| i != WEATHER), Some(DVD));
+        }
+        assert_eq!(pick_rotation(&mut rng, None, &[false; NAMES.len()], |_| true), None);
+    }
+
+    #[test]
+    fn weather_is_available_exactly_when_there_is_a_reading() {
+        crate::weather_source::inject(None);
+        assert!(!is_available(WEATHER));
+        assert!(is_available(DVD));
+        crate::weather_source::inject(Some(crate::weather::FALLBACK));
+        assert!(is_available(WEATHER));
+        crate::weather_source::inject(None);
     }
 
     #[test]

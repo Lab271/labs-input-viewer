@@ -90,6 +90,12 @@ pub struct Settings {
     pub remote_keyboard_enabled: bool,
     pub remote_keyboard_host: String,
     pub remote_keyboard_api_key: String,
+    /// The Weather saver's poller (ADR 0027), under Electron's keys. Off by
+    /// default: the only feature that sends anything -- the wall's rounded
+    /// location -- to a third party. A null coordinate means "not set".
+    pub weather_enabled: bool,
+    pub weather_latitude: Option<f64>,
+    pub weather_longitude: Option<f64>,
     pub border_width: f32,
     pub left_device_id: Option<String>,
     pub right_device_id: Option<String>,
@@ -114,6 +120,9 @@ impl Default for Settings {
             remote_keyboard_enabled: false,
             remote_keyboard_host: String::new(),
             remote_keyboard_api_key: String::new(),
+            weather_enabled: false,
+            weather_latitude: Some(52.37),
+            weather_longitude: Some(4.89),
             border_width: 0.0,
             left_device_id: None,
             right_device_id: None,
@@ -336,6 +345,18 @@ mod tests {
         assert!(s.multi_view);
         assert_eq!(s.center_gap, 60.0);
         assert!(s.is_enabled("never-seen"));
+    }
+
+    #[test]
+    fn weather_is_off_by_default_under_electrons_keys() {
+        let s = parse("{}").unwrap();
+        assert!(!s.weather_enabled);
+        assert_eq!((s.weather_latitude, s.weather_longitude), (Some(52.37), Some(4.89)));
+        let s = parse(r#"{ "weatherEnabled": true, "weatherLatitude": 51.92, "weatherLongitude": null }"#).unwrap();
+        assert!(s.weather_enabled);
+        assert_eq!((s.weather_latitude, s.weather_longitude), (Some(51.92), None));
+        let back: Value = serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();
+        assert_eq!(back["weatherLatitude"], 51.92);
     }
 
     #[test]

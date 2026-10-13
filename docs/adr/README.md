@@ -66,9 +66,9 @@ Defects, contradictions and doc drift found on the way are in
 | [0024](0024-scale-by-area-and-room.md) | Scale savers by area and by room light, not by axis | Accepted | Keep | Not started |
 | [0025](0025-hdr-post-chain-owns-tonemapping.md) | An HDR post chain owns tonemapping; savers emit linear HDR; supersample in the shader | Accepted | Keep | Partial |
 | [0026](0026-share-glsl-and-work-in-world-space.md) | Share GLSL through one library, and work in world space divided by the short axis | Accepted | Keep | Partial |
-| [0027](0027-network-access-outside-savers.md) | Keep network access outside the savers; weather is opt-in and coarsened | Accepted | Keep | Not started |
+| [0027](0027-network-access-outside-savers.md) | Keep network access outside the savers; weather is opt-in and coarsened | Accepted | Keep | Done |
 | [0028](0028-verify-shaders-and-measure-on-a-real-gpu.md) | Verify shaders with a direct harness and structure baselines; measure speed only on a real GPU | Accepted | Adapt | Not started |
-| [0029](0029-text-through-a-baked-glyph-atlas.md) | Draw text in savers through a baked glyph atlas | Accepted | Adapt | Not started |
+| [0029](0029-text-through-a-baked-glyph-atlas.md) | Draw text in savers through a baked glyph atlas | Accepted | Adapt | Partial |
 | [0030](0030-art-net-reactive-lighting.md) | Drive the room's lights from the screensaver: sparse readback, 1 Hz, only when enabled | Accepted | Keep | Not started |
 
 ### UI

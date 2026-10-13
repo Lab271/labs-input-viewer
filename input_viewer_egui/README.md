@@ -31,6 +31,7 @@ writes settings.
 | Daily log file, same bounds and `[Health]` line format, ported with its tests | `file-log.js` | `filelog.rs` |
 | Split-flap board, screensaver after delay, 10-min rotation, seeded + logged | `split-flap.js`, `registry.js` | `screensaver.rs` |
 | Plasma saver + bloom / ACES / dither chain, same GLSL | `plasma.js`, `post-fx.js` | `plasma.rs`, `shaders/` |
+| Weather saver and its Open-Meteo poller, off unless `weatherEnabled`; `--weather-state=N\|label` pins a canned reading | `weather.js`, `weather-source.js`, `weather-states.js` | `weather.rs`, `weather_source.rs`, `weather_states.rs` |
 | Freeze, fullscreen, Esc does one thing per press | `renderer.js` | `app.rs` |
 | Settings dialog: Inputs and Layout panes | `index.html`, `settings-status.js` | `app/settings_ui.rs`, `settings_status.rs` |
 | `settings.json`, same keys, Electron's imported once | `settings.json` | `settings.rs` |
@@ -39,7 +40,7 @@ writes settings.
 ## Not ported
 
 Reference-screenshot no-signal detection, black-bar cropping, audio/volume,
-the remote keyboard and Art-Net (features and their Settings panes), weather,
+the remote keyboard and Art-Net (features and their Settings panes),
 WebGPU compositing — and Plasma plus 3 painter-drawn screensavers instead
 of ~30 WebGL ones. Picker tiles show the last frame seen on screen, not a fresh
 snapshot sweep (#242).

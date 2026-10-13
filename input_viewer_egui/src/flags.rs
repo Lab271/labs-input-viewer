@@ -13,6 +13,7 @@
 //! | `--test-pattern[=WxH@FPS]` | Prototype only: mock inputs carry a motion test pattern, 3840x2160@60 by default. Implies `--mock=2`, the wall's two cards. |
 //! | `--hud` | Prototype only: per-half frame-rate and latency overlay, and a `[render]` log line every 5s. |
 //! | `--mock-shape=W:H` | Prototype only: mock inputs letterboxed at that shape inside pure black, as the cards fit a source of another shape -- to watch cropping (ADR 0015). |
+//! | `--weather-state=N\|LABEL` | Prototype only: Weather shows a canned reading from `weather_states.rs` -- by index, label, or a label prefix only one state has, such as `snow` -- instead of the live one, so rain, snow, fog and night can be reviewed. Electron does this with the preview's A key. |
 //! | `--mock-fault=dark\|stall\|fail` | Prototype only: the last mock input goes dark, stalls after 10 s, or fails to open -- to watch the health policy reopen it. |
 //!
 //! Unknown `--` arguments are collected rather than ignored, so a typo like
@@ -39,6 +40,8 @@ pub struct Flags {
     pub hud: bool,
     pub mock_fault: Option<MockFault>,
     pub mock_shape: Option<f64>,
+    /// Index into `weather_states::STATES`.
+    pub weather_state: Option<usize>,
     pub unrecognised: Vec<String>,
 }
 
@@ -53,6 +56,7 @@ impl Default for Flags {
             hud: false,
             mock_fault: None,
             mock_shape: None,
+            weather_state: None,
             unrecognised: Vec::new(),
         }
     }
@@ -94,6 +98,10 @@ where
             ("--mock-shape", Some(v)) => match v.split_once(':').and_then(|(a, b)| Some((a.parse::<f64>().ok()?, b.parse::<f64>().ok()?))) {
                 Some((a, b)) if a > 0.0 && b > 0.0 => flags.mock_shape = Some(a / b),
                 _ => flags.unrecognised.push(arg.to_owned()),
+            },
+            ("--weather-state", Some(v)) => match crate::weather_states::find(v) {
+                Some(i) => flags.weather_state = Some(i),
+                None => flags.unrecognised.push(arg.to_owned()),
             },
             ("--mock-fault", Some(v)) => match v {
                 "dark" => flags.mock_fault = Some(MockFault::Dark),
@@ -205,6 +213,15 @@ mod tests {
         assert_eq!(parse(["--mock-shape=16:10"]).mock_shape, Some(1.6));
         assert_eq!(parse(["--mock-shape=wide"]).unrecognised, ["--mock-shape=wide"]);
         assert_eq!(parse(["--mock-shape=5:0"]).unrecognised, ["--mock-shape=5:0"]);
+    }
+
+    #[test]
+    fn weather_state_by_index_or_label() {
+        assert_eq!(parse(["--weather-state=3"]).weather_state, Some(3));
+        assert_eq!(parse(["--weather-state=clear-night"]).weather_state, Some(7));
+        assert_eq!(parse(["--weather-state=snow"]).weather_state, Some(5));
+        assert_eq!(parse(["--weather-state=hail"]).unrecognised, ["--weather-state=hail"]);
+        assert_eq!(parse(["--weather-state"]).unrecognised, ["--weather-state"]);
     }
 
     #[test]

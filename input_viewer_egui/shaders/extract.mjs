@@ -31,6 +31,28 @@ for (const name of SAVERS) {
   console.log(`${name}.frag: ${glsl.split('\n').length} lines`)
 }
 
+// Weather is multi-pass (sky, instanced precipitation), so its shaders are
+// complete programs rather than one mainImage. Same evaluation, but its
+// imports span several lines and it exports helpers, so both are stripped
+// before the body runs. The glyph-atlas readout is not extracted: weather.rs
+// draws it with egui's painter (ADR 0029).
+{
+  const src = readFileSync(join(savers, 'weather.js'), 'utf8')
+  const body = src
+    .replace(/^import[\s\S]*?from '[^']+'$/gm, '')
+    .replace(/^export default[\s\S]*$/m, '')
+    .replace(/^export /gm, '')
+  const shaders = new Function('GLSL', `${body}\nreturn { SKY_FRAG, DROP_VERT, DROP_FRAG }`)(GLSL)
+  for (const [name, file] of [['SKY_FRAG', 'weather-sky.frag'], ['DROP_VERT', 'weather-drop.vert'], ['DROP_FRAG', 'weather-drop.frag']]) {
+    const glsl = shaders[name]
+    if (!glsl.startsWith('#version 300 es\nprecision highp float;')) throw new Error(`weather ${name}: unexpected header`)
+    writeFileSync(join(here, file),
+      `// GENERATED from input_viewer_electron/.../weather.js ${name} by extract.mjs -- do not edit.\n` +
+      glsl.replace('#version 300 es\nprecision highp float;', '#version 330 core') + '\n')
+    console.log(`${file}: ${glsl.split('\n').length} lines`)
+  }
+}
+
 // The post-FX passes are module-private constants, so they are pulled out of
 // the source text rather than imported.
 const post = readFileSync(join(savers, 'post-fx.js'), 'utf8')

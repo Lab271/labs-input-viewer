@@ -45,7 +45,7 @@ is the fallback, beyond being first and simplest, is not recorded.
 **Keep** as a Rust trait: `fn create(seed) -> Result<Box<dyn Saver>>`,
 `start/stop/paint`, optional `is_available()`. Prototype: four savers in a
 `State` enum in `screensaver.rs`; Plasma falls back to the DVD logo if its
-GL setup fails (`plasma::failed()`). Missing: `is_available`, a stepping
+GL setup fails (`plasma::failed()`). `is_available` is ported (Weather only, `screensaver::pick_random`). Missing: a stepping
 order that matches the Electron registry, and `stop()` releasing GL
 resources (the prototype keeps compiled programs for the context's life,
 deliberately, to avoid recompiling).

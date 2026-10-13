@@ -16,6 +16,9 @@
 //! after a callback, but it leaves the scissor test on, so every pass here
 //! disables it first -- otherwise the bloom mips get clipped to the window's
 //! clip rect and the bloom goes lopsided.
+//!
+//! The chain is shared: `render` runs a scene a saver draws itself (Weather's
+//! sky and precipitation passes) through the same targets and passes.
 
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -45,7 +48,7 @@ void main() {
 }";
 
 /// One oversized triangle from gl_VertexID, so no vertex buffer is needed.
-const VERTEX: &str = "#version 330 core
+pub const VERTEX: &str = "#version 330 core
 void main() {
   vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
   gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
@@ -143,11 +146,11 @@ struct Target {
     h: i32,
 }
 
-struct Gpu {
+/// The post-FX chain and its render targets. One per GL context, shared by
+/// every saver that renders through it (`render`), so the wall pays for one
+/// 6000x1200 HDR scene target, not one per saver.
+struct Post {
     vao: glow::VertexArray,
-    /// Per (saver, samples), compiled on first use and kept for the life of
-    /// the GL context, so a re-activation does not pay the compile again.
-    scenes: HashMap<(usize, u32), glow::Program>,
     bright: glow::Program,
     down: glow::Program,
     up: glow::Program,
@@ -156,6 +159,13 @@ struct Gpu {
     mips: Vec<Target>,
     out: Option<Target>,
     size: (i32, i32),
+}
+
+struct Gpu {
+    post: Post,
+    /// Per (saver, samples), compiled on first use and kept for the life of
+    /// the GL context, so a re-activation does not pay the compile again.
+    scenes: HashMap<(usize, u32), glow::Program>,
 }
 
 enum State {
@@ -168,15 +178,18 @@ static GPU: Mutex<State> = Mutex::new(State::Uninit);
 /// Savers whose shader did not compile or link on this machine.
 static BROKEN: Mutex<Vec<usize>> = Mutex::new(Vec::new());
 
+/// Whether the post chain could not be set up on this machine.
+pub fn post_failed() -> bool {
+    matches!(*GPU.lock().unwrap(), State::Failed)
+}
+
 /// Whether this saver cannot run, so the caller can fall back to a painter
 /// saver the way registry.js falls back to the DVD logo.
 pub fn failed(saver: usize) -> bool {
-    matches!(*GPU.lock().unwrap(), State::Failed) || BROKEN.lock().unwrap().contains(&saver)
+    post_failed() || BROKEN.lock().unwrap().contains(&saver)
 }
 
-/// Render one frame of `saver` into `viewport` (pixels, GL origin
-/// bottom-left) of the framebuffer egui is drawing to.
-pub fn paint(gl: &glow::Context, saver: usize, viewport: [i32; 4], time: f32, frame: i32, seed: [f32; 4]) {
+fn with_gpu(gl: &glow::Context, f: impl FnOnce(&mut Gpu)) {
     let mut state = GPU.lock().unwrap();
     if let State::Uninit = *state {
         *state = match unsafe { Gpu::new(gl) } {
@@ -188,11 +201,42 @@ pub fn paint(gl: &glow::Context, saver: usize, viewport: [i32; 4], time: f32, fr
         };
     }
     if let State::Ready(gpu) = &mut *state {
-        unsafe { gpu.draw(gl, saver, viewport, time, frame, seed) };
+        f(gpu);
     }
 }
 
-unsafe fn compile(gl: &glow::Context, vs: &str, fs: &str) -> Result<glow::Program, String> {
+/// Render one frame of `saver` into `viewport` (pixels, GL origin
+/// bottom-left) of the framebuffer egui is drawing to.
+pub fn paint(gl: &glow::Context, saver: usize, viewport: [i32; 4], time: f32, frame: i32, seed: [f32; 4]) {
+    with_gpu(gl, |gpu| unsafe {
+        let [_, _, w, h] = viewport;
+        let samples = sample_count(w, h, SAVERS[saver].antialias);
+        let Some(prog) = gpu.scene_program(gl, saver, samples) else { return };
+        let s = &SAVERS[saver];
+        gpu.post.run(gl, viewport, &s.bloom, s.exposure, |gl, w, h| {
+            gl.use_program(Some(prog));
+            let u = |name: &str| gl.get_uniform_location(prog, name);
+            gl.uniform_3_f32(u("iResolution").as_ref(), w as f32, h as f32, 1.0);
+            gl.uniform_1_f32(u("iTime").as_ref(), time);
+            gl.uniform_1_i32(u("iFrame").as_ref(), frame);
+            gl.uniform_4_f32(u("iSeed").as_ref(), seed[0], seed[1], seed[2], seed[3]);
+            gl.draw_arrays(glow::TRIANGLES, 0, 3);
+            true
+        });
+    });
+}
+
+/// Render a saver that draws its own scene -- any number of passes -- through
+/// the shared post chain. `scene` is called with the HDR scene target bound
+/// at (0, 0, w, h), blending, depth and scissor off, and the fullscreen
+/// triangle's VAO bound; it returns false to abandon the frame.
+pub fn render(gl: &glow::Context, viewport: [i32; 4], bloom: &Bloom, exposure: f32,
+    scene: impl FnOnce(&glow::Context, i32, i32) -> bool) {
+    with_gpu(gl, |gpu| unsafe { gpu.post.run(gl, viewport, bloom, exposure, scene) });
+}
+
+/// Compile and link a vertex + fragment pair; the info log on failure.
+pub unsafe fn compile(gl: &glow::Context, vs: &str, fs: &str) -> Result<glow::Program, String> {
     unsafe {
         let prog = gl.create_program()?;
         let mut shaders = Vec::new();
@@ -247,16 +291,18 @@ impl Gpu {
     unsafe fn new(gl: &glow::Context) -> Result<Self, String> {
         unsafe {
             let gpu = Self {
-                vao: gl.create_vertex_array()?,
+                post: Post {
+                    vao: gl.create_vertex_array()?,
+                    bright: compile(gl, VERTEX, BRIGHT).map_err(|e| format!("bright: {e}"))?,
+                    down: compile(gl, VERTEX, DOWN).map_err(|e| format!("downsample: {e}"))?,
+                    up: compile(gl, VERTEX, UP).map_err(|e| format!("upsample: {e}"))?,
+                    composite: compile(gl, VERTEX, COMPOSITE).map_err(|e| format!("composite: {e}"))?,
+                    scene: None,
+                    mips: Vec::new(),
+                    out: None,
+                    size: (0, 0),
+                },
                 scenes: HashMap::new(),
-                bright: compile(gl, VERTEX, BRIGHT).map_err(|e| format!("bright: {e}"))?,
-                down: compile(gl, VERTEX, DOWN).map_err(|e| format!("downsample: {e}"))?,
-                up: compile(gl, VERTEX, UP).map_err(|e| format!("upsample: {e}"))?,
-                composite: compile(gl, VERTEX, COMPOSITE).map_err(|e| format!("composite: {e}"))?,
-                scene: None,
-                mips: Vec::new(),
-                out: None,
-                size: (0, 0),
             };
             log_info!("[Screensaver] post-FX shaders compiled");
             Ok(gpu)
@@ -283,7 +329,9 @@ impl Gpu {
             }
         }
     }
+}
 
+impl Post {
     unsafe fn free_targets(&mut self, gl: &glow::Context) {
         unsafe {
             for t in self.scene.take().into_iter().chain(self.out.take()).chain(self.mips.drain(..)) {
@@ -330,7 +378,8 @@ impl Gpu {
         }
     }
 
-    unsafe fn draw(&mut self, gl: &glow::Context, saver: usize, vp: [i32; 4], time: f32, frame: i32, seed: [f32; 4]) {
+    unsafe fn run(&mut self, gl: &glow::Context, vp: [i32; 4], b: &Bloom, exposure: f32,
+        draw_scene: impl FnOnce(&glow::Context, i32, i32) -> bool) {
         unsafe {
             let [x, y, w, h] = vp;
             if w <= 0 || h <= 0 {
@@ -340,25 +389,28 @@ impl Gpu {
                 log_error!("[Screensaver] {e}");
                 return;
             }
-            let samples = sample_count(w, h, SAVERS[saver].antialias);
-            let Some(scene_prog) = self.scene_program(gl, saver, samples) else { return };
             let (scene, out) = (self.scene.unwrap(), self.out.unwrap());
-            let b = &SAVERS[saver].bloom;
 
             gl.disable(glow::SCISSOR_TEST);
             gl.disable(glow::BLEND);
             gl.disable(glow::CULL_FACE);
             gl.disable(glow::DEPTH_TEST);
             gl.disable(glow::FRAMEBUFFER_SRGB);
-            gl.bind_vertex_array(Some(self.vao));
 
             // Scene, in HDR.
-            self.pass(gl, scene_prog, scene, &[], |u| {
-                gl.uniform_3_f32(u("iResolution").as_ref(), w as f32, h as f32, 1.0);
-                gl.uniform_1_f32(u("iTime").as_ref(), time);
-                gl.uniform_1_i32(u("iFrame").as_ref(), frame);
-                gl.uniform_4_f32(u("iSeed").as_ref(), seed[0], seed[1], seed[2], seed[3]);
-            });
+            gl.bind_framebuffer(glow::FRAMEBUFFER, Some(scene.fbo));
+            gl.viewport(0, 0, w, h);
+            gl.bind_vertex_array(Some(self.vao));
+            let drawn = draw_scene(gl, w, h);
+            // Whatever the scene left bound, the passes below need these.
+            gl.disable(glow::BLEND);
+            gl.bind_vertex_array(Some(self.vao));
+            if !drawn {
+                gl.bind_framebuffer(glow::FRAMEBUFFER, None);
+                gl.bind_vertex_array(None);
+                gl.use_program(None);
+                return;
+            }
 
             // Bloom: bright pass into mip 0, down the chain, then additively
             // back up it.
@@ -394,7 +446,7 @@ impl Gpu {
                 gl.uniform_1_i32(u("uBloom").as_ref(), 1);
                 gl.uniform_2_f32(u("uTexel").as_ref(), 1.0 / w as f32, 1.0 / h as f32);
                 gl.uniform_1_f32(u("uBloomIntensity").as_ref(), b.intensity);
-                gl.uniform_1_f32(u("uExposure").as_ref(), SAVERS[saver].exposure);
+                gl.uniform_1_f32(u("uExposure").as_ref(), exposure);
                 gl.uniform_1_i32(u("uTonemap").as_ref(), 2);
                 gl.uniform_1_i32(u("uDither").as_ref(), 1);
             });

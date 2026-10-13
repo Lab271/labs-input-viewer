@@ -4,7 +4,7 @@
 //! on the bottom edge, and the no-signal board / screensaver.
 
 use std::collections::HashMap;
-use std::sync::mpsc;
+use std::sync::{Arc, Mutex, mpsc};
 use std::time::{Duration, Instant};
 
 use eframe::egui::{
@@ -24,6 +24,7 @@ use crate::screensaver::{self, Rng, Screensaver};
 use crate::settings::{Layout, Settings, Store};
 use crate::shortcuts::{self, Action};
 use crate::update::Updater;
+use crate::weather_source;
 
 mod settings_ui;
 use settings_ui::Pane;
@@ -104,6 +105,10 @@ pub(crate) fn dual_rects(rect: Rect, gap: f32) -> (Rect, Rect, Rect) {
 }
 
 /// The content area once `borderWidth` is taken off each side edge.
+fn weather_config(s: &Settings) -> weather_source::Config {
+    weather_source::Config { enabled: s.weather_enabled, latitude: s.weather_latitude, longitude: s.weather_longitude }
+}
+
 fn wall_rect(rect: Rect, border: f32) -> Rect {
     let b = border.clamp(0.0, rect.width() / 2.0);
     Rect::from_min_max(rect.min + vec2(b, 0.0), rect.max - vec2(b, 0.0))
@@ -263,6 +268,10 @@ pub struct InputViewer {
     saver_on_demand: bool,
     saver_started: Instant,
     last_saver: Option<usize>,
+    /// The Weather saver's poller, for the app's lifetime (ADR 0027), and
+    /// the settings it reads at each poll.
+    _weather: weather_source::Source,
+    weather_config: Arc<Mutex<weather_source::Config>>,
     rng: Rng,
     last_frame: Instant,
     review: Option<Review>,
@@ -292,6 +301,16 @@ impl InputViewer {
         // configuration.
         let (settings, store) = Store::open(flags.mock.is_none() && review.is_none());
         let layout_t = if settings.layout() == Layout::Dual { 1.0 } else { 0.0 };
+        let weather_config = Arc::new(Mutex::new(weather_config(&settings)));
+        let weather = {
+            let config = weather_config.clone();
+            weather_source::install(Box::new(move || *config.lock().unwrap()))
+        };
+        if let Some(i) = flags.weather_state {
+            let state = &crate::weather_states::STATES[i];
+            log_info!("[TestFlags] Weather pinned to canned state {i}: {}", state.label);
+            weather_source::inject(Some(state.reading.clone()));
+        }
         let mut app = Self {
             settings,
             store,
@@ -325,6 +344,8 @@ impl InputViewer {
             saver_on_demand: false,
             saver_started: Instant::now(),
             last_saver: None,
+            _weather: weather,
+            weather_config,
             rng: Rng::new(Rng::clock_seed()),
             last_frame: Instant::now(),
             review,
@@ -657,8 +678,11 @@ impl InputViewer {
             }
             i
         });
-        let Some(index) = index.or(pinned).or_else(|| screensaver::pick(&self.savers_enabled(), self.last_saver, &mut self.rng))
-        else {
+        // Availability gates the random pick only: --screensaver and the
+        // stepping keys still show Weather without a reading.
+        let enabled = self.savers_enabled();
+        let picked = || screensaver::pick_rotation(&mut self.rng, self.last_saver, &enabled, screensaver::is_available);
+        let Some(index) = index.or(pinned).or_else(picked) else {
             // Every saver disabled: the split-flap board stays up.
             self.saver = None;
             self.saver_on_demand = false;
@@ -1225,6 +1249,7 @@ impl eframe::App for InputViewer {
         self.sync_streams(ctx);
         self.sample_health();
         self.update_saver(Instant::now());
+        *self.weather_config.lock().unwrap() = weather_config(&self.settings);
         if let Some(last) = self.remote.as_ref().and_then(remote_key::Sender::poll) {
             self.remote_last = Some(last);
         }
