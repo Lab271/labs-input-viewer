@@ -9,7 +9,7 @@
 //! frame loop notices the change and writes it, debounced.
 
 use super::*;
-use crate::settings::{BORDER_WIDTH_RANGE, CENTER_GAP_RANGE};
+use crate::settings::{BORDER_WIDTH_RANGE, CENTER_GAP_RANGE, LOGO_WIDTH_RANGE};
 use crate::settings_status::{self as status, InputState, Tone};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -295,6 +295,19 @@ impl InputViewer {
             ui.label("Side borders");
             ui.add(egui::Slider::new(&mut self.settings.border_width, BORDER_WIDTH_RANGE).step_by(1.0).suffix(" px"));
             ui.end_row();
+
+            ui.label("Logo");
+            ui.horizontal(|ui| {
+                let mut fit = self.settings.logo_width.is_none();
+                if ui.checkbox(&mut fit, "Fit the centre gap").changed() {
+                    // Unticking starts from the size it has now, not a jump.
+                    self.settings.logo_width = if fit { None } else { Some((self.settings.center_gap * 0.9).max(*LOGO_WIDTH_RANGE.start())) };
+                }
+                if let Some(w) = &mut self.settings.logo_width {
+                    ui.add(egui::Slider::new(w, LOGO_WIDTH_RANGE).step_by(1.0).logarithmic(true).suffix(" px"));
+                }
+            });
+            ui.end_row();
         });
 
         ui.add_space(12.0);
@@ -315,14 +328,12 @@ impl InputViewer {
 
         p.rect_filled(area, 2.0, Color32::BLACK);
         let inner = wall_rect(wall, self.settings.border_width);
+        let mut logo_at = None;
         let halves: Vec<(usize, Rect)> = match self.settings.layout() {
             Layout::Single => vec![(0, inner)],
             Layout::Dual => {
                 let (l, divider, r) = dual_rects(inner, self.settings.center_gap);
-                if let Some(logo) = &self.logo {
-                    let uv = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
-                    p.image(logo.mipmapped.id(), map(logo_rect(divider, logo.size())), uv, Color32::WHITE);
-                }
+                logo_at = Some(logo_rect(divider, self.logo.as_ref().map_or(Vec2::ZERO, Logo::size), self.settings.logo_width));
                 vec![(0, l), (1, r)]
             }
         };
@@ -331,6 +342,10 @@ impl InputViewer {
             p.rect_filled(r, 0.0, Color32::from_rgb(34, 38, 48));
             let text = self.label_of(self.sides[i].as_ref());
             p.text(r.center(), Align2::CENTER_CENTER, text, FontId::proportional(12.0), Color32::from_gray(200));
+        }
+        if let (Some(logo), Some(r)) = (&self.logo, logo_at) {
+            let uv = Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0));
+            p.image(logo.mipmapped.id(), map(r), uv, Color32::WHITE);
         }
         p.rect_stroke(area, 2.0, Stroke::new(1.0, Color32::from_gray(70)), StrokeKind::Outside);
     }

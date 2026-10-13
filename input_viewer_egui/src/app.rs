@@ -110,9 +110,11 @@ fn wall_rect(rect: Rect, border: f32) -> Rect {
 }
 
 /// `.divider-logo`: contained within 90% of the column's width and 80% of its
-/// height, centred.
-fn logo_rect(divider: Rect, logo: Vec2) -> Rect {
-    let scale = (divider.width() * 0.9 / logo.x).min(divider.height() * 0.8 / logo.y);
+/// height, centred. With `width` set (`logoWidth`), that width instead,
+/// still capped at 80% of the height.
+fn logo_rect(divider: Rect, logo: Vec2, width: Option<f32>) -> Rect {
+    let w = width.unwrap_or(divider.width() * 0.9);
+    let scale = (w / logo.x).min(divider.height() * 0.8 / logo.y);
     Rect::from_center_size(divider.center(), logo * scale)
 }
 
@@ -806,10 +808,6 @@ impl InputViewer {
         let (l, divider, r) = transition::layout_rects(rect, dual_rects(rect, self.settings.center_gap), self.layout_t);
         let shown = transition::ease(self.layout_t);
         let settled = self.layout_t == 0.0 || self.layout_t == 1.0;
-        if let Some(logo) = self.logo.as_mut().filter(|_| divider.width() >= 1.0) {
-            let r = logo_rect(divider, logo.size());
-            logo.paint(&painter, r, Color32::WHITE.gamma_multiply(shown), settled);
-        }
         for (i, half, opacity) in [(0, l, 1.0), (1, r, shown)] {
             if half.width() < 1.0 {
                 continue;
@@ -831,6 +829,11 @@ impl InputViewer {
             if black > 0.0 {
                 clipped.rect_filled(half, 0.0, Color32::BLACK.gamma_multiply(black));
             }
+        }
+        // After the halves: a logo set wider than the gap lies over them.
+        if let Some(logo) = self.logo.as_mut().filter(|_| divider.width() >= 1.0) {
+            let r = logo_rect(divider, logo.size(), self.settings.logo_width);
+            logo.paint(&painter, r, Color32::WHITE.gamma_multiply(shown), settled);
         }
 
         if self.frozen {
@@ -1415,9 +1418,13 @@ mod tests {
     #[test]
     fn logo_fits_the_divider_column() {
         let d = Rect::from_min_size(pos2(2970.0, 0.0), vec2(60.0, 1200.0));
-        let r = logo_rect(d, vec2(1014.0, 275.0));
+        let r = logo_rect(d, vec2(1014.0, 275.0), None);
         assert!((r.width() - 54.0).abs() < 0.01, "90% of the column: {r:?}");
         assert_eq!(r.center(), d.center());
+        // A set width may exceed the gap, but never 80% of the height.
+        assert!((logo_rect(d, vec2(1014.0, 275.0), Some(400.0)).width() - 400.0).abs() < 0.01);
+        let tall = logo_rect(d, vec2(100.0, 100.0), Some(5000.0));
+        assert!((tall.height() - 960.0).abs() < 0.01);
     }
 
     #[test]

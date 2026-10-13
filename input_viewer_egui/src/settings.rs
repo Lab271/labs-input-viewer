@@ -36,6 +36,8 @@ pub const ELECTRON_APP_DIR: &str = "input-viewer";
 /// The ranges of Electron's sliders.
 pub const CENTER_GAP_RANGE: std::ops::RangeInclusive<f32> = 20.0..=200.0;
 pub const BORDER_WIDTH_RANGE: std::ops::RangeInclusive<f32> = 0.0..=200.0;
+/// The logo's width when it is not fitted to the gap.
+pub const LOGO_WIDTH_RANGE: std::ops::RangeInclusive<f32> = 20.0..=1200.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
@@ -75,6 +77,10 @@ pub struct Settings {
     /// the OS `prefers-reduced-motion`; egui has no such query, so it is a
     /// setting. Electron ignores the key.
     pub reduced_motion: bool,
+    /// The centre logo's width in px. None: fitted to the centre gap, as in
+    /// Electron. Set, it may be wider than the gap and is drawn over the
+    /// pictures. Electron ignores the key.
+    pub logo_width: Option<f32>,
     /// The remote keyboard (ADR 0040), under Electron's keys. The API key
     /// is plain text, as it is in Electron and in the firmware.
     pub remote_keyboard_enabled: bool,
@@ -99,6 +105,7 @@ impl Default for Settings {
             center_gap: 60.0,
             crop_letterbox: true,
             reduced_motion: false,
+            logo_width: None,
             remote_keyboard_enabled: false,
             remote_keyboard_host: String::new(),
             remote_keyboard_api_key: String::new(),
@@ -140,6 +147,7 @@ impl Settings {
         };
         self.center_gap = clamp(self.center_gap, &CENTER_GAP_RANGE, 60.0);
         self.border_width = clamp(self.border_width, &BORDER_WIDTH_RANGE, 0.0);
+        self.logo_width = self.logo_width.filter(|w| w.is_finite()).map(|w| w.clamp(*LOGO_WIDTH_RANGE.start(), *LOGO_WIDTH_RANGE.end()));
     }
 }
 
