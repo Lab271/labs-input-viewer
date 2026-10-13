@@ -81,6 +81,10 @@ pub struct Settings {
     /// Electron. Set, it may be wider than the gap and is drawn over the
     /// pictures. Electron ignores the key.
     pub logo_width: Option<f32>,
+    /// Screensavers left out of the rotation, by display name. A list of the
+    /// *disabled* ones, so a saver added later is on by default. Electron has
+    /// no such setting and ignores the key.
+    pub disabled_screensavers: Vec<String>,
     /// The remote keyboard (ADR 0040), under Electron's keys. The API key
     /// is plain text, as it is in Electron and in the firmware.
     pub remote_keyboard_enabled: bool,
@@ -106,6 +110,7 @@ impl Default for Settings {
             crop_letterbox: true,
             reduced_motion: false,
             logo_width: None,
+            disabled_screensavers: Vec::new(),
             remote_keyboard_enabled: false,
             remote_keyboard_host: String::new(),
             remote_keyboard_api_key: String::new(),
@@ -137,6 +142,17 @@ impl Settings {
     /// The operator's name if set and not blank.
     pub fn name_of(&self, id: &str) -> Option<&str> {
         self.inputs.get(id)?.name.as_deref().map(str::trim).filter(|n| !n.is_empty())
+    }
+
+    pub fn saver_enabled(&self, name: &str) -> bool {
+        !self.disabled_screensavers.iter().any(|n| n == name)
+    }
+
+    pub fn set_saver_enabled(&mut self, name: &str, on: bool) {
+        self.disabled_screensavers.retain(|n| n != name);
+        if !on {
+            self.disabled_screensavers.push(name.to_owned());
+        }
     }
 
     /// Pull out-of-range values from a hand-edited file back into the sliders'

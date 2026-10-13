@@ -17,6 +17,7 @@ pub enum Pane {
     Inputs,
     Layout,
     RemoteKeyboard,
+    Screensavers,
 }
 
 const STILL: Vec2 = vec2(96.0, 54.0);
@@ -97,6 +98,10 @@ impl InputViewer {
                     nav_item(ui, &mut pane, Pane::Layout, "Layout", layout_text, Tone::Off);
                     let (rk_text, rk_tone, _) = self.remote_status();
                     nav_item(ui, &mut pane, Pane::RemoteKeyboard, "Remote keyboard", rk_text, rk_tone);
+                    let on = screensaver::NAMES.iter().filter(|n| self.settings.saver_enabled(n)).count();
+                    let savers_text = format!("{on} of {}", screensaver::NAMES.len());
+                    nav_item(ui, &mut pane, Pane::Screensavers, "Screensavers", &savers_text,
+                        if on == 0 { Tone::Warn } else { Tone::Off });
                     ui.add_space(16.0);
                     ui.label(egui::RichText::new("Art-Net is not in this prototype yet.").small().weak());
                 });
@@ -109,6 +114,7 @@ impl InputViewer {
                         Pane::Inputs => self.inputs_pane(ui, &states),
                         Pane::Layout => self.layout_pane(ui, wall),
                         Pane::RemoteKeyboard => self.remote_keyboard_pane(ui),
+                        Pane::Screensavers => self.screensavers_pane(ui),
                     }
                 });
             });
@@ -218,6 +224,37 @@ impl InputViewer {
                     ui.end_row();
                 }
             });
+        });
+    }
+
+    fn screensavers_pane(&mut self, ui: &mut egui::Ui) {
+        ui.label(egui::RichText::new("Screensavers").strong());
+        ui.label(egui::RichText::new(
+            "After five minutes without a signal the wall rotates through the ticked savers, a new one \
+             every ten minutes. With none ticked, the split-flap board stays up.").weak());
+        ui.add_space(6.0);
+        ui.horizontal(|ui| {
+            if ui.button("All").clicked() {
+                self.settings.disabled_screensavers.clear();
+            }
+            if ui.button("None").clicked() {
+                self.settings.disabled_screensavers = screensaver::NAMES.iter().map(|n| (*n).to_owned()).collect();
+            }
+        });
+        ui.add_space(6.0);
+        let running = self.saver.as_ref().map(Screensaver::name);
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            for name in screensaver::NAMES {
+                ui.horizontal(|ui| {
+                    let mut on = self.settings.saver_enabled(name);
+                    if ui.checkbox(&mut on, *name).changed() {
+                        self.settings.set_saver_enabled(name, on);
+                    }
+                    if running == Some(name) {
+                        ui.label(egui::RichText::new("showing now").small().weak());
+                    }
+                });
+            }
         });
     }
 

@@ -652,19 +652,30 @@ impl InputViewer {
             }
             i
         });
-        let index = index.or(pinned).unwrap_or_else(|| self.rng.index_except(screensaver::NAMES.len(), self.last_saver));
+        let Some(index) = index.or(pinned).or_else(|| screensaver::pick(&self.savers_enabled(), self.last_saver, &mut self.rng))
+        else {
+            // Every saver disabled: the split-flap board stays up.
+            self.saver = None;
+            self.saver_on_demand = false;
+            return;
+        };
         self.last_saver = Some(index);
         self.saver = Some(Screensaver::new(index, Rng::clock_seed()));
         self.saver_started = Instant::now();
     }
 
+    /// Per saver, in `NAMES` order: whether Settings has it enabled.
+    fn savers_enabled(&self) -> Vec<bool> {
+        screensaver::NAMES.iter().map(|n| self.settings.saver_enabled(n)).collect()
+    }
+
     fn step_saver(&mut self, delta: isize) {
-        let n = screensaver::NAMES.len() as isize;
-        let cur = self.saver.as_ref().map_or(0, |s| s.index as isize);
+        let cur = self.saver.as_ref().map(|s| s.index);
+        let Some(next) = screensaver::step(&self.savers_enabled(), cur, delta) else { return };
         if self.saver.is_none() {
             self.saver_on_demand = true;
         }
-        self.start_saver(Some(((cur + delta).rem_euclid(n)) as usize));
+        self.start_saver(Some(next));
     }
 
     fn update_saver(&mut self, now: Instant) {
@@ -680,7 +691,10 @@ impl InputViewer {
                 self.start_saver(None);
             }
         }
-        if self.saver.is_some() && now.duration_since(self.saver_started) >= screensaver::ROTATE_EVERY {
+        // Rotate every ten minutes, and at once if the running saver has just
+        // been disabled in Settings.
+        let disabled = self.saver.as_ref().is_some_and(|s| !self.settings.saver_enabled(s.name()));
+        if self.saver.is_some() && (disabled || now.duration_since(self.saver_started) >= screensaver::ROTATE_EVERY) {
             self.start_saver(None);
         }
     }
@@ -1289,7 +1303,7 @@ impl eframe::App for InputViewer {
             self.dropdown_open = open == "dropdown";
             self.legend_open = open == "legend";
             if let Some(pane) = open.strip_prefix("settings") {
-                self.settings_pane.get_or_insert(match pane { ":layout" => Pane::Layout, ":remote" => Pane::RemoteKeyboard, _ => Pane::Inputs });
+                self.settings_pane.get_or_insert(match pane { ":layout" => Pane::Layout, ":remote" => Pane::RemoteKeyboard, ":screensavers" => Pane::Screensavers, _ => Pane::Inputs });
             }
             self.last_activity = now;
         }

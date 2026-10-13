@@ -15,6 +15,23 @@ use crate::filelog::log_info;
 
 pub const ROTATE_EVERY: Duration = Duration::from_secs(10 * 60);
 
+/// A random enabled saver, avoiding the previous pick when there is any
+/// other choice. None when every saver is disabled.
+pub fn pick(enabled: &[bool], avoid: Option<usize>, rng: &mut Rng) -> Option<usize> {
+    let on: Vec<usize> = (0..enabled.len()).filter(|&i| enabled[i]).collect();
+    let others: Vec<usize> = on.iter().copied().filter(|&i| Some(i) != avoid).collect();
+    let pool = if others.is_empty() { &on } else { &others };
+    (!pool.is_empty()).then(|| pool[rng.index_except(pool.len(), None)])
+}
+
+/// The next enabled saver from `current` in the direction of `delta`, for
+/// the stepping keys. None when every saver is disabled.
+pub fn step(enabled: &[bool], current: Option<usize>, delta: isize) -> Option<usize> {
+    let n = enabled.len() as isize;
+    let start = current.map_or(if delta > 0 { -1 } else { 0 }, |c| c as isize);
+    (1..=n).map(|k| (start + delta.signum() * k).rem_euclid(n) as usize).find(|&i| enabled[i])
+}
+
 /// xorshift64*; small, seedable, good enough for visuals.
 #[derive(Clone)]
 pub struct Rng(u64);
@@ -222,6 +239,28 @@ mod tests {
         let shaders: Vec<_> = crate::shader_saver::SAVERS.iter().map(|s| s.name).collect();
         assert_eq!(&NAMES[..shaders.len()], &shaders[..]);
         assert_eq!(NAMES[DVD], "DVD logo");
+    }
+
+    #[test]
+    fn rotation_only_picks_enabled_savers() {
+        let mut r = Rng::new(3);
+        let enabled = [false, true, false, true];
+        for _ in 0..200 {
+            assert_eq!(pick(&enabled, Some(1), &mut r), Some(3));
+        }
+        // The only enabled one repeats rather than leaving the wall blank.
+        assert_eq!(pick(&[false, true], Some(1), &mut r), Some(1));
+        assert_eq!(pick(&[false, false], None, &mut r), None);
+    }
+
+    #[test]
+    fn stepping_skips_disabled_savers_and_wraps() {
+        let enabled = [true, false, true, false];
+        assert_eq!(step(&enabled, Some(0), 1), Some(2));
+        assert_eq!(step(&enabled, Some(2), 1), Some(0));
+        assert_eq!(step(&enabled, Some(0), -1), Some(2));
+        assert_eq!(step(&enabled, None, 1), Some(0));
+        assert_eq!(step(&[false, false], Some(0), 1), None);
     }
 
     #[test]
